@@ -76,7 +76,11 @@ services:
       - PREFECT_SERVER_API_HOST=0.0.0.0
       - PREFECT_SERVER_API_PORT=4200
       - PREFECT_API_URL=http://127.0.0.1:4200/api
-      - PREFECT_LOGGING_LEVEL=INFO
+      - PREFECT_LOGGING_LEVEL=WARNING
+      # Оптимизация производительности - увеличиваем интервалы опроса
+      - PREFECT_API_SERVICES_SCHEDULER_LOOP_SECONDS=120  # с 60 до 120 сек
+      - PREFECT_API_SERVICES_EVENT_PERSISTER_FLUSH_INTERVAL=10  # с 5 до 10 сек
+      - PREFECT_API_SERVICES_FOREMAN_FALLBACK_HEARTBEAT_INTERVAL_SECONDS=60  # с 30 до 60 сек
     command: prefect server start --host 0.0.0.0
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4200/api/health').read()"]
