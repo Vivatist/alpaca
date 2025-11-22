@@ -81,3 +81,4 @@ Thumbs.db
 # Application specific
 monitored_folder/
 *.pid
+SUPABASE_CREDENTIALS.txt
