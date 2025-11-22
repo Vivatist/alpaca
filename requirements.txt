@@ -29,8 +29,8 @@ python-dotenv==1.0.0
 # ========================================
 
 # Text splitting и обработка
-langchain==0.3.0
-langchain-text-splitters==0.3.0
+langchain>=0.3.0
+langchain-text-splitters>=0.3.0
 
 # ========================================
 # Database Migrations
@@ -48,7 +48,7 @@ pytest-asyncio==0.24.0
 pytest-cov==4.1.0
 
 # Code quality
-black==24.0.0
+black==24.10.0
 ruff==0.6.0
 mypy==1.11.0
 
