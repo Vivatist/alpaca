@@ -29,7 +29,7 @@ echo ""
 
 # Запуск контейнеров проекта
 echo "📦 Запуск сервисов проекта..."
-cd "$(dirname "$0")/../docker"
+cd /home/alpaca/alpaca/docker
 docker compose up -d
 
 echo ""
