@@ -14,12 +14,12 @@ import time
 import tempfile
 from pathlib import Path
 
-# Добавляем путь к модулям приложения
-sys.path.insert(0, '/app')
+# Добавляем путь к корню проекта
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from database import Database
-from scanner import Scanner
-from vector_sync import VectorSync
+from app.file_watcher.database import Database
+from app.file_watcher.scanner import Scanner
+from app.file_watcher.vector_sync import VectorSync
 
 
 class TestFileWatcher:
@@ -30,17 +30,17 @@ class TestFileWatcher:
         # Создаём временную папку для тестов
         self.test_folder = tempfile.mkdtemp()
         
-        # Подключаемся к тестовой БД
-        os.environ.setdefault('DB_HOST', 'supabase-db')
-        self.db = Database()
+        # Загружаем DATABASE_URL из settings
+        from settings import settings
+        self.db = Database(database_url=settings.DATABASE_URL)
         
-        # Очищаем таблицу file_state перед тестом
+        # Очищаем таблицу files перед тестом
         with self.db.get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("DELETE FROM file_state WHERE file_path LIKE 'test_%'")
+                cur.execute("DELETE FROM files WHERE file_path LIKE 'test_%'")
         
         # Инициализируем компоненты
-        from file_filter import FileFilter
+        from app.file_watcher.file_filter import FileFilter
         # Для тестов создаём фильтр без ограничений
         test_filter = FileFilter(min_size=0, max_size=100*1024*1024, excluded_dirs=[], excluded_patterns=[])
         self.scanner = Scanner(self.test_folder, ['.txt', '.pdf', '.docx'], test_filter)
@@ -62,7 +62,7 @@ class TestFileWatcher:
             with conn.cursor() as cur:
                 # Удаляем записи с тестовыми именами файлов
                 cur.execute("""
-                    DELETE FROM file_state 
+                    DELETE FROM files 
                     WHERE file_path LIKE 'test_%' 
                        OR file_path LIKE '%test%.txt'
                        OR file_path LIKE '%test%.pdf'
@@ -86,7 +86,7 @@ class TestFileWatcher:
         with self.db.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT status_sync FROM file_state WHERE file_path = %s",
+                    "SELECT status_sync FROM files WHERE file_path = %s",
                     (filename,)
                 )
                 row = cur.fetchone()

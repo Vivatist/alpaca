@@ -5,10 +5,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-# Добавляем путь к модулям приложения
-sys.path.insert(0, '/app')
+# Добавляем путь к корню проекта
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from file_filter import FileFilter
+from app.file_watcher.file_filter import FileFilter
 
 
 class TestFileFilter:

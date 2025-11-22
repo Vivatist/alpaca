@@ -3,6 +3,7 @@ File Watcher Service - изолированный сервис для монит
 """
 import time
 from typing import Dict, Any
+from prefect import task
 from app.utils.logging import get_logger
 from .scanner import Scanner
 from .database import Database
@@ -11,6 +12,37 @@ from .file_filter import FileFilter
 
 
 logger = get_logger(__name__)
+
+
+# Prefect tasks как отдельные функции (принимают объекты явно)
+@task(name="scan_disk", retries=2, persist_result=True)
+def task_scan_disk(scanner: Scanner) -> list:
+    """Task: сканирование диска"""
+    files = scanner.scan()
+    return files
+
+
+@task(name="sync_files_to_db", retries=3, persist_result=True)
+def task_sync_files(db: Database, files: list) -> Dict[str, int]:
+    """Task: синхронизация файлов с БД"""
+    result = db.sync_by_hash(files)
+    return result
+
+
+@task(name="sync_vector_status", retries=3, persist_result=True)
+def task_sync_status(vector_sync: VectorSync) -> Dict[str, int]:
+    """Task: синхронизация статусов с векторной БД"""
+    result = vector_sync.sync_status()
+    return result
+
+
+@task(name="reset_processed_statuses", persist_result=True)
+def task_reset_processed(db: Database) -> int:
+    """Task: сброс статусов 'processed' на 'ok'"""
+    count = db.reset_processed_to_ok()
+    if count > 0:
+        logger.info(f"🔄 Reset {count} processed statuses")
+    return count
 
 
 class FileWatcherService:
@@ -55,7 +87,8 @@ class FileWatcherService:
     
     def scan_and_sync(self) -> Dict[str, Any]:
         """
-        Выполняет полный цикл сканирования и синхронизации
+        Выполняет полный цикл сканирования и синхронизации.
+        Использует Prefect tasks для отслеживания каждого шага.
         
         Returns:
             dict: Результаты сканирования и синхронизации
@@ -63,32 +96,22 @@ class FileWatcherService:
         start_time = time.time()
         
         try:
-            # Сканируем диск
-            files = self.scanner.scan()
-            logger.info(f"Found {len(files)} files on disk")
-            
-            # Синхронизируем файлы с БД
-            file_sync = self.db.sync_by_hash(files)
-            logger.info(
-                f"File sync: "
-                f"+{file_sync['added']} added, "
-                f"~{file_sync['updated']} updated, "
-                f"-{file_sync['deleted']} deleted, "
-                f"={file_sync['unchanged']} unchanged"
-            )
-            
-            # Синхронизируем статусы
-            status_sync = self.vector_sync.sync_status()
-            logger.info(
-                f"Status sync: "
-                f"ok={status_sync['ok']}, "
-                f"added={status_sync['added']}, "
-                f"updated={status_sync['updated']}, "
-                f"unchanged={status_sync['unchanged']}"
-            )
+            # Каждый шаг - отдельная task с retry и мониторингом
+            files = task_scan_disk(self.scanner)
+            file_sync = task_sync_files(self.db, files)
+            status_sync = task_sync_status(self.vector_sync)
             
             duration = time.time() - start_time
-            
+            logger.info(
+                f"disc[total:{len(files)}, "
+                f"+{file_sync['added']}, "
+                f"~{file_sync['updated']}, "
+                f"-{file_sync['deleted']}]  "
+                f"base[ok:{status_sync['ok']}, "
+                f"a:{status_sync['added']}, "
+                f"u:{status_sync['updated']}] "
+                f"in {duration:.2f}s"
+                )
             return {
                 'success': True,
                 'disk_files': len(files),
@@ -113,4 +136,4 @@ class FileWatcherService:
         Returns:
             int: Количество сброшенных записей
         """
-        return self.db.reset_processed_to_ok()
+        return task_reset_processed(self.db)

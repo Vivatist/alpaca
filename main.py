@@ -14,6 +14,7 @@ os.environ["PREFECT_LOGGING_TO_API_ENABLED"] = "false"
 
 from datetime import timedelta
 from prefect import flow, serve
+from prefect.artifacts import create_table_artifact
 from app.utils.logging import setup_logging, get_logger
 from app.file_watcher import FileWatcherService
 from settings import settings
@@ -38,25 +39,37 @@ file_watcher = FileWatcherService(
 def file_watcher_flow():
     """Сканирование и синхронизация файлов"""
     result = file_watcher.scan_and_sync()
-    if not result['success']:
+
+    if result['success']:
+        # Создаём артефакт с результатами сканирования
+        create_table_artifact(
+            key="scan-summary",
+            table=[
+                {"Metric": "Files on disk", "Value": result['disk_files']},
+                {"Metric": "Added", "Value": result['file_sync']['added']},
+                {"Metric": "Updated", "Value": result['file_sync']['updated']},
+                {"Metric": "Deleted", "Value": result['file_sync']['deleted']},
+                {"Metric": "Unchanged", "Value": result['file_sync']['unchanged']},
+                {"Metric": "Status OK", "Value": result['status_sync']['ok']},
+                {"Metric": "Status Added", "Value": result['status_sync']['added']},
+                {"Metric": "Status Updated", "Value": result['status_sync']['updated']},
+                {"Metric": "Duration (s)", "Value": f"{result['duration']:.2f}"},
+            ],
+            description="File Watcher Scan Summary"
+        )
+    else:
         raise Exception(result.get('error', 'Unknown error'))
+    
     return result
 
 
 if __name__ == "__main__":
-    # Отключаем избыточное логирование Prefect
-    logging.getLogger("prefect").setLevel(logging.ERROR)
-    logging.getLogger("prefect.flow_runs").setLevel(logging.ERROR)
-    logging.getLogger("prefect.flow_runs.runner").setLevel(logging.ERROR)
-    
     logger.info("Starting ALPACA RAG system...")
     logger.info(f"Monitored folder: {settings.MONITORED_PATH}")
     logger.info(f"Scan interval: {settings.SCAN_MONITORED_FOLDER_INTERVAL}s")
     
     # Сброс статусов processed у файлов в базе при старте
     reset_count = file_watcher.reset_processed_statuses()
-    if reset_count > 0:
-        logger.info(f"🔄 Reset {reset_count} statuses")
     
     # Запуск периодического сканирования
     serve(
