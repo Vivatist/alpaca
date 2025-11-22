@@ -34,7 +34,7 @@ class Database:
         with self.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
-                    CREATE TABLE IF NOT EXISTS file_state (
+                    CREATE TABLE IF NOT EXISTS files (
                         id SERIAL PRIMARY KEY,
                         file_path TEXT NOT NULL UNIQUE,
                         file_size BIGINT NOT NULL,
@@ -44,29 +44,29 @@ class Database:
                         last_checked TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
-                cur.execute("CREATE INDEX IF NOT EXISTS idx_file_path ON file_state(file_path)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_file_path ON files(file_path)")
                 
                 # Миграция: добавляем новые колонки если их нет
                 cur.execute("""
                     DO $$ 
                     BEGIN 
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                                      WHERE table_name='file_state' AND column_name='file_hash') THEN
-                            ALTER TABLE file_state ADD COLUMN file_hash TEXT;
+                                      WHERE table_name='files' AND column_name='file_hash') THEN
+                            ALTER TABLE files ADD COLUMN file_hash TEXT;
                         END IF;
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                                      WHERE table_name='file_state' AND column_name='file_mtime') THEN
-                            ALTER TABLE file_state ADD COLUMN file_mtime DOUBLE PRECISION;
+                                      WHERE table_name='files' AND column_name='file_mtime') THEN
+                            ALTER TABLE files ADD COLUMN file_mtime DOUBLE PRECISION;
                         END IF;
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                                      WHERE table_name='file_state' AND column_name='status_sync') THEN
-                            ALTER TABLE file_state ADD COLUMN status_sync TEXT DEFAULT 'ok';
+                                      WHERE table_name='files' AND column_name='status_sync') THEN
+                            ALTER TABLE files ADD COLUMN status_sync TEXT DEFAULT 'ok';
                         END IF;
                     END $$;
                 """)
                 
-                cur.execute("CREATE INDEX IF NOT EXISTS idx_file_hash ON file_state(file_hash)")
-                cur.execute("CREATE INDEX IF NOT EXISTS idx_status_sync ON file_state(status_sync)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_file_hash ON files(file_hash)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_status_sync ON files(status_sync)")
     
     def reset_processed_to_ok(self) -> int:
         """Сбрасывает все статусы 'processed' на 'ok'
@@ -76,11 +76,11 @@ class Database:
         """
         with self.get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("UPDATE file_state SET status_sync = 'ok' WHERE status_sync = 'processed'")
+                cur.execute("UPDATE files SET status_sync = 'ok' WHERE status_sync = 'processed'")
                 return cur.rowcount
     
     def sync_by_hash(self, disk_files: list) -> dict:
-        """Синхронизирует file_state с диском используя хэши как источник истины
+        """Синхронизирует files с диском используя хэши как источник истины
         
         ВАЖНО: НЕ удаляет записи из БД. Только добавляет/обновляет файлы с диска.
         Файлы, удалённые с диска, помечаются status_sync='deleted'.
@@ -102,7 +102,7 @@ class Database:
         with self.get_connection() as conn:
             with conn.cursor() as cur:
                 # Получаем все хэши и пути из БД
-                cur.execute("SELECT file_hash, file_path FROM file_state")
+                cur.execute("SELECT file_hash, file_path FROM files")
                 db_records = cur.fetchall()
                 db_hashes = {row[0]: row[1] for row in db_records}  # hash -> path
                 db_paths = {row[1]: row[0] for row in db_records}  # path -> hash
@@ -131,31 +131,31 @@ class Database:
                 if disk_files:
                     values = [(f['path'], f['size'], f['hash'], f['mtime']) for f in disk_files]
                     execute_values(cur, """
-                        INSERT INTO file_state (file_path, file_size, file_hash, file_mtime, last_checked, status_sync)
+                        INSERT INTO files (file_path, file_size, file_hash, file_mtime, last_checked, status_sync)
                         VALUES %s
                         ON CONFLICT (file_path) DO UPDATE SET
                             file_size = CASE 
-                                WHEN file_state.status_sync = 'processed' THEN file_state.file_size
-                                WHEN file_state.status_sync = 'error' THEN file_state.file_size
+                                WHEN files.status_sync = 'processed' THEN files.file_size
+                                WHEN files.status_sync = 'error' THEN files.file_size
                                 ELSE EXCLUDED.file_size
                             END,
                             file_hash = CASE 
-                                WHEN file_state.status_sync = 'processed' THEN file_state.file_hash
-                                WHEN file_state.status_sync = 'error' THEN file_state.file_hash
+                                WHEN files.status_sync = 'processed' THEN files.file_hash
+                                WHEN files.status_sync = 'error' THEN files.file_hash
                                 ELSE EXCLUDED.file_hash
                             END,
                             file_mtime = CASE 
-                                WHEN file_state.status_sync = 'processed' THEN file_state.file_mtime
-                                WHEN file_state.status_sync = 'error' THEN file_state.file_mtime
+                                WHEN files.status_sync = 'processed' THEN files.file_mtime
+                                WHEN files.status_sync = 'error' THEN files.file_mtime
                                 ELSE EXCLUDED.file_mtime
                             END,
                             last_checked = CURRENT_TIMESTAMP,
                             status_sync = CASE 
-                                WHEN file_state.status_sync = 'error' THEN 'error'
-                                WHEN file_state.status_sync = 'processed' THEN 'processed'
-                                WHEN file_state.status_sync = 'deleted' THEN 'updated'
-                                WHEN file_state.file_hash != EXCLUDED.file_hash THEN 'updated'
-                                ELSE file_state.status_sync
+                                WHEN files.status_sync = 'error' THEN 'error'
+                                WHEN files.status_sync = 'processed' THEN 'processed'
+                                WHEN files.status_sync = 'deleted' THEN 'updated'
+                                WHEN files.file_hash != EXCLUDED.file_hash THEN 'updated'
+                                ELSE files.status_sync
                             END
                     """, values, template="(%s, %s, %s, %s, CURRENT_TIMESTAMP, 'added')", page_size=500)
                 
@@ -163,7 +163,7 @@ class Database:
                 missing_paths = set(db_paths.keys()) - disk_paths
                 if missing_paths:
                     cur.execute("""
-                        UPDATE file_state 
+                        UPDATE files 
                         SET status_sync = 'deleted', 
                             last_checked = CURRENT_TIMESTAMP
                         WHERE file_path = ANY(%s)
@@ -175,7 +175,7 @@ class Database:
         return stats
     
     def get_file_state_records(self) -> list:
-        """Получает все записи из file_state
+        """Получает все записи из files
         
         Returns:
             list: [(file_path, file_hash, status_sync), ...]
@@ -184,7 +184,7 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT file_path, file_hash, status_sync
-                    FROM file_state
+                    FROM files
                 """)
                 return cur.fetchall()
     
@@ -223,7 +223,7 @@ class Database:
         with self.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.executemany(
-                    "UPDATE file_state SET status_sync = %s WHERE file_path = %s",
+                    "UPDATE files SET status_sync = %s WHERE file_path = %s",
                     updates
                 )
                 return cur.rowcount

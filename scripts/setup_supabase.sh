@@ -7,6 +7,7 @@ SUPABASE_HOME="/home/alpaca/supabase"
 SUPABASE_DOCKER="$SUPABASE_HOME/docker"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 NETWORK_PATCH="$SCRIPT_DIR/setup_supabase/supabase-network-patch.yml"
+DB_PORT_PATCH="$SCRIPT_DIR/setup_supabase/supabase-db-port-patch.yml"
 
 echo "🚀 Установка Supabase..."
 echo ""
@@ -75,11 +76,11 @@ fi
 source .env
 ALPACA_ENV="/home/alpaca/alpaca/.env"
 if [ -f "$ALPACA_ENV" ]; then
-    # Обновляем DATABASE_URL в проекте
+    # Обновляем DATABASE_URL в проекте (используем порт 54322 для прямого доступа)
     if grep -q "^DATABASE_URL=" "$ALPACA_ENV"; then
-        sed -i "s|^DATABASE_URL=.*|DATABASE_URL=postgresql://postgres:$POSTGRES_PASSWORD@supabase-db:6543/postgres|g" "$ALPACA_ENV"
+        sed -i "s|^DATABASE_URL=.*|DATABASE_URL=postgresql://postgres:$POSTGRES_PASSWORD@localhost:54322/postgres|g" "$ALPACA_ENV"
     else
-        echo "DATABASE_URL=postgresql://postgres:$POSTGRES_PASSWORD@supabase-db:6543/postgres" >> "$ALPACA_ENV"
+        echo "DATABASE_URL=postgresql://postgres:$POSTGRES_PASSWORD@localhost:54322/postgres" >> "$ALPACA_ENV"
     fi
     echo "✅ DATABASE_URL обновлён в проекте alpaca"
 fi
@@ -91,8 +92,8 @@ echo "🗄️  Применение схемы базы данных..."
 docker network inspect alpaca_network >/dev/null 2>&1 || docker network create alpaca_network
 
 # Запуск Supabase для инициализации базы
-echo "📦 Запуск Supabase..."
-docker compose up -d
+echo "📦 Запуск Supabase с пробросом порта БД..."
+docker compose -f docker-compose.yml -f "$DB_PORT_PATCH" up -d
 
 # Ожидание готовности PostgreSQL
 echo "⏳ Ожидание запуска PostgreSQL..."
@@ -124,6 +125,7 @@ echo ""
 echo "📁 Директория: $SUPABASE_DOCKER"
 echo "🌐 Сеть: alpaca_network (общая с alpaca проектом)"
 echo "🔐 Пароль PostgreSQL: $POSTGRES_PASSWORD"
+echo "🔌 PostgreSQL порт: localhost:54322"
 echo "🗄️  Таблицы: chunks (векторная), files (отслеживание)"
 echo "🌐 Dashboard: http://localhost:8000"
 echo ""
