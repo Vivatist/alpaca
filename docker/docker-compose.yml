@@ -22,11 +22,11 @@ services:
     volumes:
       - unstructured_data:/app/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/healthcheck"]
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8000/healthcheck"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
     networks:
       - alpaca_network
 
@@ -79,7 +79,7 @@ services:
       - PREFECT_LOGGING_LEVEL=INFO
     command: prefect server start --host 0.0.0.0
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4200/api/health"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4200/api/health').read()"]
       interval: 30s
       timeout: 10s
       retries: 3
