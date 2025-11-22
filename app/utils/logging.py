@@ -50,3 +50,8 @@ def setup_logging():
         f"Logging configured: level={settings.LOG_LEVEL}, "
         f"environment={settings.ENVIRONMENT}"
     )
+
+
+def get_logger(name: str) -> logging.Logger:
+    """Получить logger для модуля"""
+    return logging.getLogger(name)

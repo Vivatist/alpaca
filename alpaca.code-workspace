@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../monitored_folder"
+		}
+	],
+	"settings": {}
+}
