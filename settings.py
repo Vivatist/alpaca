@@ -10,6 +10,11 @@ class Settings(BaseSettings):
     # Application
     APP_NAME: str = "ALPACA RAG"
     VERSION: str = "2.0.0"
+    ENVIRONMENT: str = "development"
+    
+    # Logging
+    LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     
     # Supabase Database (PostgreSQL с pgvector)
     # Формат: postgresql://postgres:[YOUR-PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres

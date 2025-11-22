@@ -46,7 +46,12 @@ def setup_logging():
     logging.getLogger('asyncpg').setLevel(logging.WARNING)
     logging.getLogger('uvicorn.access').setLevel(logging.WARNING)
     
+    # Настраиваем логирование Prefect
+    prefect_logger = logging.getLogger('prefect')
+    prefect_logger.setLevel(getattr(logging, settings.PREFECT_LOGGING_LEVEL.upper()))
+    
     logger.info(
         f"Logging configured: level={settings.LOG_LEVEL}, "
-        f"environment={settings.ENVIRONMENT}"
+        f"environment={settings.ENVIRONMENT}, "
+        f"prefect_level={settings.PREFECT_LOGGING_LEVEL}"
     )
