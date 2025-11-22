@@ -1,47 +1,48 @@
 # ALPACA RAG
 
-## Подготовка внешних сервисов
+Система обработки документов с RAG (Retrieval Augmented Generation).
 
-### 1. Supabase (PostgreSQL + pgvector)
+## Быстрый старт
 
-1. Создайте проект на https://supabase.com
-2. В проекте перейдите: **Settings** → **Database**
-3. Найдите раздел **Connection string** → **URI mode**
-4. Скопируйте строку вида:
-   ```
-   postgresql://postgres:[YOUR-PASSWORD]@db.xxxxx.supabase.co:5432/postgres
-   ```
-5. Включите **pgvector** расширение:
-   - Откройте SQL Editor в Supabase
-   - Выполните:
-     ```sql
-     CREATE EXTENSION IF NOT EXISTS vector;
-     ```
+### 1. Установка Supabase
 
-### 2. Docker сервисы (Ollama + Unstructured)
+Supabase устанавливается **отдельно** от основного проекта.
+
+📖 Подробная инструкция: [SUPABASE_SETUP.md](SUPABASE_SETUP.md)
+
+**Быстрая установка (Self-Hosted):**
 
 ```bash
+cd ~/
+git clone --depth 1 https://github.com/supabase/supabase
+cd supabase/docker
+cp .env.example .env
+# Отредактируйте .env (установите пароли и секреты)
+docker compose up -d
+```
+
+Supabase будет доступен на http://localhost:8000
+
+### 2. Запуск сервисов проекта
+
+```bash
+cd ~/alpaca
+
+# Настройте переменные окружения
+cp .env.example .env
+# Отредактируйте .env и укажите DATABASE_URL от Supabase
+
+# Запуск Docker сервисов (Ollama, Unstructured, Prefect)
 chmod +x scripts/start_services.sh
 ./scripts/start_services.sh
 ```
 
 Это запустит:
-- **Ollama** (http://localhost:11434) - для LLM и embeddings
-- **Unstructured** (http://localhost:9000) - для парсинга документов
+- **Ollama** (http://localhost:11434) - LLM qwen2.5:32b + embeddings bge-m3 (GPU)
+- **Unstructured** (http://localhost:9000) - парсинг документов
+- **Prefect UI** (http://localhost:4200) - оркестрация задач
 
-### 3. Настройка .env
-
-```bash
-cp .env.example .env
-nano .env
-```
-
-Укажите ваш Supabase DATABASE_URL:
-```env
-DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@db.xxxxx.supabase.co:5432/postgres
-```
-
-## Проверка
+### 3. Проверка
 
 ```bash
 # Проверка Ollama
@@ -50,11 +51,25 @@ curl http://localhost:11434/api/tags
 # Проверка Unstructured
 curl http://localhost:9000/general/v0/general
 
-# Проверка Supabase
+# Проверка подключения к Supabase
 source venv/bin/activate
-python -c "from settings import settings; print(settings.DATABASE_URL)"
+python -c "from app.settings import settings; print(settings.DATABASE_URL)"
 ```
 
-## Готово!
+## Архитектура
 
-Все внешние сервисы настроены. Можно переходить к разработке.
+- **Supabase** - PostgreSQL + pgvector (отдельная установка)
+- **Ollama** - LLM и embeddings (Docker + GPU)
+- **Unstructured** - парсинг документов (Docker)
+- **Prefect** - оркестрация задач (Docker)
+
+## Остановка сервисов
+
+```bash
+# Остановка сервисов проекта
+./scripts/stop_services.sh
+
+# Остановка Supabase (в его директории)
+cd ~/supabase/docker
+docker compose down
+```

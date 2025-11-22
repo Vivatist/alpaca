@@ -1,5 +1,5 @@
 #!/bin/bash
-# Запуск внешних сервисов (Ollama + Unstructured)
+# Запуск внешних сервисов (Ollama, Unstructured, Prefect)
 
 set -e
 
