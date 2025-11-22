@@ -49,9 +49,9 @@ def setup_logging():
     # Настраиваем логирование Prefect
     prefect_logger = logging.getLogger('prefect')
     prefect_logger.setLevel(getattr(logging, settings.PREFECT_LOGGING_LEVEL.upper()))
-    prefect_logger.info(f"Prefect logging configured: level={settings.PREFECT_LOGGING_LEVEL}")
     
     logger.info(
         f"Logging configured: level={settings.LOG_LEVEL}, "
-        f"environment={settings.ENVIRONMENT}"
+        f"environment={settings.ENVIRONMENT}, "
+        f"prefect_level={settings.PREFECT_LOGGING_LEVEL}"
     )
