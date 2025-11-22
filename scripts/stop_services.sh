@@ -1,12 +1,10 @@
 #!/bin/bash
-# Остановка внешних сервисов (Ollama + Unstructured + Prefect)
+# Остановка всех сервисов (Alpaca + Supabase)
 
 set -e
 
-echo "🛑 Остановка внешних сервисов..."
+echo "🛑 Остановка всех сервисов..."
 echo ""
-
-cd "$(dirname "$0")/../docker"
 
 # Проверка Docker
 if ! docker ps > /dev/null 2>&1; then
@@ -14,11 +12,22 @@ if ! docker ps > /dev/null 2>&1; then
     exit 1
 fi
 
-# Остановка контейнеров
+# Остановка сервисов проекта
+echo "Остановка сервисов проекта..."
+cd "$(dirname "$0")/../docker"
 docker compose down
+
+# Остановка Supabase
+SUPABASE_DOCKER="/home/alpaca/supabase/docker"
+if [ -d "$SUPABASE_DOCKER" ]; then
+    echo "Остановка Supabase..."
+    cd "$SUPABASE_DOCKER"
+    docker compose down
+fi
 
 echo ""
 echo "✅ Все сервисы остановлены"
 echo ""
 echo "💡 Для полной очистки (включая volumes) используйте:"
-echo "   docker compose down -v"
+echo "   cd ~/alpaca/docker && docker compose down -v"
+echo "   cd ~/supabase/docker && docker compose down -v"

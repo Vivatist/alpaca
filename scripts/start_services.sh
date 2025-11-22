@@ -1,12 +1,10 @@
 #!/bin/bash
-# Запуск внешних сервисов (Ollama, Unstructured, Prefect)
+# Запуск всех сервисов (Ollama, Unstructured, Prefect, Supabase)
 
 set -e
 
-echo "🚀 Запуск внешних сервисов..."
+echo "🚀 Запуск всех сервисов..."
 echo ""
-
-cd "$(dirname "$0")/../docker"
 
 # Проверка Docker
 if ! docker ps > /dev/null 2>&1; then
@@ -14,15 +12,52 @@ if ! docker ps > /dev/null 2>&1; then
     exit 1
 fi
 
-# Запуск контейнеров
+# Проверка установки Supabase
+SUPABASE_DOCKER="/home/alpaca/supabase/docker"
+if [ ! -d "$SUPABASE_DOCKER" ]; then
+    echo "⚠️  Supabase не установлен"
+    echo "Запуск установки Supabase..."
+    "$(dirname "$0")/setup_supabase.sh"
+fi
+
+# Запуск Supabase
+echo "📦 Запуск Supabase..."
+cd "$SUPABASE_DOCKER"
+docker compose up -d
+echo "✅ Supabase запущен"
+echo ""
+
+# Запуск контейнеров проекта
+echo "📦 Запуск сервисов проекта..."
+cd "$(dirname "$0")/../docker"
 docker compose up -d
 
 echo ""
-echo "✅ Контейнеры запущены:"
-echo "   - Ollama: http://localhost:11434"
-echo "   - Unstructured: http://localhost:9000"
-echo "   - Prefect UI: http://localhost:4200"
+echo "✅ Все контейнеры запущены:"
 echo ""
+echo "   🗄️  Supabase:"
+echo "      - Studio UI: http://localhost:8000"
+echo "      - API Gateway: http://localhost:8000"
+echo "      - PostgreSQL: localhost:5432 (direct), localhost:6543 (pooled)"
+echo ""
+echo "   📦 Сервисы проекта:"
+echo "      - Ollama: http://localhost:11434"
+echo "      - Unstructured: http://localhost:9000"
+echo "      - Prefect UI: http://localhost:4200"
+echo ""
+
+# Ожидание PostgreSQL
+echo "⏳ Ожидание запуска PostgreSQL..."
+for i in {1..60}; do
+    if docker exec supabase-db pg_isready -U postgres > /dev/null 2>&1; then
+        echo "✅ PostgreSQL готов"
+        break
+    fi
+    if [ $i -eq 60 ]; then
+        echo "⚠️  PostgreSQL не запустился за 2 минуты"
+    fi
+    sleep 2
+done
 
 # Ожидание Ollama
 echo "⏳ Ожидание запуска Ollama..."
