@@ -28,7 +28,8 @@ class Settings(BaseSettings):
     
     # File Monitoring
     MONITORED_PATH: str = "/home/alpaca/monitored_folder"
-    SCAN_INTERVAL: int = 15  # секунды
+    SCAN_INTERVAL: int = 20  # секунды
+    ALLOWED_EXTENSIONS: str = ".docx,.pdf,.txt"  # Разрешённые расширения файлов
     
     # Unstructured API
     UNSTRUCTURED_API_URL: str = "http://localhost:9000/general/v0/general"
