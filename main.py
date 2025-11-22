@@ -10,8 +10,11 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pydantic_setting
 
 import asyncio
 from prefect import flow, task
-from app.utils.logging import get_logger
+from app.utils.logging import setup_logging, get_logger
 from settings import settings
+
+# Настраиваем логирование при старте приложения
+setup_logging()
 
 logger = get_logger(__name__)
 
