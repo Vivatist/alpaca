@@ -5,6 +5,8 @@ set -e
 
 SUPABASE_HOME="/home/alpaca/supabase"
 SUPABASE_DOCKER="$SUPABASE_HOME/docker"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+NETWORK_PATCH="$SCRIPT_DIR/setup_supabase/supabase-network-patch.yml"
 
 echo "🚀 Установка Supabase..."
 echo ""
@@ -45,19 +47,17 @@ if [ ! -f ".env" ]; then
 fi
 
 # Создание резервной копии docker-compose.yml
-cp docker-compose.yml docker-compose.yml.backup
+cp "$SUPABASE_DOCKER/docker-compose.yml" "$SUPABASE_DOCKER/docker-compose.yml.backup"
 
 # Добавление external network в docker-compose.yml
 echo "🔧 Настройка сетевого взаимодействия..."
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-NETWORK_PATCH="$SCRIPT_DIR/setup_supabase/supabase-network-patch.yml"
 
-if ! grep -q "alpaca_network" docker-compose.yml; then
+if ! grep -q "alpaca_network" "$SUPABASE_DOCKER/docker-compose.yml"; then
     # Добавляем external network
     if [ -f "$NETWORK_PATCH" ]; then
-        cat "$NETWORK_PATCH" >> docker-compose.yml
+        cat "$NETWORK_PATCH" >> "$SUPABASE_DOCKER/docker-compose.yml"
     else
-        cat >> docker-compose.yml << 'EOF'
+        cat >> "$SUPABASE_DOCKER/docker-compose.yml" << 'EOF'
 
 # Подключение к сети проекта alpaca
 networks:
@@ -110,13 +110,12 @@ done
 echo "✅ PostgreSQL готов"
 
 # Применение схем
-SCHEMA_DIR="$(dirname "$0")/setup_supabase"
 echo "📋 Применение схемы chunks..."
-docker exec -i supabase-db psql -U postgres -d postgres < "$SCHEMA_DIR/schema_chunks.sql" >/dev/null 2>&1
+docker exec -i supabase-db psql -U postgres -d postgres < "$SCRIPT_DIR/setup_supabase/schema_chunks.sql" >/dev/null 2>&1
 echo "✅ Таблица chunks создана"
 
 echo "📋 Применение схемы files..."
-docker exec -i supabase-db psql -U postgres -d postgres < "$SCHEMA_DIR/schema_files.sql" >/dev/null 2>&1
+docker exec -i supabase-db psql -U postgres -d postgres < "$SCRIPT_DIR/setup_supabase/schema_files.sql" >/dev/null 2>&1
 echo "✅ Таблица files создана"
 
 echo ""
