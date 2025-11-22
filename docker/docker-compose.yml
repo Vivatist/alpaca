@@ -1,0 +1,72 @@
+name: alpaca-rag
+
+services:
+  # Unstructured API для парсинга документов
+  unstructured:
+    image: downloads.unstructured.io/unstructured-io/unstructured-api:latest
+    restart: always
+    ports:
+      - "9000:8000"
+    environment:
+      - UNSTRUCTURED_ALLOWED_MIMETYPES=application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain
+      - UNSTRUCTURED_MEMORY_FREE_MINIMUM_MB=512
+      - TZ=Europe/Moscow
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
+      - PYTHONIOENCODING=utf-8
+      - UNSTRUCTURED_LANGUAGE=rus,eng
+      - UNSTRUCTURED_OCR_LANGUAGES=rus+eng
+      - UNSTRUCTURED_USE_OCR_ALWAYS=auto
+      - UNSTRUCTURED_PARALLEL_MODE=true
+      - UNSTRUCTURED_PARALLEL_NUM_WORKERS=2
+    volumes:
+      - unstructured_data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - alpaca_network
+
+  # Ollama для LLM и эмбеддингов
+  ollama:
+    image: ollama/ollama:latest
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - OLLAMA_NUM_GPU=1
+      - OLLAMA_GPU_LAYERS=999
+      - OLLAMA_MAX_LOADED_MODELS=2  # qwen2.5 + bge-m3
+      - OLLAMA_KEEP_ALIVE=-1  # Держать в памяти постоянно
+      - OLLAMA_NUM_PARALLEL=2
+      - OLLAMA_MAX_QUEUE=10
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [compute,utility]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - alpaca_network
+
+volumes:
+  unstructured_data:
+  ollama_data:
+
+networks:
+  alpaca_network:
+    name: alpaca_network
+    driver: bridge
