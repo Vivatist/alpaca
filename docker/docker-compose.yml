@@ -34,19 +34,21 @@ services:
   ollama:
     image: ollama/ollama:latest
     restart: always
+    networks:
+      - alpaca_network
     ports:
       - "11434:11434"
     volumes:
-      - ollama_data:/root/.ollama
+      - ollama_storage:/root/.ollama
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - OLLAMA_NUM_GPU=1
       - OLLAMA_GPU_LAYERS=999
-      - OLLAMA_MAX_LOADED_MODELS=2  # qwen2.5 + bge-m3
-      - OLLAMA_KEEP_ALIVE=-1  # Держать в памяти постоянно
-      - OLLAMA_NUM_PARALLEL=2
-      - OLLAMA_MAX_QUEUE=10
+      - OLLAMA_MAX_LOADED_MODELS=2  # Максимальное количество загруженных моделей в память (qwen2.5:32b + bge-m3)
+      - OLLAMA_KEEP_ALIVE=-1  # Держать модель в GPU постоянно (-1 = бесконечно)
+      - OLLAMA_NUM_PARALLEL=2  # Количество параллельных запросов к модели
+      - OLLAMA_MAX_QUEUE=10  # Максимальное количество запросов в очереди
     deploy:
       resources:
         reservations:
@@ -59,33 +61,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - alpaca_network
-
-  # PostgreSQL с pgvector (локальная альтернатива Supabase)
-  postgres:
-    image: ankane/pgvector:latest
-    restart: always
-    ports:
-      - "5432:5432"
-    environment:
-      - POSTGRES_DB=alpaca
-      - POSTGRES_USER=alpaca
-      - POSTGRES_PASSWORD=alpaca_password
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U alpaca"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - alpaca_network
 
 volumes:
   unstructured_data:
-  ollama_data:
-  postgres_data:
+  ollama_storage:
 
 networks:
   alpaca_network:

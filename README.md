@@ -1,46 +1,60 @@
-# ALPACA RAG - Постепенная миграция
+# ALPACA RAG
 
-## Текущая структура
+## Подготовка внешних сервисов
 
+### 1. Supabase (PostgreSQL + pgvector)
+
+1. Создайте проект на https://supabase.com
+2. В проекте перейдите: **Settings** → **Database**
+3. Найдите раздел **Connection string** → **URI mode**
+4. Скопируйте строку вида:
+   ```
+   postgresql://postgres:[YOUR-PASSWORD]@db.xxxxx.supabase.co:5432/postgres
+   ```
+5. Включите **pgvector** расширение:
+   - Откройте SQL Editor в Supabase
+   - Выполните:
+     ```sql
+     CREATE EXTENSION IF NOT EXISTS vector;
+     ```
+
+### 2. Docker сервисы (Ollama + Unstructured)
+
+```bash
+chmod +x scripts/start_services.sh
+./scripts/start_services.sh
 ```
-alpaca/
-├── settings.py          # ✅ Настройки
-├── .env                 # ✅ Конфигурация
-├── docker/              # ✅ Внешние сервисы
-│   └── docker-compose.yml
-├── venv/                # ✅ Python окружение
-├── app/
-│   ├── core/            # Пусто - будем добавлять
-│   ├── db/              # Пусто - будем добавлять
-│   └── utils/
-└── tests/               # Пусто - будем добавлять
+
+Это запустит:
+- **Ollama** (http://localhost:11434) - для LLM и embeddings
+- **Unstructured** (http://localhost:9000) - для парсинга документов
+
+### 3. Настройка .env
+
+```bash
+cp .env.example .env
+nano .env
 ```
 
-## План миграции
+Укажите ваш Supabase DATABASE_URL:
+```env
+DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@db.xxxxx.supabase.co:5432/postgres
+```
 
-### Шаг 1: File Watcher (текущий)
-- [ ] Портировать file_watcher.py из старого проекта
-- [ ] Создать тесты test_file_watcher.py
-- [ ] Запустить и отладить
+## Проверка
 
-### Шаг 2: Database
-- [ ] connection.py - подключение к PostgreSQL
-- [ ] Создание таблицы documents
-- [ ] Тесты
+```bash
+# Проверка Ollama
+curl http://localhost:11434/api/tags
 
-### Шаг 3: Document Parser
-- [ ] parser.py для Unstructured API
-- [ ] Тесты парсинга разных форматов
+# Проверка Unstructured
+curl http://localhost:9000/general/v0/general
 
-### Шаг 4: Processing Pipeline
-- [ ] Чанкирование
-- [ ] Embeddings
-- [ ] Сохранение в БД
+# Проверка Supabase
+source venv/bin/activate
+python -c "from settings import settings; print(settings.DATABASE_URL)"
+```
 
-## Старый проект
+## Готово!
 
-Расположение: `/home/alpaca/alpaca-n8n/`
-
-## Следующий шаг
-
-Какой компонент портируем первым?
+Все внешние сервисы настроены. Можно переходить к разработке.
