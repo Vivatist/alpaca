@@ -11,7 +11,6 @@ from settings import settings
 
 def setup_logging():
     """Настраивает логирование для всего приложения"""
-    
     # Получаем корневой logger
     logger = logging.getLogger()
     logger.setLevel(getattr(logging, settings.LOG_LEVEL.upper()))
@@ -45,11 +44,6 @@ def setup_logging():
     logging.getLogger('httpcore').setLevel(logging.WARNING)
     logging.getLogger('asyncpg').setLevel(logging.WARNING)
     logging.getLogger('uvicorn.access').setLevel(logging.WARNING)
-    
-    logger.info(
-        f"Logging configured: level={settings.LOG_LEVEL}, "
-        f"environment={settings.ENVIRONMENT}"
-    )
 
 
 def get_logger(name: str) -> logging.Logger:

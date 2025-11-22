@@ -28,8 +28,14 @@ class Settings(BaseSettings):
     
     # File Monitoring
     MONITORED_PATH: str = "/home/alpaca/monitored_folder"
-    SCAN_INTERVAL: int = 20  # секунды
+    SCAN_MONITORED_FOLDER_INTERVAL: int = 10  # секунды
     ALLOWED_EXTENSIONS: str = ".docx,.pdf,.txt"  # Разрешённые расширения файлов
+    
+    # File Filter
+    FILE_MIN_SIZE: int = 100  # Минимальный размер файла в байтах
+    FILE_MAX_SIZE: int = 10 * 1024 * 1024  # Максимальный размер файла в байтах (10 МБ)
+    EXCLUDED_DIRS: str = "TMP"  # Исключённые директории (через запятую)
+    EXCLUDED_PATTERNS: str = "~*,.*"  # Исключённые паттерны файлов (через запятую)
     
     # Unstructured API
     UNSTRUCTURED_API_URL: str = "http://localhost:9000/general/v0/general"
