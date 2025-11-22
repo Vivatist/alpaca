@@ -21,6 +21,7 @@ echo ""
 echo "✅ Контейнеры запущены:"
 echo "   - Ollama: http://localhost:11434"
 echo "   - Unstructured: http://localhost:9000"
+echo "   - Prefect UI: http://localhost:4200"
 echo ""
 
 # Ожидание Ollama
@@ -28,6 +29,16 @@ echo "⏳ Ожидание запуска Ollama..."
 for i in {1..30}; do
     if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
         echo "✅ Ollama готов"
+        break
+    fi
+    sleep 2
+done
+
+# Ожидание Prefect
+echo "⏳ Ожидание запуска Prefect..."
+for i in {1..30}; do
+    if curl -s http://localhost:4200/api/health > /dev/null 2>&1; then
+        echo "✅ Prefect готов"
         break
     fi
     sleep 2
