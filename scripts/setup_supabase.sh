@@ -49,9 +49,15 @@ cp docker-compose.yml docker-compose.yml.backup
 
 # Добавление external network в docker-compose.yml
 echo "🔧 Настройка сетевого взаимодействия..."
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+NETWORK_PATCH="$SCRIPT_DIR/setup_supabase/supabase-network-patch.yml"
+
 if ! grep -q "alpaca_network" docker-compose.yml; then
     # Добавляем external network
-    cat >> docker-compose.yml << 'EOF'
+    if [ -f "$NETWORK_PATCH" ]; then
+        cat "$NETWORK_PATCH" >> docker-compose.yml
+    else
+        cat >> docker-compose.yml << 'EOF'
 
 # Подключение к сети проекта alpaca
 networks:
@@ -59,6 +65,7 @@ networks:
     name: alpaca_network
     external: true
 EOF
+    fi
     echo "✅ Сеть alpaca_network настроена"
 else
     echo "✅ Сеть уже настроена"
@@ -103,7 +110,7 @@ done
 echo "✅ PostgreSQL готов"
 
 # Применение схем
-SCHEMA_DIR="/home/alpaca/alpaca"
+SCHEMA_DIR="$(dirname "$0")/setup_supabase"
 echo "📋 Применение схемы chunks..."
 docker exec -i supabase-db psql -U postgres -d postgres < "$SCHEMA_DIR/schema_chunks.sql" >/dev/null 2>&1
 echo "✅ Таблица chunks создана"
