@@ -78,11 +78,49 @@ if [ -f "$ALPACA_ENV" ]; then
 fi
 
 echo ""
-echo "✅ Supabase готов к запуску!"
+echo "🗄️  Применение схемы базы данных..."
+
+# Создание Docker сети если не существует
+docker network inspect alpaca_network >/dev/null 2>&1 || docker network create alpaca_network
+
+# Запуск Supabase для инициализации базы
+echo "📦 Запуск Supabase..."
+docker compose up -d
+
+# Ожидание готовности PostgreSQL
+echo "⏳ Ожидание запуска PostgreSQL..."
+MAX_RETRIES=30
+RETRY_COUNT=0
+until docker exec supabase-db pg_isready -U postgres >/dev/null 2>&1; do
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+        echo "❌ Timeout: PostgreSQL не запустился"
+        exit 1
+    fi
+    echo "   Попытка $RETRY_COUNT/$MAX_RETRIES..."
+    sleep 2
+done
+echo "✅ PostgreSQL готов"
+
+# Применение схем
+SCHEMA_DIR="/home/alpaca/alpaca"
+echo "📋 Применение схемы chunks..."
+docker exec -i supabase-db psql -U postgres -d postgres < "$SCHEMA_DIR/schema_chunks.sql" >/dev/null 2>&1
+echo "✅ Таблица chunks создана"
+
+echo "📋 Применение схемы files..."
+docker exec -i supabase-db psql -U postgres -d postgres < "$SCHEMA_DIR/schema_files.sql" >/dev/null 2>&1
+echo "✅ Таблица files создана"
+
+echo ""
+echo "✅ Supabase настроен и запущен!"
 echo ""
 echo "📁 Директория: $SUPABASE_DOCKER"
 echo "🌐 Сеть: alpaca_network (общая с alpaca проектом)"
 echo "🔐 Пароль PostgreSQL: $POSTGRES_PASSWORD"
+echo "🗄️  Таблицы: chunks (векторная), files (отслеживание)"
+echo "🌐 Dashboard: http://localhost:8000"
 echo ""
-echo "Для запуска всех сервисов используйте:"
-echo "  ./scripts/start_services.sh"
+echo "Для управления сервисами используйте:"
+echo "  ./scripts/start_services.sh  - запуск"
+echo "  ./scripts/stop_services.sh   - остановка"
