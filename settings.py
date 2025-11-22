@@ -1,18 +1,24 @@
 """
 Настройки приложения
 """
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     """Настройки приложения"""
     
+    model_config = ConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="ignore"  # Игнорировать дополнительные поля из .env
+    )
+    
     # Application
     APP_NAME: str = "ALPACA RAG"
     VERSION: str = "2.0.0"
     
     # Supabase Database (PostgreSQL с pgvector)
-    # Формат: postgresql://postgres:[YOUR-PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
     DATABASE_URL: str
     
     # File Monitoring
@@ -32,10 +38,6 @@ class Settings(BaseSettings):
     PREFECT_SERVER_HOST: str = "0.0.0.0"
     PREFECT_SERVER_PORT: int = 4200
     PREFECT_LOGGING_LEVEL: str = "INFO"
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
 
 
 settings = Settings()
