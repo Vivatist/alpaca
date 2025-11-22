@@ -62,9 +62,30 @@ services:
     networks:
       - alpaca_network
 
+  # PostgreSQL с pgvector (локальная альтернатива Supabase)
+  postgres:
+    image: ankane/pgvector:latest
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=alpaca
+      - POSTGRES_USER=alpaca
+      - POSTGRES_PASSWORD=alpaca_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alpaca"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - alpaca_network
+
 volumes:
   unstructured_data:
   ollama_data:
+  postgres_data:
 
 networks:
   alpaca_network:
