@@ -1,1 +1,0 @@
-"""File Watcher internal modules"""

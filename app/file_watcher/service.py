@@ -4,10 +4,10 @@ File Watcher Service - изолированный сервис для монит
 import time
 from typing import Dict, Any
 from app.utils.logging import get_logger
-from .file_watcher.scanner import Scanner
-from .file_watcher.database import Database
-from .file_watcher.vector_sync import VectorSync
-from .file_watcher.file_filter import FileFilter
+from .scanner import Scanner
+from .database import Database
+from .vector_sync import VectorSync
+from .file_filter import FileFilter
 
 
 logger = get_logger(__name__)

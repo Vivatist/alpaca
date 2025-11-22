@@ -20,7 +20,7 @@ from settings import settings
 
 # Настраиваем логирование в каждом процессе
 setup_logging()
-logger = get_logger("main")
+logger = get_logger(__name__)
 
 # Единственный экземпляр сервиса
 file_watcher = FileWatcherService(
