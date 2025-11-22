@@ -2,7 +2,7 @@
 
 # Скрипт копирования корпоративных документов в monitored_folder
 
-SOURCE_DIR="$HOME/Alpaca/data/volume_documents/ЮРИСТ (МАША)/Корпоративные документы (Уставные, Учредительные, прочее)"
+SOURCE_DIR="$HOME/old_Alpaca/data/volume_documents/ЮРИСТ (МАША)/Корпоративные документы (Уставные, Учредительные, прочее)"
 
 # Получаем путь из settings.py
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -18,9 +18,24 @@ fi
 
 # Проверка существования целевой директории
 if [ ! -d "$DEST_DIR" ]; then
-    echo "ОШИБКА: Целевая директория не найдена:"
+    echo "⚠️  Целевая директория не найдена:"
     echo "$DEST_DIR"
-    exit 1
+    echo ""
+    read -p "Создать директорию? (yes/no): " create_dir
+    
+    if [ "$create_dir" = "yes" ]; then
+        mkdir -p "$DEST_DIR"
+        if [ $? -eq 0 ]; then
+            echo "✓ Директория создана: $DEST_DIR"
+            echo ""
+        else
+            echo "✗ Ошибка при создании директории"
+            exit 1
+        fi
+    else
+        echo "Отменено."
+        exit 0
+    fi
 fi
 
 # Копирование файлов

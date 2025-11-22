@@ -9,9 +9,26 @@ MONITORED_DIR=$(cd "$PROJECT_DIR" && source venv/bin/activate && python -c "from
 
 # Проверка существования директории
 if [ ! -d "$MONITORED_DIR" ]; then
-    echo "ОШИБКА: Директория не найдена:"
+    echo "⚠️  Директория не найдена:"
     echo "$MONITORED_DIR"
-    exit 1
+    echo ""
+    read -p "Создать директорию? (yes/no): " create_dir
+    
+    if [ "$create_dir" = "yes" ]; then
+        mkdir -p "$MONITORED_DIR"
+        if [ $? -eq 0 ]; then
+            echo "✓ Директория создана: $MONITORED_DIR"
+            echo ""
+            echo "Директория пуста, нечего удалять."
+            exit 0
+        else
+            echo "✗ Ошибка при создании директории"
+            exit 1
+        fi
+    else
+        echo "Отменено."
+        exit 0
+    fi
 fi
 
 # Подсчет файлов и директорий перед удалением
