@@ -2,6 +2,7 @@
 ALPACA RAG - Единая точка входа
 """
 import os
+from dataclasses import dataclass
 from typing import Dict, List, Tuple
 import warnings
 
@@ -14,7 +15,13 @@ os.environ["PREFECT_LOGGING_TO_API_ENABLED"] = "false"
 
 from datetime import timedelta
 from prefect import flow, serve, task
-from prefect.artifacts import create_table_artifact
+
+
+@dataclass(frozen=True)
+class FileID:
+    """Идентификатор файла (hash + path)"""
+    hash: str
+    path: str
 from utils.logging import setup_logging, get_logger
 from utils.process_lock import ProcessLock
 from app.file_watcher import FileWatcherService
@@ -54,26 +61,18 @@ def file_watcher_flow():
     return result
 
 
-
-@task(name="process_deleted_files", retries=2, persist_result=True)
-def task_process_deleted_files(
-    db: Database,
-    files: List[Tuple[str, str, int]]
-) -> int:
-    """Task: обработка deleted файлов"""
-    processed = 0
-    
-    for file_path, file_hash, file_size in files:
-        try:
-            logger.info(f"Processing deleted: {file_path}")
-            chunks_deleted = db.task_delete_chunks_by_hash(db, file_hash)
-            db.task_delete_file(db, file_hash)
-            logger.info(f"Deleted {chunks_deleted} chunks and file record")
-            processed += 1
-        except Exception as e:
-            logger.error(f"ERROR when trying to delete a file {file_path}: {e}")
-    
-    return processed
+@task(name="process_deleted_file", retries=2, persist_result=True)
+def task_process_deleted_file(
+    db: Database, file_path, file_hash: str) -> bool:
+    """Task: обработка deleted файла"""
+    try:
+        chunks_deleted = db.delete_chunks_by_hash(file_hash)
+        db.delete_file_by_hash(file_hash)
+        logger.info(f"Deleted {file_path} and {chunks_deleted} chunks")
+    except Exception as e:
+        logger.error(f"ERROR when trying to delete a file {file_path}: {e}")
+        return False
+    return True
 
 
 @task(name="process_added_files", retries=2, persist_result=True)
@@ -90,13 +89,13 @@ def task_process_added_files(
         if slots_available > 0:
             try:
                 logger.info(f"➕ Processing added: {file_path}")
-                db.task_call_webhook(webhook_url, file_path, file_hash)
-                db.task_mark_as_processed(db, file_hash)
+                db.call_webhook(webhook_url, file_path, file_hash)
+                db.mark_as_processed(file_hash)
                 stats['processed'] += 1
                 slots_available -= 1
             except Exception as e:
                 logger.error(f"❌ Failed to process added file {file_path}: {e}")
-                db.task_mark_as_error(db, file_hash)
+                db.mark_as_error(file_hash)
         else:
             logger.info(f"⏸️  Workflow limit reached, skipping remaining added files")
             stats['skipped'] = len(files) - stats['processed']
@@ -106,23 +105,24 @@ def task_process_added_files(
 
 
 @task(name="process_updated_files", retries=2, persist_result=True)
-def task_process_updated_files(db: Database, webhook_url: str, files: List[Tuple[str, str, int]], slots_available: int) -> Dict[str, int]:
+def task_process_updated_files(
+    db: Database, file_path, file_hash: str) -> bool:   
     """Task: обработка updated файлов"""
-    stats = {'processed': 0, 'skipped': 0}
+
     
     for file_path, file_hash, file_size in files:
         if slots_available > 0:
             try:
                 logger.info(f"🔄 Processing updated: {file_path}")
-                chunks_deleted = db.task_delete_chunks_by_path(db, file_path)
+                chunks_deleted = db.delete_chunks_by_path(file_path)
                 logger.info(f"🗑️  Deleted {chunks_deleted} old chunks")
-                db.task_call_webhook(webhook_url, file_path, file_hash)
-                db.task_mark_as_processed(db, file_hash)
+                db.call_webhook(webhook_url, file_path, file_hash)
+                db.mark_as_processed(file_hash)
                 stats['processed'] += 1
                 slots_available -= 1
             except Exception as e:
                 logger.error(f"❌ Failed to process updated file {file_path}: {e}")
-                db.db.task_mark_as_error(db, file_hash)
+                db.mark_as_error(file_hash)
         else:
             logger.info(f"⏸️  Workflow limit reached, skipping remaining updated files")
             stats['skipped'] = len(files) - stats['processed']
@@ -134,19 +134,26 @@ def task_process_updated_files(db: Database, webhook_url: str, files: List[Tuple
 @flow(name="ingest_files_flow")
 def ingest_files_flow():
     """Обработка изменений статусов файлов (added/updated → ingestion, deleted → cleanup)"""
-    logger.info("Starting file status processing flow...")
-    while True:
-        pending_files = db.get_pending_files()
-        total_pending = sum(len(files) for files in pending_files.values())
-        logger.info(f"📋 Found {total_pending} pending files (deleted:{len(pending_files['deleted'])}, updated:{len(pending_files['updated'])}, added:{len(pending_files['added'])})")
-        if total_pending == 0:
-            break
+    pending_files = db.get_pending_files()
+    total_pending = sum(len(files) for files in pending_files.values())
+    logger.info(f"📋 Found {total_pending} pending files (deleted:{len(pending_files['deleted'])}, updated:{len(pending_files['updated'])}, added:{len(pending_files['added'])})")
+
+    # Цикл обработки файлов до тех пор, пока есть отмеченные как deleted pending-файлы
+    for file_path, file_hash, file_size in pending_files['deleted']:
+        task_process_deleted_file(db, file_path, file_hash)
         
-        if pending_files['deleted']:
-            task_process_deleted_files(db, pending_files['deleted'])
+    # Цикл обработки файлов до тех пор, пока есть отмеченные как deleted pending-файлы
+    for file_path, file_hash, file_size in pending_files['updated']:
+        task_process_updated_files(db, file_path, file_hash)
+        
         
         if pending_files['updated'] or pending_files['added']:
-            logger.info("⏸️  Skipping updated/added files (not implemented yet)")
+            task_process_updated_files(
+                db,
+                settings.N8N_WEBHOOK_URL,
+                pending_files['updated'],
+                settings.MAX_HEAVY_WORKFLOWS
+            )
             break  # Временно прерываем цикл, чтобы не зависнуть
     result = pending_files
     return result
@@ -163,10 +170,7 @@ if __name__ == "__main__":
         
         # Сброс статусов processed у файлов в базе при старте
         reset_count = file_watcher.reset_processed_statuses()
-        
-        # Не используем setup_handlers() - конфликтует с Prefect Runner
-        # atexit уже зарегистрирован, этого достаточно
-        
+            
         # Запуск нескольких flows с ограничением параллелизма
         serve(
             file_watcher_flow.to_deployment(
