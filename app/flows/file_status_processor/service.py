@@ -127,6 +127,25 @@ def task_process_updated_files(
     return stats
 
 
+@task(name="process_deleted_files", retries=2, persist_result=True)
+def task_process_deleted_files(
+    db: Database,
+    files: List[Tuple[str, str, int]]
+) -> int:
+    """Task: обработка deleted файлов"""
+    processed = 0
+    
+    for file_path, file_hash, file_size in files:
+        try:
+            logger.info(f"🗑️  Processing deleted: {file_path}")
+            chunks_deleted = task_delete_chunks_by_hash(db, file_hash)
+            task_delete_file(db, file_hash)
+            logger.info(f"✅ Deleted {chunks_deleted} chunks and file record")
+            processed += 1
+        except Exception as e:
+            logger.error(f"❌ Failed to process deleted file {file_path}: {e}")
+    
+    return processed
 
 
 class FileStatusProcessorService:
