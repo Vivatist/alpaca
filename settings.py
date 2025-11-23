@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     SCAN_MONITORED_FOLDER_INTERVAL: int = 10  # секунды
     ALLOWED_EXTENSIONS: str = ".docx,.pdf,.txt"  # Разрешённые расширения файлов
     
+    # File Status Processor
+    PROCESS_FILE_CHANGES_INTERVAL: int = 7  # секунды
+    MAX_HEAVY_WORKFLOWS: int = 2  # Максимум одновременных тяжёлых воркфлоу
+
     # File Filter
     FILE_MIN_SIZE: int = 100  # Минимальный размер файла в байтах
     FILE_MAX_SIZE: int = 10 * 1024 * 1024  # Максимальный размер файла в байтах (10 МБ)
@@ -51,10 +55,6 @@ class Settings(BaseSettings):
     PREFECT_SERVER_PORT: int = 4200
     PREFECT_LOGGING_LEVEL: str = "INFO"
     
-    # File Status Processor
-    PROCESS_FILE_CHANGES_INTERVAL: int = 10  # секунды
-    MAX_HEAVY_WORKFLOWS: int = 2  # Максимум одновременных тяжёлых воркфлоу
-    N8N_WEBHOOK_URL: str = "http://localhost:5678/webhook/added_document"
-    
+
 
 settings = Settings()
