@@ -1,3 +1,5 @@
+temp_parsed/
+
 # Python
 __pycache__/
 *.py[cod]

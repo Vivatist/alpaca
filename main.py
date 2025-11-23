@@ -30,8 +30,6 @@ class FileID(BaseModel):
 from utils.logging import setup_logging, get_logger
 from utils.process_lock import ProcessLock
 from app.file_watcher import FileWatcherService
-from app.flows.file_status_processor import FileStatusProcessorService
-from prefect.task_runners import ConcurrentTaskRunner
 from settings import settings
 from database import Database
 
@@ -75,14 +73,15 @@ def task_process_deleted_file(
     return file_id
 
 
-@task(name="process_parsing_files", retries=2, persist_result=True)
-def task_parsing_file(
-    db: Database, file_id: FileID) -> str:
-    """Task: обработка added файлов"""
+@flow(name="parsing_flow")
+def parsing_flow(file_id: dict) -> str:
+    """Flow: парсинг документа в текст"""
+    file_id = FileID(**file_id)
+    
     try:
-        logger.info(f"Processing parsing: {file_id.path}")
+        logger.info(f"📖 Processing parsing: {file_id.path}")
         # parsed_text = parser_service.parse(file_id.path)    
-        sleep(2 + os.urandom(1)[0] / 255 * 3)  # Симуляция времени парсинга 2-5 сек
+        sleep(3)  # Симуляция времени парсинга 2-5 сек
         return "--text--"  # TODO: вернуть реальный текст
     except Exception as e:
         logger.error(f"Failed to process parsing file {file_id.path}: {e}")
@@ -92,19 +91,20 @@ def task_parsing_file(
 
 @flow(name="ingest_pipeline")
 def ingest_pipeline(file_id: dict) -> str:
-    """Входная точка пайплайна нового документа"""
-    
+    """Входная точка пайплайна нового документа"""    
     file_id = FileID(**file_id)  # Преобразуем dict обратно в FileID
-    logger.info(f"🔍 Parsing file: {file_id.path} (hash: {file_id.hash[:8]}...)")
+    logger.info(f"🍎 Start ingest pipeline: {file_id.path} (hash: {file_id.hash[:8]}...)")
     db.mark_as_processed(file_id.hash)
     
     # 1. Парсим файл в сырой текст
-    raw_text = task_parsing_file(db, file_id)
+    raw_text = parsing_flow(file_id.model_dump())
     
     # TODO: Реализовать пайплайн. пока только парсим и сохраняем в файл
     temp_dir = os.path.join(os.path.dirname(__file__), "temp_parsed")
-    os.makedirs(temp_dir, exist_ok=True)
     temp_file_path = os.path.join(temp_dir, f"{file_id.path}.txt")
+    
+    # Создаём все родительские директории
+    os.makedirs(os.path.dirname(temp_file_path), exist_ok=True)
     
     with open(temp_file_path, "w", encoding="utf-8") as f:
         f.write(raw_text)
@@ -114,7 +114,7 @@ def ingest_pipeline(file_id: dict) -> str:
     return ""
 
 
-@flow(task_runner=ConcurrentTaskRunner(max_workers=1), name="process_pending_files_flow")
+@flow(name="process_pending_files_flow")
 def process_pending_files_flow():
     """Обработка изменений статусов файлов (added/updated → ingestion, deleted → cleanup)"""
     pending_files = db.get_pending_files()
@@ -124,7 +124,7 @@ def process_pending_files_flow():
     # Цикл обработки файлов до тех пор, пока есть отмеченные как deleted pending-файлы
     for file_id in pending_files['deleted']:
         task_process_deleted_file(db, file_id)
-        
+
     # Цикл обработки файлов до тех пор, пока есть отмеченные как updated pending-файлы
     for file_id in pending_files['updated']:
         task_process_deleted_file(db, file_id)
@@ -152,16 +152,16 @@ if __name__ == "__main__":
         # Запуск нескольких flows с ограничением параллелизма
         serve(
             file_watcher_flow.to_deployment(
-                name="file-watcher",
-                interval=timedelta(seconds=settings.SCAN_MONITORED_FOLDER_INTERVAL),
-                description="Сканирование и синхронизация файлов",
-                concurrency_limit=1
+            name="file-watcher",
+            interval=timedelta(seconds=settings.SCAN_MONITORED_FOLDER_INTERVAL),
+            description="Сканирование и синхронизация файлов",
+            concurrency_limit=1
             ),
             process_pending_files_flow.to_deployment(
-                name="process_pending_files_flow",
-                interval=timedelta(seconds=settings.PROCESS_FILE_CHANGES_INTERVAL),
-                description="Обработка изменений статусов файлов",
-                concurrency_limit=1
+            name="process_pending_files_flow",
+            interval=timedelta(seconds=settings.PROCESS_FILE_CHANGES_INTERVAL),
+            description="Обработка изменений статусов файлов",
+            concurrency_limit=settings.MAX_HEAVY_WORKFLOWS
             )
         )
     except KeyboardInterrupt:

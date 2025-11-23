@@ -127,8 +127,12 @@ class Database:
                         if db_record['status'] in ('error', 'processed'):
                             continue
                         
+                        # Пропускаем файлы в статусе added/updated - они ждут обработки
+                        if db_record['status'] in ('added', 'updated'):
+                            continue
+                        
                         if db_record['hash'] == disk_file['hash']:
-                            # Хэш совпадает → ok
+                            # Хэш совпадает → ok (только для файлов уже в ok/deleted)
                             if db_record['status'] != 'ok':
                                 updates.append(('ok', disk_path))
                                 stats['unchanged'] += 1
