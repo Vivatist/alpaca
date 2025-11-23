@@ -1,9 +1,7 @@
 """
 File Watcher Service - изолированный сервис для мониторинга файлов
 """
-import time
 from typing import Dict, Any
-from prefect import task
 from app.utils.logging import get_logger
 from .scanner import Scanner
 from .database import Database
@@ -12,37 +10,6 @@ from .file_filter import FileFilter
 
 
 logger = get_logger(__name__)
-
-
-# Prefect tasks как отдельные функции (принимают объекты явно)
-@task(name="scan_disk", retries=2, persist_result=True)
-def task_scan_disk(scanner: Scanner) -> list:
-    """Task: сканирование диска"""
-    files = scanner.scan()
-    return files
-
-
-@task(name="sync_files_to_db", retries=3, persist_result=True)
-def task_sync_files(db: Database, files: list) -> Dict[str, int]:
-    """Task: синхронизация файлов с БД"""
-    result = db.sync_by_hash(files)
-    return result
-
-
-@task(name="sync_vector_status", retries=3, persist_result=True)
-def task_sync_status(vector_sync: VectorSync) -> Dict[str, int]:
-    """Task: синхронизация статусов с векторной БД"""
-    result = vector_sync.sync_status()
-    return result
-
-
-@task(name="reset_processed_statuses", persist_result=True)
-def task_reset_processed(db: Database) -> int:
-    """Task: сброс статусов 'processed' на 'ok'"""
-    count = db.reset_processed_to_ok()
-    if count > 0:
-        logger.info(f"🔄 Reset {count} processed statuses")
-    return count
 
 
 class FileWatcherService:
@@ -85,55 +52,42 @@ class FileWatcherService:
         
         self.vector_sync = VectorSync(self.db)
     
-    def scan_and_sync(self) -> Dict[str, Any]:
+    def scan(self) -> list:
         """
-        Выполняет полный цикл сканирования и синхронизации.
-        Использует Prefect tasks для отслеживания каждого шага.
+        Сканирует диск и возвращает список файлов.
         
         Returns:
-            dict: Результаты сканирования и синхронизации
+            list: Список словарей с информацией о файлах
         """
-        start_time = time.time()
+        return self.scanner.scan()
+    
+    def sync_by_hash(self, files: list) -> Dict[str, int]:
+        """
+        Синхронизирует файлы с БД по хешам.
         
-        try:
-            # Каждый шаг - отдельная task с retry и мониторингом
-            files = task_scan_disk(self.scanner)
-            file_sync = task_sync_files(self.db, files)
-            status_sync = task_sync_status(self.vector_sync)
+        Args:
+            files: Список файлов с диска
             
-            duration = time.time() - start_time
-            logger.info(
-                f"disc[total:{len(files)}, "
-                f"+{file_sync['added']}, "
-                f"~{file_sync['updated']}, "
-                f"-{file_sync['deleted']}]  "
-                f"base[ok:{status_sync['ok']}, "
-                f"a:{status_sync['added']}, "
-                f"u:{status_sync['updated']}] "
-                f"in {duration:.2f}s"
-                )
-            return {
-                'success': True,
-                'disk_files': len(files),
-                'file_sync': file_sync,
-                'status_sync': status_sync,
-                'duration': duration
-            }
-            
-        except Exception as e:
-            duration = time.time() - start_time
-            logger.error(f"❌ Scan failed after {duration:.2f}s: {e}", exc_info=True)
-            return {
-                'success': False,
-                'error': str(e),
-                'duration': duration
-            }
+        Returns:
+            dict: Статистика (added, updated, deleted, unchanged)
+        """
+        return self.db.sync_by_hash(files)
+    
+    def sync_status(self) -> Dict[str, int]:
+        """
+        Синхронизирует статусы файлов с векторной БД.
+        
+        Returns:
+            dict: Статистика (ok, added, updated)
+        """
+        return self.vector_sync.sync_status()
     
     def reset_processed_statuses(self) -> int:
         """
-        Сбрасывает все статусы 'processed' на 'ok'
+        Сбрасывает все статусы 'processed' на 'ok'.
         
         Returns:
             int: Количество сброшенных записей
         """
-        return task_reset_processed(self.db)
+        count = self.db.reset_processed_to_ok()
+        return count

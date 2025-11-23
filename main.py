@@ -2,11 +2,7 @@
 ALPACA RAG - Единая точка входа
 """
 import os
-import sys
 import warnings
-import logging
-import atexit
-import signal
 
 os.environ.setdefault("PYTHONWARNINGS", "ignore::UserWarning")
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic_settings.main")
@@ -16,64 +12,18 @@ os.environ["PREFECT_LOGGING_LEVEL"] = "WARNING"
 os.environ["PREFECT_LOGGING_TO_API_ENABLED"] = "false"
 
 from datetime import timedelta
-from prefect import flow, serve
+from prefect import flow, serve, task
 from prefect.artifacts import create_table_artifact
 from app.utils.logging import setup_logging, get_logger
+from app.utils.process_lock import ProcessLock
 from app.file_watcher import FileWatcherService
 from app.flows.file_status_processor import FileStatusProcessorService
 from settings import settings
+import time
 
 # Настраиваем логирование в каждом процессе
 setup_logging()
 logger = get_logger(__name__)
-
-# PID файл для защиты от дублей (как у HTTP сервера)
-PID_FILE = '/tmp/alpaca_rag.pid'
-
-
-def acquire_lock():
-    """Проверяет что процесс не запущен (аналог bind() у сокета)"""
-    if os.path.exists(PID_FILE):
-        try:
-            with open(PID_FILE, 'r') as f:
-                old_pid = int(f.read().strip())
-            
-            # Проверяем жив ли процесс
-            try:
-                os.kill(old_pid, 0)  # Не убивает, просто проверяет
-                logger.error(f"❌ ALPACA RAG already running (PID: {old_pid})")
-                logger.error(f"   To stop: kill {old_pid}")
-                logger.error(f"   Or if it's dead: rm {PID_FILE}")
-                sys.exit(1)
-            except OSError:
-                # Процесс мёртв, удаляем старый PID
-                logger.info(f"Removing stale PID file (process {old_pid} is dead)")
-                os.remove(PID_FILE)
-        except (ValueError, IOError) as e:
-            logger.warning(f"Invalid PID file, removing: {e}")
-            os.remove(PID_FILE)
-    
-    # Записываем наш PID
-    with open(PID_FILE, 'w') as f:
-        f.write(str(os.getpid()))
-    logger.info(f"Acquired lock (PID: {os.getpid()}, file: {PID_FILE})")
-
-
-def release_lock():
-    """Удаляет PID файл при завершении"""
-    try:
-        if os.path.exists(PID_FILE):
-            os.remove(PID_FILE)
-            logger.info("Released lock")
-    except Exception as e:
-        logger.error(f"Failed to release lock: {e}")
-
-
-def signal_handler(signum, frame):
-    """Обработчик сигналов для graceful shutdown"""
-    logger.info(f"Received signal {signum}, shutting down...")
-    release_lock()
-    sys.exit(0)
 
 # Сервисы
 file_watcher = FileWatcherService(
@@ -93,32 +43,84 @@ file_processor = FileStatusProcessorService(
 )
 
 
+# === FILE WATCHER TASKS ===
+
+@task(name="scan_disk", retries=3, persist_result=True)
+def task_scan_disk() -> list:
+    """Task: сканирование диска"""
+    return file_watcher.scan()
+
+
+@task(name="sync_files_to_db", retries=3, persist_result=True)
+def task_sync_files(files: list) -> dict:
+    """Task: синхронизация файлов с БД по хешам"""
+    return file_watcher.sync_by_hash(files)
+
+
+@task(name="sync_vector_status", retries=3, persist_result=True)
+def task_sync_status() -> dict:
+    """Task: синхронизация статусов с векторной БД"""
+    return file_watcher.sync_status()
+
+
+@task(name="reset_processed_statuses", persist_result=True)
+def task_reset_processed() -> int:
+    """Task: сброс статусов 'processed' на 'ok'"""
+    return file_watcher.reset_processed_statuses()
+
+
 @flow(name="file_watcher_flow")
 def file_watcher_flow():
     """Сканирование и синхронизация файлов"""
-    result = file_watcher.scan_and_sync()
-
-    if result['success']:
+    start_time = time.time()
+    
+    try:
+        # Каждый шаг - отдельная task с retry и мониторингом
+        files = task_scan_disk()
+        file_sync = task_sync_files(files)
+        status_sync = task_sync_status()
+        
+        duration = time.time() - start_time
+        logger.info(
+            f"disc[total:{len(files)}, "
+            f"+{file_sync['added']}, "
+            f"~{file_sync['updated']}, "
+            f"-{file_sync['deleted']}]  "
+            f"base[ok:{status_sync['ok']}, "
+            f"a:{status_sync['added']}, "
+            f"u:{status_sync['updated']}] "
+            f"in {duration:.2f}s"
+        )
+        
         # Создаём артефакт с результатами сканирования
         create_table_artifact(
             key="scan-summary",
             table=[
-                {"Metric": "Files on disk", "Value": result['disk_files']},
-                {"Metric": "Added", "Value": result['file_sync']['added']},
-                {"Metric": "Updated", "Value": result['file_sync']['updated']},
-                {"Metric": "Deleted", "Value": result['file_sync']['deleted']},
-                {"Metric": "Unchanged", "Value": result['file_sync']['unchanged']},
-                {"Metric": "Status OK", "Value": result['status_sync']['ok']},
-                {"Metric": "Status Added", "Value": result['status_sync']['added']},
-                {"Metric": "Status Updated", "Value": result['status_sync']['updated']},
-                {"Metric": "Duration (s)", "Value": f"{result['duration']:.2f}"},
+                {"Metric": "Files on disk", "Value": len(files)},
+                {"Metric": "Added", "Value": file_sync['added']},
+                {"Metric": "Updated", "Value": file_sync['updated']},
+                {"Metric": "Deleted", "Value": file_sync['deleted']},
+                {"Metric": "Unchanged", "Value": file_sync['unchanged']},
+                {"Metric": "Status OK", "Value": status_sync['ok']},
+                {"Metric": "Status Added", "Value": status_sync['added']},
+                {"Metric": "Status Updated", "Value": status_sync['updated']},
+                {"Metric": "Duration (s)", "Value": f"{duration:.2f}"},
             ],
             description="File Watcher Scan Summary"
         )
-    else:
-        raise Exception(result.get('error', 'Unknown error'))
-    
-    return result
+        
+        return {
+            'success': True,
+            'disk_files': len(files),
+            'file_sync': file_sync,
+            'status_sync': status_sync,
+            'duration': duration
+        }
+        
+    except Exception as e:
+        duration = time.time() - start_time
+        logger.error(f"❌ Scan failed after {duration:.2f}s: {e}", exc_info=True)
+        raise
 
 
 @flow(name="file_status_processor_flow")
@@ -147,13 +149,10 @@ def file_status_processor_flow():
 
 
 if __name__ == "__main__":
-    # Проверяем что мы единственные (как HTTP сервер проверяет порт)
-    acquire_lock()
-    
-    # Регистрируем очистку при выходе
-    atexit.register(release_lock)
-    signal.signal(signal.SIGTERM, signal_handler)
-    signal.signal(signal.SIGINT, signal_handler)
+    # Защита от дублирования процессов (как HTTP сервер проверяет порт)
+    process_lock = ProcessLock('/tmp/alpaca_rag.pid')
+    process_lock.acquire()
+    process_lock.setup_handlers()
     
     try:
         logger.info("Starting ALPACA RAG system...")
@@ -163,7 +162,7 @@ if __name__ == "__main__":
         logger.info(f"Max heavy workflows: {settings.MAX_HEAVY_WORKFLOWS}")
         
         # Сброс статусов processed у файлов в базе при старте
-        reset_count = file_watcher.reset_processed_statuses()
+        reset_count = task_reset_processed()
         
         # Запуск нескольких flows
         serve(
@@ -181,4 +180,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info("Shutting down gracefully...")
     finally:
-        release_lock()
+        process_lock.release()
