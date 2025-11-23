@@ -71,7 +71,7 @@ def task_process_deleted_file(
 
 
 @task(name="parsing")
-def parsing_flow(file_id: dict) -> str:
+def parsing_task(file_id: dict) -> str:
     """Flow: парсинг документа в текст"""
     file_id = FileID(**file_id)
     
@@ -94,7 +94,7 @@ def ingest_pipeline(file_id: dict) -> str:
     db.mark_as_processed(file_id.hash)
     
     # 1. Парсим файл в сырой текст
-    raw_text = parsing_flow(file_id.model_dump())
+    raw_text = parsing_task(file_id.model_dump())
     
     # TODO: Реализовать пайплайн. пока только парсим и сохраняем в файл
     temp_dir = os.path.join(os.path.dirname(__file__), "temp_parsed")
