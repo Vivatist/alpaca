@@ -22,9 +22,6 @@ class FileID(BaseModel):
     """Идентификатор файла (hash + path)"""
     hash: str
     path: str
-    
-    class Config:
-        frozen = True
         
         
 from utils.logging import setup_logging, get_logger
@@ -73,7 +70,7 @@ def task_process_deleted_file(
     return file_id
 
 
-@flow(name="parsing_flow")
+@task(name="parsing")
 def parsing_flow(file_id: dict) -> str:
     """Flow: парсинг документа в текст"""
     file_id = FileID(**file_id)
@@ -91,8 +88,8 @@ def parsing_flow(file_id: dict) -> str:
 
 @flow(name="ingest_pipeline")
 def ingest_pipeline(file_id: dict) -> str:
-    """Входная точка пайплайна нового документа"""    
-    file_id = FileID(**file_id)  # Преобразуем dict обратно в FileID
+    """Входная точка пайплайна нового документа"""
+    file_id = FileID(**file_id)
     logger.info(f"🍎 Start ingest pipeline: {file_id.path} (hash: {file_id.hash[:8]}...)")
     db.mark_as_processed(file_id.hash)
     
@@ -152,16 +149,16 @@ if __name__ == "__main__":
         # Запуск нескольких flows с ограничением параллелизма
         serve(
             file_watcher_flow.to_deployment(
-            name="file-watcher",
-            interval=timedelta(seconds=settings.SCAN_MONITORED_FOLDER_INTERVAL),
-            description="Сканирование и синхронизация файлов",
-            concurrency_limit=1
+                name="file-watcher",
+                interval=timedelta(seconds=settings.SCAN_MONITORED_FOLDER_INTERVAL),
+                description="Сканирование и синхронизация файлов",
+                concurrency_limit=1
             ),
             process_pending_files_flow.to_deployment(
-            name="process_pending_files_flow",
-            interval=timedelta(seconds=settings.PROCESS_FILE_CHANGES_INTERVAL),
-            description="Обработка изменений статусов файлов",
-            concurrency_limit=settings.MAX_HEAVY_WORKFLOWS
+                name="process_pending_files_flow",
+                interval=timedelta(seconds=settings.PROCESS_FILE_CHANGES_INTERVAL),
+                description="Обработка изменений статусов файлов",
+                concurrency_limit=settings.MAX_HEAVY_WORKFLOWS
             )
         )
     except KeyboardInterrupt:

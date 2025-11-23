@@ -56,8 +56,5 @@ class Settings(BaseSettings):
     MAX_HEAVY_WORKFLOWS: int = 2  # Максимум одновременных тяжёлых воркфлоу
     N8N_WEBHOOK_URL: str = "http://localhost:5678/webhook/added_document"
     
-    # Парсер
-    MAX_PARSING_THREADS: int = 10  # Максимальное количество потоков для парсинга
-
 
 settings = Settings()

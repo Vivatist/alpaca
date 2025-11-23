@@ -127,17 +127,17 @@ class Database:
                         if db_record['status'] in ('error', 'processed'):
                             continue
                         
-                        # Пропускаем файлы в статусе added/updated - они ждут обработки
-                        if db_record['status'] in ('added', 'updated'):
-                            continue
-                        
                         if db_record['hash'] == disk_file['hash']:
-                            # Хэш совпадает → ok (только для файлов уже в ok/deleted)
+                            # Хэш совпадает
+                            # Если файл в added/updated - не трогаем, он ждет обработки
+                            if db_record['status'] in ('added', 'updated'):
+                                continue
+                            # Иначе переводим в ok (для deleted или других статусов)
                             if db_record['status'] != 'ok':
                                 updates.append(('ok', disk_path))
                                 stats['unchanged'] += 1
                         else:
-                            # Хэш различается → updated
+                            # Хэш различается → updated (даже если был added)
                             updates.append(('updated', disk_path))
                             # Обновляем также хэш и метаданные
                             cur.execute("""
