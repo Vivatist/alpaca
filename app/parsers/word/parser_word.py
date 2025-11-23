@@ -21,12 +21,16 @@ db = Database(settings.DATABASE_URL)
 
 @task(name="parser_word_old_task", retries=2, persist_result=True)
 def parser_word_old_task(file_id: dict) -> str:
-    logger.info(f"🍆 Processing parsing with old parser: {file_id.path}")
     file_id = FileID(**file_id)
+    logger.info(f"🍆 Processing parsing with old parser: {file_id.path}")
+    
     from .word_parser_module.word_parser import WordParser
     try:
         word_parser = WordParser(enable_ocr=True, ocr_strategy='auto')
-        parse_result = word_parser.parse(file_id.path)
+        full_path = os.path.join(settings.MONITORED_PATH, file_id.path)
+        parse_result_dict = word_parser.parse(full_path)
+        parse_result = parse_result_dict.get('markdown', '')
+        
     except Exception as e:
         logger.error(f"Failed to parse file | file={file_id.path} error={type(e).__name__}: {e}")
         db.mark_as_error(file_id.hash)

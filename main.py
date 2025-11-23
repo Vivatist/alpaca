@@ -16,8 +16,8 @@ from typing import Dict, List, Tuple
 
 from app.parsers.word.parser_word import parser_word_task, parser_word_old_task
 
-# Отключаем логирование Prefect ДО импорта
-os.environ["PREFECT_LOGGING_LEVEL"] = "WARNING"
+# Настраиваем логирование Prefect ДО импорта
+os.environ["PREFECT_LOGGING_LEVEL"] = "INFO"
 os.environ["PREFECT_LOGGING_TO_API_ENABLED"] = "false"
 
 from datetime import timedelta
@@ -70,7 +70,7 @@ def task_process_deleted_file(
     try:
         chunks_deleted = db.delete_chunks_by_hash(file_id.hash)
         db.delete_file_by_hash(file_id.hash)
-        logger.info(f"Deleted {file_id.path} and {chunks_deleted} chunks")
+        logger.info(f"🪓 Deleted {file_id.path} and {chunks_deleted} chunks")
     except Exception as e:
         logger.error(f"ERROR when trying to delete a file {file_id.path}: {e}")
         return None

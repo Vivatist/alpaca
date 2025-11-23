@@ -13,11 +13,11 @@ from typing import Dict, Optional
 from datetime import datetime
 from abc import ABC, abstractmethod
 
-project_root = Path(__file__).resolve().parent.parent.parent.parent.parent
-sys.path.insert(0, str(project_root / 'shared' / 'logging'))
-sys.path.insert(0, '/app/shared/logging')
+# Добавляем путь к корню проекта для импортов
+project_root = Path(__file__).resolve().parent.parent.parent.parent
+sys.path.insert(0, str(project_root))
 
-from alpaca_logger import setup_logger
+from utils.logging import get_logger
 
 
 class BaseParser(ABC):
@@ -33,7 +33,7 @@ class BaseParser(ABC):
         Args:
             parser_name: Имя парсера для логирования
         """
-        self.logger = setup_logger(parser_name)
+        self.logger = get_logger(parser_name)
     
     @abstractmethod
     def parse(self, file_path: str, file_hash: Optional[str] = None) -> Dict:

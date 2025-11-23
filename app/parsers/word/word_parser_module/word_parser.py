@@ -129,6 +129,10 @@ class WordParser(BaseParser):
             'error': None
         }
         
+        # Инициализация переменных для finally блока
+        converted = False
+        original_file_path = file_path
+        
         try:
             if not os.path.exists(file_path):
                 result['error'] = f"File not found: {file_path}"
@@ -138,8 +142,6 @@ class WordParser(BaseParser):
             
             # 1. Конвертация .doc → .docx через LibreOffice если нужно
             file_ext = Path(file_path).suffix.lower()
-            original_file_path = file_path
-            converted = False
             
             if file_ext == '.doc':
                 self.logger.info(f"Old .doc format detected, converting to .docx via LibreOffice")
@@ -187,7 +189,13 @@ class WordParser(BaseParser):
                 specific_metadata['ocr_enabled'] = False
             
             # 5. Основной парсинг через Markitdown
-            markdown_content = self._parse_with_markitdown(file_path)
+            try:
+                markdown_content = self._parse_with_markitdown(file_path)
+            except Exception as parse_error:
+                self.logger.error(f"Parsing failed completely | error={type(parse_error).__name__}: {parse_error}")
+                result['error'] = f"Parsing failed: {str(parse_error)}"
+                result['success'] = False
+                return result
             
             # 6. OCR для изображений (если есть)
             if self.enable_ocr and images_info:
@@ -525,10 +533,19 @@ class WordParser(BaseParser):
             
             return markdown
             
-        except Exception as e:
-            self.logger.error(f"Markitdown parsing failed | error={type(e).__name__}: {e}")
-            # Для .doc файлов пробуем альтернативные методы
+        except (ValueError, TypeError, AttributeError) as e:
+            self.logger.warning(f"Markitdown parsing failed with known error | error={type(e).__name__}: {e}")
             file_ext = Path(file_path).suffix.lower()
+            
+            # Для всех файлов используем fallback парсер
+            self.logger.info(f"Using fallback parser for {file_ext} file")
+            return self._fallback_parse(file_path)
+            
+        except Exception as e:
+            self.logger.warning(f"Markitdown parsing failed | error={type(e).__name__}: {e}")
+            file_ext = Path(file_path).suffix.lower()
+            
+            # Для .doc файлов пробуем альтернативные методы через olefile
             if file_ext == '.doc':
                 self.logger.info("Trying alternative .doc parsing with olefile")
                 try:
@@ -551,6 +568,8 @@ class WordParser(BaseParser):
                 except Exception as ole_error:
                     self.logger.warning(f"Olefile parsing failed | error={type(ole_error).__name__}: {ole_error}")
             
+            # Для всех файлов (включая .docx) используем fallback парсер
+            self.logger.info(f"Using fallback parser for {file_ext} file")
             return self._fallback_parse(file_path)
     
     def _fallback_parse(self, file_path: str) -> str:
