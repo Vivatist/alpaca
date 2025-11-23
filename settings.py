@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     PREFECT_SERVER_HOST: str = "0.0.0.0"
     PREFECT_SERVER_PORT: int = 4200
     PREFECT_LOGGING_LEVEL: str = "INFO"
+    
+    # File Status Processor
+    PROCESS_FILE_CHANGES_INTERVAL: int = 10  # секунды
+    MAX_HEAVY_WORKFLOWS: int = 2  # Максимум одновременных тяжёлых воркфлоу
+    N8N_WEBHOOK_URL: str = "http://localhost:5678/webhook/added_document"
 
 
 settings = Settings()

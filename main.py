@@ -17,13 +17,14 @@ from prefect import flow, serve
 from prefect.artifacts import create_table_artifact
 from app.utils.logging import setup_logging, get_logger
 from app.file_watcher import FileWatcherService
+from app.flows.file_status_processor import FileStatusProcessorService
 from settings import settings
 
 # Настраиваем логирование в каждом процессе
 setup_logging()
 logger = get_logger(__name__)
 
-# Единственный экземпляр сервиса
+# Сервисы
 file_watcher = FileWatcherService(
     database_url=settings.DATABASE_URL,
     monitored_path=settings.MONITORED_PATH,
@@ -32,6 +33,12 @@ file_watcher = FileWatcherService(
     file_max_size=settings.FILE_MAX_SIZE,
     excluded_dirs=settings.EXCLUDED_DIRS.split(','),
     excluded_patterns=settings.EXCLUDED_PATTERNS.split(',')
+)
+
+file_processor = FileStatusProcessorService(
+    database_url=settings.DATABASE_URL,
+    webhook_url=settings.N8N_WEBHOOK_URL,
+    max_heavy_workflows=settings.MAX_HEAVY_WORKFLOWS
 )
 
 
@@ -63,19 +70,51 @@ def file_watcher_flow():
     return result
 
 
+@flow(name="file_status_processor_flow")
+def file_status_processor_flow():
+    """Обработка изменений статусов файлов (added/updated → ingestion, deleted → cleanup)"""
+    result = file_processor.process_changes()
+
+    if result['success']:
+        # Создаём артефакт с результатами обработки
+        create_table_artifact(
+            key="processing-summary",
+            table=[
+                {"Metric": "Total processed", "Value": result['processed']},
+                {"Metric": "Added (ingested)", "Value": result['added']},
+                {"Metric": "Updated (reingested)", "Value": result['updated']},
+                {"Metric": "Deleted (cleaned)", "Value": result['deleted']},
+                {"Metric": "Skipped (capacity)", "Value": result['skipped']},
+                {"Metric": "Duration (s)", "Value": f"{result['duration']:.2f}"},
+            ],
+            description="File Status Processor Summary"
+        )
+    else:
+        raise Exception(result.get('error', 'Unknown error'))
+    
+    return result
+
+
 if __name__ == "__main__":
     logger.info("Starting ALPACA RAG system...")
     logger.info(f"Monitored folder: {settings.MONITORED_PATH}")
-    logger.info(f"Scan interval: {settings.SCAN_MONITORED_FOLDER_INTERVAL}s")
+    logger.info(f"File watcher interval: {settings.SCAN_MONITORED_FOLDER_INTERVAL}s")
+    logger.info(f"Status processor interval: {settings.PROCESS_FILE_CHANGES_INTERVAL}s")
+    logger.info(f"Max heavy workflows: {settings.MAX_HEAVY_WORKFLOWS}")
     
     # Сброс статусов processed у файлов в базе при старте
     reset_count = file_watcher.reset_processed_statuses()
     
-    # Запуск периодического сканирования
+    # Запуск нескольких flows
     serve(
         file_watcher_flow.to_deployment(
             name="file-watcher",
             interval=timedelta(seconds=settings.SCAN_MONITORED_FOLDER_INTERVAL),
             description="Сканирование и синхронизация файлов"
+        ),
+        file_status_processor_flow.to_deployment(
+            name="file-status-processor",
+            interval=timedelta(seconds=settings.PROCESS_FILE_CHANGES_INTERVAL),
+            description="Обработка изменений статусов файлов"
         )
     )
