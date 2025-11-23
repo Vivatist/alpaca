@@ -2,17 +2,19 @@
 ALPACA RAG - Единая точка входа
 """
 import os
+import warnings
+
+# Отключаем UserWarning ДО любых импортов
+os.environ.setdefault("PYTHONWARNINGS", "ignore::UserWarning")
+warnings.filterwarnings("ignore", category=UserWarning)
+
 import requests
 import psycopg2
 import psycopg2.extras
 from time import sleep
 from typing import Dict, List, Tuple
-import warnings
 
-from app.parsers.word.parser_word import parser_word_task
-
-os.environ.setdefault("PYTHONWARNINGS", "ignore::UserWarning")
-warnings.filterwarnings("ignore", category=UserWarning, module="pydantic_settings.main")
+from app.parsers.word.parser_word import parser_word_task, parser_word_old_task
 
 # Отключаем логирование Prefect ДО импорта
 os.environ["PREFECT_LOGGING_LEVEL"] = "WARNING"
@@ -218,7 +220,7 @@ def ingest_pipeline(file_id: dict) -> str:
     
     # 1. Парсим файл в сырой текст
     if file_id.path.lower().endswith('.docx'):  
-        raw_text = parser_word_task(file_id.model_dump())
+        raw_text = parser_word_old_task(file_id.model_dump())
     else:
         logger.error(f"Unsupported file type: {file_id.path}")
         db.mark_as_error(file_id.hash)

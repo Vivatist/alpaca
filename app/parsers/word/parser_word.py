@@ -20,9 +20,20 @@ db = Database(settings.DATABASE_URL)
 
 
 @task(name="parser_word_old_task", retries=2, persist_result=True)
-def parser_word_task(file_id: dict) -> str:
-    from .word_parser import WordParser
-    return "--text--"
+def parser_word_old_task(file_id: dict) -> str:
+    logger.info(f"🍆 Processing parsing with old parser: {file_id.path}")
+    file_id = FileID(**file_id)
+    from .word_parser_module.word_parser import WordParser
+    try:
+        word_parser = WordParser(enable_ocr=True, ocr_strategy='auto')
+        parse_result = word_parser.parse(file_id.path)
+    except Exception as e:
+        logger.error(f"Failed to parse file | file={file_id.path} error={type(e).__name__}: {e}")
+        db.mark_as_error(file_id.hash)
+        return ""
+    logger.info(f"✅ Parsed successfully | file={file_id.path} length={len(parse_result)}")
+    return parse_result
+
 
 @task(name="parser_word_task", retries=2, persist_result=True)
 def parser_word_task(file_id: dict) -> str:
