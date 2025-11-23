@@ -2,8 +2,11 @@
 ALPACA RAG - Единая точка входа
 """
 import os
+import sys
 import warnings
 import logging
+import atexit
+import signal
 
 os.environ.setdefault("PYTHONWARNINGS", "ignore::UserWarning")
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic_settings.main")
@@ -23,6 +26,54 @@ from settings import settings
 # Настраиваем логирование в каждом процессе
 setup_logging()
 logger = get_logger(__name__)
+
+# PID файл для защиты от дублей (как у HTTP сервера)
+PID_FILE = '/tmp/alpaca_rag.pid'
+
+
+def acquire_lock():
+    """Проверяет что процесс не запущен (аналог bind() у сокета)"""
+    if os.path.exists(PID_FILE):
+        try:
+            with open(PID_FILE, 'r') as f:
+                old_pid = int(f.read().strip())
+            
+            # Проверяем жив ли процесс
+            try:
+                os.kill(old_pid, 0)  # Не убивает, просто проверяет
+                logger.error(f"❌ ALPACA RAG already running (PID: {old_pid})")
+                logger.error(f"   To stop: kill {old_pid}")
+                logger.error(f"   Or if it's dead: rm {PID_FILE}")
+                sys.exit(1)
+            except OSError:
+                # Процесс мёртв, удаляем старый PID
+                logger.info(f"Removing stale PID file (process {old_pid} is dead)")
+                os.remove(PID_FILE)
+        except (ValueError, IOError) as e:
+            logger.warning(f"Invalid PID file, removing: {e}")
+            os.remove(PID_FILE)
+    
+    # Записываем наш PID
+    with open(PID_FILE, 'w') as f:
+        f.write(str(os.getpid()))
+    logger.info(f"Acquired lock (PID: {os.getpid()}, file: {PID_FILE})")
+
+
+def release_lock():
+    """Удаляет PID файл при завершении"""
+    try:
+        if os.path.exists(PID_FILE):
+            os.remove(PID_FILE)
+            logger.info("Released lock")
+    except Exception as e:
+        logger.error(f"Failed to release lock: {e}")
+
+
+def signal_handler(signum, frame):
+    """Обработчик сигналов для graceful shutdown"""
+    logger.info(f"Received signal {signum}, shutting down...")
+    release_lock()
+    sys.exit(0)
 
 # Сервисы
 file_watcher = FileWatcherService(
@@ -96,25 +147,38 @@ def file_status_processor_flow():
 
 
 if __name__ == "__main__":
-    logger.info("Starting ALPACA RAG system...")
-    logger.info(f"Monitored folder: {settings.MONITORED_PATH}")
-    logger.info(f"File watcher interval: {settings.SCAN_MONITORED_FOLDER_INTERVAL}s")
-    logger.info(f"Status processor interval: {settings.PROCESS_FILE_CHANGES_INTERVAL}s")
-    logger.info(f"Max heavy workflows: {settings.MAX_HEAVY_WORKFLOWS}")
+    # Проверяем что мы единственные (как HTTP сервер проверяет порт)
+    acquire_lock()
     
-    # Сброс статусов processed у файлов в базе при старте
-    reset_count = file_watcher.reset_processed_statuses()
+    # Регистрируем очистку при выходе
+    atexit.register(release_lock)
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
     
-    # Запуск нескольких flows
-    serve(
-        file_watcher_flow.to_deployment(
-            name="file-watcher",
-            interval=timedelta(seconds=settings.SCAN_MONITORED_FOLDER_INTERVAL),
-            description="Сканирование и синхронизация файлов"
-        ),
-        file_status_processor_flow.to_deployment(
-            name="file-status-processor",
-            interval=timedelta(seconds=settings.PROCESS_FILE_CHANGES_INTERVAL),
-            description="Обработка изменений статусов файлов"
+    try:
+        logger.info("Starting ALPACA RAG system...")
+        logger.info(f"Monitored folder: {settings.MONITORED_PATH}")
+        logger.info(f"File watcher interval: {settings.SCAN_MONITORED_FOLDER_INTERVAL}s")
+        logger.info(f"Status processor interval: {settings.PROCESS_FILE_CHANGES_INTERVAL}s")
+        logger.info(f"Max heavy workflows: {settings.MAX_HEAVY_WORKFLOWS}")
+        
+        # Сброс статусов processed у файлов в базе при старте
+        reset_count = file_watcher.reset_processed_statuses()
+        
+        # Запуск нескольких flows
+        serve(
+            file_watcher_flow.to_deployment(
+                name="file-watcher",
+                interval=timedelta(seconds=settings.SCAN_MONITORED_FOLDER_INTERVAL),
+                description="Сканирование и синхронизация файлов"
+            ),
+            file_status_processor_flow.to_deployment(
+                name="file-status-processor",
+                interval=timedelta(seconds=settings.PROCESS_FILE_CHANGES_INTERVAL),
+                description="Обработка изменений статусов файлов"
+            )
         )
-    )
+    except KeyboardInterrupt:
+        logger.info("Shutting down gracefully...")
+    finally:
+        release_lock()
