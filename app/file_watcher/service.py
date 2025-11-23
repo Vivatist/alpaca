@@ -3,7 +3,7 @@ File Watcher Service - изолированный сервис для монит
 """
 from typing import Dict, Any
 from prefect import task
-from app.utils.logging import get_logger
+from utils.logging import get_logger
 from .scanner import Scanner
 from .database import Database
 from .vector_sync import VectorSync

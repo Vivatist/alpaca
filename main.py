@@ -14,8 +14,8 @@ os.environ["PREFECT_LOGGING_TO_API_ENABLED"] = "false"
 from datetime import timedelta
 from prefect import flow, serve
 from prefect.artifacts import create_table_artifact
-from app.utils.logging import setup_logging, get_logger
-from app.utils.process_lock import ProcessLock
+from utils.logging import setup_logging, get_logger
+from utils.process_lock import ProcessLock
 from app.file_watcher import FileWatcherService
 from app.flows.file_status_processor import FileStatusProcessorService
 from settings import settings

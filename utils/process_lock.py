@@ -6,7 +6,7 @@ import os
 import sys
 import atexit
 import signal
-from app.utils.logging import get_logger
+from utils.logging import get_logger
 
 
 logger = get_logger(__name__)
