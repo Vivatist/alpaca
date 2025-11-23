@@ -80,13 +80,14 @@ class VectorSync:
             file_hash = file_info['hash']
             current_status = file_info['status']
             
-            # ВАЖНО: файлы со статусами 'deleted', 'updated', 'processed', 'error' не трогаем
+            # ВАЖНО: файлы со статусами 'deleted', 'updated', 'added', 'processed', 'error' не трогаем
             # Они должны быть обработаны main-loop или вручную:
             # 'deleted' - будут удалены из documents
             # 'updated' - будут обновлены в documents
+            # 'added' - ожидают обработки в очереди, не перезаписываем!
             # 'processed' - обрабатываются прямо сейчас, не трогаем!
             # 'error' - ошибка обработки, сбрасывается только вручную
-            if current_status in ('deleted', 'updated', 'processed', 'error'):
+            if current_status in ('deleted', 'updated', 'added', 'processed', 'error'):
                 stats['unchanged'] += 1
                 continue
             

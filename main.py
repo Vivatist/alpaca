@@ -2,7 +2,6 @@
 ALPACA RAG - Единая точка входа
 """
 import os
-from dataclasses import dataclass
 from time import sleep
 from typing import Dict, List, Tuple
 import warnings
@@ -16,13 +15,18 @@ os.environ["PREFECT_LOGGING_TO_API_ENABLED"] = "false"
 
 from datetime import timedelta
 from prefect import flow, serve, task
+from pydantic import BaseModel
 
 
-@dataclass(frozen=True)
-class FileID:
+class FileID(BaseModel):
     """Идентификатор файла (hash + path)"""
     hash: str
     path: str
+    
+    class Config:
+        frozen = True
+        
+        
 from utils.logging import setup_logging, get_logger
 from utils.process_lock import ProcessLock
 from app.file_watcher import FileWatcherService
@@ -32,7 +36,7 @@ from database import Database
 
 # Настраиваем логирование в каждом процессе
 setup_logging()
-logger = get_logger(__name__)
+logger = get_logger("alpaca.main")
 
 # Сервисы
 file_watcher = FileWatcherService(
@@ -44,12 +48,6 @@ file_watcher = FileWatcherService(
     excluded_dirs=settings.EXCLUDED_DIRS.split(','),
     excluded_patterns=settings.EXCLUDED_PATTERNS.split(',')
 )
-
-# file_processor = FileStatusProcessorService(
-#     database_url=settings.DATABASE_URL,
-#     webhook_url=settings.N8N_WEBHOOK_URL,
-#     max_heavy_workflows=settings.MAX_HEAVY_WORKFLOWS
-# )
 
 db = Database(settings.DATABASE_URL)
 
@@ -75,82 +73,49 @@ def task_process_deleted_file(
         return None
     return file_id
 
+
 @task(name="process_added_files", retries=2, persist_result=True)
-def task_process_added_files(
-    db: Database,
-    webhook_url: str,
-    files: List[Tuple[str, str, int]],
-    slots_available: int
-) -> Dict[str, int]:
+def task_parsing_file(
+    db: Database, file_id: FileID) -> str:
     """Task: обработка added файлов"""
-    stats = {'processed': 0, 'skipped': 0}
-    
-    for file_path, file_hash, file_size in files:
-        if slots_available > 0:
-            try:
-                logger.info(f"➕ Processing added: {file_path}")
-                db.call_webhook(webhook_url, file_path, file_hash)
-                db.mark_as_processed(file_hash)
-                stats['processed'] += 1
-                slots_available -= 1
-            except Exception as e:
-                logger.error(f"❌ Failed to process added file {file_path}: {e}")
-                db.mark_as_error(file_hash)
-        else:
-            logger.info(f"⏸️  Workflow limit reached, skipping remaining added files")
-            stats['skipped'] = len(files) - stats['processed']
-            break
-    
-    return stats
+    try:
+        logger.info(f"Processing parsing: {file_id.path}")
+        # parsed_text = parser_service.parse(file_id.path)    
+        sleep(2 + os.urandom(1)[0] / 255 * 3)  # Симуляция времени парсинга 2-5 сек
+        return "--text--"  # TODO: вернуть реальный текст
+    except Exception as e:
+        logger.error(f"Failed to process parsing file {file_id.path}: {e}")
+        db.mark_as_error(file_id.hash)
+        return ""
 
 
-@task(name="process_updated_files", retries=2, persist_result=True)
-def task_process_updated_files(
-    db: Database, file_path, file_hash: str) -> bool:   
-    """Task: обработка updated файлов"""
-
+@flow(name="ingest_pipeline")
+def ingest_pipeline(file_id: dict) -> str:
+    """Входная точка пайплайна нового документа"""
     
-    for file_path, file_hash, file_size in files:
-        if slots_available > 0:
-            try:
-                logger.info(f"🔄 Processing updated: {file_path}")
-                chunks_deleted = db.delete_chunks_by_path(file_path)
-                logger.info(f"🗑️  Deleted {chunks_deleted} old chunks")
-                db.call_webhook(webhook_url, file_path, file_hash)
-                db.mark_as_processed(file_hash)
-                stats['processed'] += 1
-                slots_available -= 1
-            except Exception as e:
-                logger.error(f"❌ Failed to process updated file {file_path}: {e}")
-                db.mark_as_error(file_hash)
-        else:
-            logger.info(f"⏸️  Workflow limit reached, skipping remaining updated files")
-            stats['skipped'] = len(files) - stats['processed']
-            break
-    
-    return stats
-
-
-@flow(name="parsing_flow")
-def parsing_flow(file_id: FileID) -> str:
-    """Парсинг документа в текст
-    
-    Args:
-        file_id: Идентификатор файла (hash + path)
-    
-    Returns:
-        str: Извлечённый текст документа
-    """
+    file_id = FileID(**file_id)  # Преобразуем dict обратно в FileID
     logger.info(f"🔍 Parsing file: {file_id.path} (hash: {file_id.hash[:8]}...)")
+    db.mark_as_processed(file_id.hash)
     
-    # TODO: Реализовать вызов парсера
-    # parsed_text = parser_service.parse(file_id.path)    
-    sleep(2 + os.urandom(1)[0] / 255 * 3)  # Симуляция времени парсинга 2-5 сек
+    # 1. Парсим файл в сырой текст
+    raw_text = task_parsing_file(db, file_id)
+    
+    # TODO: Реализовать пайплайн. пока только парсим и сохраняем в файл
+    temp_dir = os.path.join(os.path.dirname(__file__), "temp_parsed")
+    os.makedirs(temp_dir, exist_ok=True)
+    temp_file_path = os.path.join(temp_dir, f"{file_id.hash}.txt")
+    
+    with open(temp_file_path, "w", encoding="utf-8") as f:
+        f.write(raw_text)
+    
+    # Помечаем файл как успешно обработанный только после завершения всего пайплайна
+    db.mark_as_ok(file_id.hash)
+    logger.info(f"✅ File processed successfully: {file_id.path}")
     return ""
 
 
 @flow(name="ingest_files_flow")
-def ingest_files_flow():
+def process_pending_files_flow():
     """Обработка изменений статусов файлов (added/updated → ingestion, deleted → cleanup)"""
     pending_files = db.get_pending_files()
     total_pending = sum(len(files) for files in pending_files.values())
@@ -160,22 +125,16 @@ def ingest_files_flow():
     for file_id in pending_files['deleted']:
         task_process_deleted_file(db, file_id)
         
-    # Цикл обработки файлов до тех пор, пока есть отмеченные как deleted pending-файлы
+    # Цикл обработки файлов до тех пор, пока есть отмеченные как updated pending-файлы
     for file_id in pending_files['updated']:
         task_process_deleted_file(db, file_id)
-        
-        
-        
-        if pending_files['updated'] or pending_files['added']:
-            task_process_updated_files(
-                db,
-                settings.N8N_WEBHOOK_URL,
-                pending_files['updated'],
-                settings.MAX_HEAVY_WORKFLOWS
-            )
-            break  # Временно прерываем цикл, чтобы не зависнуть
-    result = pending_files
-    return result
+        ingest_pipeline(file_id.model_dump())
+
+    # Цикл обработки файлов до тех пор, пока есть отмеченные как added pending-файлы
+    for file_id in pending_files['added']:
+        ingest_pipeline(file_id.model_dump())
+
+    return
         
         
 if __name__ == "__main__":
@@ -198,7 +157,7 @@ if __name__ == "__main__":
                 description="Сканирование и синхронизация файлов",
                 concurrency_limit=1
             ),
-            ingest_files_flow.to_deployment(
+            process_pending_files_flow.to_deployment(
                 name="ingest_files_flow",
                 interval=timedelta(seconds=settings.PROCESS_FILE_CHANGES_INTERVAL),
                 description="Обработка изменений статусов файлов",

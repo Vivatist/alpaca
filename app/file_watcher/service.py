@@ -96,17 +96,16 @@ class FileWatcherService:
             # Каждый шаг - отдельная task с retry и мониторингом
             files = task_scan_disk(self.scanner)
             file_sync = task_sync_files(self.db, files)
-            status_sync = task_sync_status(self.vector_sync)
+            # NOTE: vector_sync отключен - логика синхронизации статусов теперь в sync_by_hash
+            # status_sync = task_sync_status(self.vector_sync)
             
             duration = time.time() - start_time
             logger.info(
                 f"disc[total:{len(files)}, "
                 f"+{file_sync['added']}, "
                 f"~{file_sync['updated']}, "
-                f"-{file_sync['deleted']}]  "
-                f"base[ok:{status_sync['ok']}, "
-                f"a:{status_sync['added']}, "
-                f"u:{status_sync['updated']}] "
+                f"-{file_sync['deleted']}, "
+                f"ok:{file_sync['unchanged']}] "
                 f"in {duration:.2f}s"
             )
             
@@ -114,7 +113,6 @@ class FileWatcherService:
                 'success': True,
                 'disk_files': len(files),
                 'file_sync': file_sync,
-                'status_sync': status_sync,
                 'duration': duration
             }
             
