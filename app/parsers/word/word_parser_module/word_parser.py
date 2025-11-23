@@ -29,9 +29,13 @@ from app.parsers.word.base_parser import BaseParser
 
 try:
     from markitdown import MarkItDown  # type: ignore
+    from markitdown._markitdown import FileConversionException  # type: ignore
     MARKITDOWN_AVAILABLE = True
 except ImportError:
     MARKITDOWN_AVAILABLE = False
+    # Определяем заглушку для FileConversionException, чтобы код не падал
+    class FileConversionException(Exception):  # type: ignore
+        pass
 
 try:
     from unstructured.partition.auto import partition  # type: ignore
@@ -532,6 +536,14 @@ class WordParser(BaseParser):
             self.logger.debug(f"Markitdown parsing complete | length={len(markdown)}")
             
             return markdown
+            
+        except FileConversionException as e:
+            self.logger.warning(f"Markitdown FileConversionException | error={e}")
+            file_ext = Path(file_path).suffix.lower()
+            
+            # Для всех файлов используем fallback парсер
+            self.logger.info(f"Using fallback parser for {file_ext} file after markitdown failure")
+            return self._fallback_parse(file_path)
             
         except (ValueError, TypeError, AttributeError) as e:
             self.logger.warning(f"Markitdown parsing failed with known error | error={type(e).__name__}: {e}")
