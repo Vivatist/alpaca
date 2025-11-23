@@ -8,8 +8,11 @@
 
 import psycopg2
 from contextlib import contextmanager
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, TYPE_CHECKING
 from utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from main import FileID
 
 logger = get_logger(__name__)
 
@@ -56,17 +59,19 @@ class Database:
                 """)
                 return cur.fetchone()[0]
     
-    def get_pending_files(self) -> Dict[str, List[Tuple[str, str, int]]]:
+    def get_pending_files(self) -> Dict[str, List['FileID']]:
         """Получает файлы, требующие обработки (status_sync in ['added', 'updated', 'deleted'])
         
         Returns:
             dict: Словарь с файлами по статусам
                 {
-                    'added': [(file_path, file_hash, file_size), ...],
-                    'updated': [(file_path, file_hash, file_size), ...],
-                    'deleted': [(file_path, file_hash, file_size), ...]
+                    'added': [FileID(hash=..., path=...), ...],
+                    'updated': [FileID(hash=..., path=...), ...],
+                    'deleted': [FileID(hash=..., path=...), ...]
                 }
         """
+        from main import FileID
+        
         result = {
             'added': [],
             'updated': [],
@@ -86,14 +91,14 @@ class Database:
                 
                 for row in rows:
                     file_path, file_hash, file_size, status = row
-                    file_info = (file_path, file_hash, file_size)
+                    file_id = FileID(hash=file_hash, path=file_path)
                     
                     if status == 'added':
-                        result['added'].append(file_info)
+                        result['added'].append(file_id)
                     elif status == 'updated':
-                        result['updated'].append(file_info)
+                        result['updated'].append(file_id)
                     elif status == 'deleted':
-                        result['deleted'].append(file_info)
+                        result['deleted'].append(file_id)
         
         return result
     

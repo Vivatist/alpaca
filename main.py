@@ -3,6 +3,7 @@ ALPACA RAG - Единая точка входа
 """
 import os
 from dataclasses import dataclass
+from time import sleep
 from typing import Dict, List, Tuple
 import warnings
 
@@ -63,17 +64,16 @@ def file_watcher_flow():
 
 @task(name="process_deleted_file", retries=2, persist_result=True)
 def task_process_deleted_file(
-    db: Database, file_path, file_hash: str) -> bool:
+    db: Database, file_id: FileID) -> FileID:
     """Task: обработка deleted файла"""
     try:
-        chunks_deleted = db.delete_chunks_by_hash(file_hash)
-        db.delete_file_by_hash(file_hash)
-        logger.info(f"Deleted {file_path} and {chunks_deleted} chunks")
+        chunks_deleted = db.delete_chunks_by_hash(file_id.hash)
+        db.delete_file_by_hash(file_id.hash)
+        logger.info(f"Deleted {file_id.path} and {chunks_deleted} chunks")
     except Exception as e:
-        logger.error(f"ERROR when trying to delete a file {file_path}: {e}")
-        return False
-    return True
-
+        logger.error(f"ERROR when trying to delete a file {file_id.path}: {e}")
+        return None
+    return file_id
 
 @task(name="process_added_files", retries=2, persist_result=True)
 def task_process_added_files(
@@ -131,6 +131,24 @@ def task_process_updated_files(
     return stats
 
 
+@flow(name="parsing_flow")
+def parsing_flow(file_id: FileID) -> str:
+    """Парсинг документа в текст
+    
+    Args:
+        file_id: Идентификатор файла (hash + path)
+    
+    Returns:
+        str: Извлечённый текст документа
+    """
+    logger.info(f"🔍 Parsing file: {file_id.path} (hash: {file_id.hash[:8]}...)")
+    
+    # TODO: Реализовать вызов парсера
+    # parsed_text = parser_service.parse(file_id.path)    
+    sleep(2 + os.urandom(1)[0] / 255 * 3)  # Симуляция времени парсинга 2-5 сек
+    return ""
+
+
 @flow(name="ingest_files_flow")
 def ingest_files_flow():
     """Обработка изменений статусов файлов (added/updated → ingestion, deleted → cleanup)"""
@@ -139,12 +157,13 @@ def ingest_files_flow():
     logger.info(f"📋 Found {total_pending} pending files (deleted:{len(pending_files['deleted'])}, updated:{len(pending_files['updated'])}, added:{len(pending_files['added'])})")
 
     # Цикл обработки файлов до тех пор, пока есть отмеченные как deleted pending-файлы
-    for file_path, file_hash, file_size in pending_files['deleted']:
-        task_process_deleted_file(db, file_path, file_hash)
+    for file_id in pending_files['deleted']:
+        task_process_deleted_file(db, file_id)
         
     # Цикл обработки файлов до тех пор, пока есть отмеченные как deleted pending-файлы
-    for file_path, file_hash, file_size in pending_files['updated']:
-        task_process_updated_files(db, file_path, file_hash)
+    for file_id in pending_files['updated']:
+        task_process_deleted_file(db, file_id)
+        
         
         
         if pending_files['updated'] or pending_files['added']:
