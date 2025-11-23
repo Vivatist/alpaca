@@ -135,21 +135,20 @@ def task_process_updated_files(db: Database, webhook_url: str, files: List[Tuple
 def ingest_files_flow():
     """Обработка изменений статусов файлов (added/updated → ingestion, deleted → cleanup)"""
     logger.info("Starting file status processing flow...")
-    result = pending_files = db.get_pending_files()
-    # while True:
-    #     pending_files = db.get_pending_files()
-    #     total_pending = sum(len(files) for files in pending_files.values())
-    #     logger.info(f"📋 Found {total_pending} pending files (deleted:{len(pending_files['deleted'])}, updated:{len(pending_files['updated'])}, added:{len(pending_files['added'])})")
-    #     if total_pending == 0:
-    #         break
+    while True:
+        pending_files = db.get_pending_files()
+        total_pending = sum(len(files) for files in pending_files.values())
+        logger.info(f"📋 Found {total_pending} pending files (deleted:{len(pending_files['deleted'])}, updated:{len(pending_files['updated'])}, added:{len(pending_files['added'])})")
+        if total_pending == 0:
+            break
         
-    #     if pending_files['deleted']:
-    #         task_process_deleted_files(db, pending_files['deleted'])
+        if pending_files['deleted']:
+            task_process_deleted_files(db, pending_files['deleted'])
         
-    #     if pending_files['updated'] or pending_files['added']:
-    #         logger.info("⏸️  Skipping updated/added files (not implemented yet)")
-    #         break  # Временно прерываем цикл, чтобы не зависнуть
-    # result = pending_files
+        if pending_files['updated'] or pending_files['added']:
+            logger.info("⏸️  Skipping updated/added files (not implemented yet)")
+            break  # Временно прерываем цикл, чтобы не зависнуть
+    result = pending_files
     return result
         
         
