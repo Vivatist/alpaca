@@ -31,6 +31,7 @@ from utils.logging import setup_logging, get_logger
 from utils.process_lock import ProcessLock
 from app.file_watcher import FileWatcherService
 from app.flows.file_status_processor import FileStatusProcessorService
+from prefect.task_runners import ConcurrentTaskRunner
 from settings import settings
 from database import Database
 
@@ -74,7 +75,7 @@ def task_process_deleted_file(
     return file_id
 
 
-@task(name="process_added_files", retries=2, persist_result=True)
+@task(name="process_parsing_files", retries=2, persist_result=True)
 def task_parsing_file(
     db: Database, file_id: FileID) -> str:
     """Task: обработка added файлов"""
@@ -103,18 +104,17 @@ def ingest_pipeline(file_id: dict) -> str:
     # TODO: Реализовать пайплайн. пока только парсим и сохраняем в файл
     temp_dir = os.path.join(os.path.dirname(__file__), "temp_parsed")
     os.makedirs(temp_dir, exist_ok=True)
-    temp_file_path = os.path.join(temp_dir, f"{file_id.hash}.txt")
+    temp_file_path = os.path.join(temp_dir, f"{file_id.path}.txt")
     
     with open(temp_file_path, "w", encoding="utf-8") as f:
         f.write(raw_text)
     
-    # Помечаем файл как успешно обработанный только после завершения всего пайплайна
     db.mark_as_ok(file_id.hash)
     logger.info(f"✅ File processed successfully: {file_id.path}")
     return ""
 
 
-@flow(name="ingest_files_flow")
+@flow(task_runner=ConcurrentTaskRunner(max_workers=1), name="process_pending_files_flow")
 def process_pending_files_flow():
     """Обработка изменений статусов файлов (added/updated → ingestion, deleted → cleanup)"""
     pending_files = db.get_pending_files()
@@ -158,7 +158,7 @@ if __name__ == "__main__":
                 concurrency_limit=1
             ),
             process_pending_files_flow.to_deployment(
-                name="ingest_files_flow",
+                name="process_pending_files_flow",
                 interval=timedelta(seconds=settings.PROCESS_FILE_CHANGES_INTERVAL),
                 description="Обработка изменений статусов файлов",
                 concurrency_limit=1
