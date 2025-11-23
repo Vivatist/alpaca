@@ -2,6 +2,7 @@
 File Watcher Service - изолированный сервис для мониторинга файлов
 """
 from typing import Dict, Any
+from prefect import task
 from app.utils.logging import get_logger
 from .scanner import Scanner
 from .database import Database
@@ -10,6 +11,34 @@ from .file_filter import FileFilter
 
 
 logger = get_logger(__name__)
+
+
+# Prefect tasks для file watcher
+@task(name="scan_disk", retries=3, persist_result=True)
+def task_scan_disk(scanner: Scanner) -> list:
+    """Task: сканирование диска"""
+    return scanner.scan()
+
+
+@task(name="sync_files_to_db", retries=3, persist_result=True)
+def task_sync_files(db: Database, files: list) -> dict:
+    """Task: синхронизация файлов с БД по хешам"""
+    return db.sync_by_hash(files)
+
+
+@task(name="sync_vector_status", retries=3, persist_result=True)
+def task_sync_status(vector_sync) -> dict:
+    """Task: синхронизация статусов с векторной БД"""
+    return vector_sync.sync_status()
+
+
+@task(name="reset_processed_statuses", persist_result=True)
+def task_reset_processed(db: Database) -> int:
+    """Task: сброс статусов 'processed' на 'ok'"""
+    count = db.reset_processed_to_ok()
+    if count > 0:
+        logger.info(f"🔄 Reset {count} processed statuses")
+    return count
 
 
 class FileWatcherService:
@@ -51,6 +80,53 @@ class FileWatcherService:
         )
         
         self.vector_sync = VectorSync(self.db)
+    
+    def scan_and_sync(self) -> Dict[str, Any]:
+        """
+        Выполняет полный цикл сканирования и синхронизации.
+        Использует Prefect tasks для каждого шага.
+        
+        Returns:
+            dict: Результаты сканирования и синхронизации
+        """
+        import time
+        start_time = time.time()
+        
+        try:
+            # Каждый шаг - отдельная task с retry и мониторингом
+            files = task_scan_disk(self.scanner)
+            file_sync = task_sync_files(self.db, files)
+            status_sync = task_sync_status(self.vector_sync)
+            
+            duration = time.time() - start_time
+            logger.info(
+                f"disc[total:{len(files)}, "
+                f"+{file_sync['added']}, "
+                f"~{file_sync['updated']}, "
+                f"-{file_sync['deleted']}]  "
+                f"base[ok:{status_sync['ok']}, "
+                f"a:{status_sync['added']}, "
+                f"u:{status_sync['updated']}] "
+                f"in {duration:.2f}s"
+            )
+            
+            return {
+                'success': True,
+                'disk_files': len(files),
+                'file_sync': file_sync,
+                'status_sync': status_sync,
+                'duration': duration
+            }
+            
+        except Exception as e:
+            import time
+            duration = time.time() - start_time
+            logger.error(f"❌ Scan failed after {duration:.2f}s: {e}", exc_info=True)
+            return {
+                'success': False,
+                'error': str(e),
+                'duration': duration
+            }
     
     def scan(self) -> list:
         """
