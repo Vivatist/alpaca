@@ -3,7 +3,7 @@
 Предоставляет методы для получения статистики и данных из БД
 """
 
-import psycopg
+import psycopg # type: ignore
 from contextlib import contextmanager
 from typing import Dict, List, Optional, Any
 import os

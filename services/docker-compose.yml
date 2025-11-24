@@ -1,4 +1,4 @@
-name: alpaca-rag
+name: alpaca
 
 services:
   # Unstructured API для парсинга документов
@@ -95,7 +95,7 @@ services:
   # File Watcher для мониторинга файлов
   filewatcher:
     build:
-      context: ../services/file_watcher
+      context: ./file_watcher
       dockerfile: Dockerfile
     restart: always
     networks:
