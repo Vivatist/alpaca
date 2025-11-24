@@ -101,12 +101,10 @@ services:
     networks:
       - alpaca_network
     volumes:
-      - ${MONITORED_PATH:-../monitored_folder}:/monitored_folder:ro
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
+      - /home/alpaca/monitored_folder:/monitored_folder:ro
     environment:
-      # === CREDENTIALS (из .env) ===
-      - DATABASE_URL=${DATABASE_URL}
+      # === CREDENTIALS ===
+      - DATABASE_URL=postgresql://postgres:IFEmDfNac7SuIZsEdCFG3LC2rejPyupEHZkdYe3kS+k=@172.17.0.1:54322/postgres
       
       # === SYSTEM SETTINGS ===
       - TZ=Europe/Moscow
@@ -126,6 +124,24 @@ services:
       - prefect
     healthcheck:
       test: ["CMD", "pgrep", "-f", "python"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Admin Backend для мониторинга и управления
+  admin-backend:
+    image: alpaca-admin-backend:latest
+    restart: always
+    networks:
+      - alpaca_network
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgresql://postgres:IFEmDfNac7SuIZsEdCFG3LC2rejPyupEHZkdYe3kS+k=@172.17.0.1:54322/postgres
+      - TZ=Europe/Moscow
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3

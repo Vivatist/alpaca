@@ -248,7 +248,8 @@ def ingest_pipeline(file_id: dict) -> str:
 
 @flow(name="process_pending_files_flow")
 def process_pending_files_flow():
-    """Обработка изменений статусов файлов (added/updated → ingestion, deleted → cleanup)"""
+    """Обработка изменений статусов файлов (added/updated → ingestion, deleted → cleanup)
+    вызывается по расписанию. Обрабатывает все pending файлы за один запуск."""
     pending_files = db.get_pending_files()
     total_pending = sum(len(files) for files in pending_files.values())
     logger.info(f"📋 Found {total_pending} pending files (deleted:{len(pending_files['deleted'])}, updated:{len(pending_files['updated'])}, added:{len(pending_files['added'])})")
@@ -274,13 +275,9 @@ if __name__ == "__main__":
     # Защита от дублирования процессов 
     process_lock = ProcessLock('/tmp/alpaca_rag.pid')
     process_lock.acquire()
-    # process_lock.setup_handlers()  # Отключено: конфликт с Prefect Runner SIGTERM
     
     try:
         logger.info("Starting ALPACA RAG system...")
-        
-        # NOTE: file_watcher теперь работает в отдельном контейнере
-        # Запуск process_pending_files_flow для обработки изменений
         serve(
             process_pending_files_flow.to_deployment(
                 name="process_pending_files_flow",
