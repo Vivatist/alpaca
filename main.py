@@ -284,8 +284,9 @@ def process_pending_files_flow():
     return
         
         
+# ТОЧКА ВХОДА
 if __name__ == "__main__":
-    # Защита от дублирования процессов (как HTTP сервер проверяет порт)
+    # Защита от дублирования процессов 
     process_lock = ProcessLock('/tmp/alpaca_rag.pid')
     process_lock.acquire()
     # process_lock.setup_handlers()  # Отключено: конфликт с Prefect Runner SIGTERM

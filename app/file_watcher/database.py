@@ -166,10 +166,11 @@ class Database:
                 # Помечаем файлы, которых нет на диске, как deleted
                 missing_paths = set(db_records.keys()) - set(disk_paths.keys())
                 if missing_paths:
-                    # Пропускаем файлы со статусами error, processed, deleted
+                    # Помечаем все отсутствующие файлы как deleted (включая error, processed)
+                    # Пропускаем только уже помеченные как deleted
                     paths_to_delete = [
                         path for path in missing_paths 
-                        if db_records[path]['status'] not in ('error', 'processed', 'deleted')
+                        if db_records[path]['status'] != 'deleted'
                     ]
                     if paths_to_delete:
                         cur.execute("""
