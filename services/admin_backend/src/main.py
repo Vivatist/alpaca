@@ -240,7 +240,7 @@ async def get_file_state_files(
 
 @app.get("/api/files/queue", tags=["Files"])
 async def get_processing_queue():
-    """Получить текущую очередь файлов на обработку
+    """Получить текущий список файлов ожидающих обработку и детальную информацию
     
     Возвращает файлы со статусами: added, updated, deleted
     """

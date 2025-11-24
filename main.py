@@ -217,7 +217,7 @@ def ingest_pipeline(file_id: dict) -> str:
         return ""
     
     # 2. Сохраняем распарсенный текст в temp_parsed
-    temp_dir = os.path.join(os.path.dirname(__file__), "temp_parsed")
+    temp_dir = "/home/alpaca/tmp_md"
     temp_file_path = os.path.join(temp_dir, f"{file_id.path}.md")
     
     os.makedirs(os.path.dirname(temp_file_path), exist_ok=True)
