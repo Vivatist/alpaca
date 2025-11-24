@@ -199,8 +199,9 @@ class TestSyncLogic:
             assert current_status == expected_status, \
                 f"{filename}: ожидали {expected_status}, получили {current_status}"
         
-        # Только NULL должен измениться
-        assert stats['unchanged'] == 1, "Только NULL → updated должен быть учтён"
+        # 6 файлов не изменились (skip), 1 файл (NULL) обновился
+        assert stats['unchanged'] == 6, "6 файлов должны быть unchanged (все кроме NULL)"
+        assert stats['updated'] == 1, "1 файл (NULL) должен быть updated"
         print("✅ Passed: Хэш совпадает - статусы не меняются (кроме NULL → updated)")
     
     # ========== СТРОКА 3: ХЭШ НЕ СОВПАДАЕТ (файл изменился) ==========

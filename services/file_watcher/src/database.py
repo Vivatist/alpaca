@@ -178,12 +178,13 @@ class Database:
                     )
                     
                     if action == 'skip':
-                        # Ничего не делаем
+                        # Файл не изменился (хэш совпадает)
+                        stats['unchanged'] += 1
                         continue
                     elif action == 'update_status':
                         # Обновляем только статус (для NULL → updated при совпадении хэша)
                         status_updates.append((new_status, disk_path))
-                        stats['unchanged'] += 1
+                        stats['updated'] += 1
                     elif action == 'update_full':
                         # Обновляем хэш, метаданные и статус (файл изменился)
                         full_updates.append((
