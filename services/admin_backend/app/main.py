@@ -1,11 +1,10 @@
-"""FastAPI Admin Backend для Alpaca N8N
+"""FastAPI Admin Backend для Alpaca
 
 API для управления и мониторинга системы обработки документов.
 Предоставляет эндпоинты для:
 - Мониторинга статуса обработки файлов
 - Получения статистики
 - Управления конфигурацией
-- Интеграции с Lovable.dev UI
 """
 
 from fastapi import FastAPI, HTTPException, Query
@@ -32,6 +31,27 @@ app = FastAPI(
     }
 )
 
+# Переопределяем для генерации OpenAPI 3.0.7 вместо 3.1.0
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    
+    from fastapi.openapi.utils import get_openapi
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    
+    # Изменяем версию OpenAPI на 3.0.7
+    openapi_schema["openapi"] = "3.0.7"
+    
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
+
 # Кастомный ReDoc работающий по /redoc
 @app.get("/redoc", include_in_schema=False)
 async def redoc_custom():
@@ -41,7 +61,7 @@ async def redoc_custom():
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Alpaca N8N Admin API - ReDoc</title>
+        <title>Alpaca Admin API - ReDoc</title>
         <meta charset="utf-8"/>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
@@ -143,7 +163,7 @@ class FileDetail(BaseModel):
 async def root():
     """Проверка доступности API"""
     return {
-        "service": "Alpaca N8N Admin Backend",
+        "service": "Alpaca Admin Backend",
         "status": "running",
         "version": "1.0.0",
         "docs": "/docs"
@@ -328,7 +348,7 @@ async def get_main_loop_config():
     Возвращает все переменные окружения:
     - MAX_HEAVY_WORKFLOWS
     - LOOP_INTERVAL
-    - N8N_WEBHOOK_URL
+
     - POSTGRES_HOST
     - POSTGRES_PORT
     """
@@ -345,7 +365,7 @@ async def get_main_loop_config():
                 key, value = env_str.split('=', 1)
                 # Фильтруем только релевантные переменные
                 if key in [
-                    'MAX_HEAVY_WORKFLOWS', 'LOOP_INTERVAL', 'N8N_WEBHOOK_URL',
+                    'MAX_HEAVY_WORKFLOWS', 'LOOP_INTERVAL',
                     'POSTGRES_HOST', 'POSTGRES_PORT', 'POSTGRES_DB',
                     'POSTGRES_USER'
                 ]:
@@ -362,95 +382,6 @@ async def get_main_loop_config():
 
 
 # ============================================
-# N8N API Integration
-# ============================================
-
-N8N_BASE_URL = os.getenv("N8N_BASE_URL", "http://n8n:5678")
-N8N_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhNTY2YWZiOS0wODQxLTQzYTUtYjVmMS04ODdiOTM5MmExOWUiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzYzNzQ5NzI4fQ.3QJXAI-wunSZqmbyfT8iMJVaYxtg5i_Qq2rTIrFUONw"
-
-async def n8n_request(endpoint: str, method: str = "GET") -> Dict[str, Any]:
-    """Выполнить запрос к N8N API"""
-    url = f"{N8N_BASE_URL}/api/v1/{endpoint}"
-    headers = {"X-N8N-API-KEY": N8N_API_KEY}
-    
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            if method == "GET":
-                response = await client.get(url, headers=headers)
-            elif method == "POST":
-                response = await client.post(url, headers=headers)
-            else:
-                raise ValueError(f"Unsupported method: {method}")
-            
-            response.raise_for_status()
-            return response.json()
-    except httpx.HTTPError as e:
-        raise HTTPException(status_code=502, detail=f"N8N API error: {str(e)}")
-
-
-@app.get("/api/n8n/executions", tags=["N8N"])
-async def get_n8n_executions(
-    limit: int = Query(default=20, ge=1, le=100, description="Количество записей"),
-    workflow_id: Optional[str] = Query(default=None, description="Фильтр по workflow ID")
-):
-    """Получить список выполнений workflows
-    
-    Args:
-        limit: Количество записей (1-100)
-        workflow_id: Опциональный фильтр по ID workflow
-    
-    Returns:
-        Dict: Список выполнений с информацией о статусе, времени и результатах
-    """
-    endpoint = f"executions?limit={limit}"
-    if workflow_id:
-        endpoint += f"&workflowId={workflow_id}"
-    
-    data = await n8n_request(endpoint)
-    return data
-
-
-@app.get("/api/n8n/executions/{execution_id}", tags=["N8N"])
-async def get_n8n_execution_details(execution_id: str):
-    """Получить детальную информацию о выполнении
-    
-    Args:
-        execution_id: ID выполнения
-    
-    Returns:
-        Dict: Полная информация о выполнении включая данные узлов
-    """
-    data = await n8n_request(f"executions/{execution_id}")
-    return data
-
-
-@app.get("/api/n8n/health", tags=["N8N"])
-async def get_n8n_health():
-    """Проверить статус N8N (не требует аутентификации)
-    
-    Returns:
-        Dict: Статус здоровья N8N
-    """
-    url = f"{N8N_BASE_URL}/healthz"
-    
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            return {
-                "status": "healthy",
-                "n8n_url": N8N_BASE_URL,
-                "response": response.json() if response.text else {}
-            }
-    except httpx.HTTPError as e:
-        return {
-            "status": "unhealthy",
-            "n8n_url": N8N_BASE_URL,
-            "error": str(e)
-        }
-
-
-# ============================================
 # Dashboard Endpoint (для Lovable.dev)
 # ============================================
 
@@ -464,30 +395,14 @@ async def get_dashboard_data():
     - Очередь обработки
     - Файлы с ошибками
     - Статус системы
-    - N8N workflows и статус
     """
     try:
-        # Получаем N8N данные параллельно, но не ломаем дашборд если N8N недоступен
-        n8n_data = {}
-        try:
-            n8n_health = await get_n8n_health()
-            n8n_data = {
-                "health": n8n_health,
-                "available": True
-            }
-        except Exception as e:
-            n8n_data = {
-                "available": False,
-                "error": str(e)
-            }
-        
         return {
             "files": db.get_file_state_stats(),
             "chunks": db.get_documents_stats(),
             "queue": db.get_processing_queue(),
             "errors": db.get_error_files(),
-            "health": db.get_database_health(),
-            "n8n": n8n_data
+            "health": db.get_database_health()
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get dashboard data: {str(e)}")
