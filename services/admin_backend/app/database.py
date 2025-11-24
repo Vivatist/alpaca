@@ -3,7 +3,7 @@
 Предоставляет методы для получения статистики и данных из БД
 """
 
-import psycopg2
+import psycopg
 from contextlib import contextmanager
 from typing import Dict, List, Optional, Any
 import os
@@ -13,18 +13,35 @@ class Database:
     """Класс для работы с базой данных"""
     
     def __init__(self):
-        self.config = {
-            'host': os.getenv('POSTGRES_HOST', 'supabase-db'),
-            'port': os.getenv('POSTGRES_PORT', '5432'),
-            'database': os.getenv('POSTGRES_DB', 'postgres'),
-            'user': os.getenv('POSTGRES_USER', 'postgres'),
-            'password': os.getenv('POSTGRES_PASSWORD', 'postgres')
-        }
+        # Приоритет DATABASE_URL, иначе отдельные переменные
+        database_url = os.getenv('DATABASE_URL')
+        
+        if database_url:
+            # Парсим DATABASE_URL
+            from urllib.parse import urlparse
+            parsed = urlparse(database_url)
+            
+            self.config = {
+                'host': parsed.hostname,
+                'port': parsed.port or 5432,
+                'dbname': parsed.path.lstrip('/'),
+                'user': parsed.username,
+                'password': parsed.password
+            }
+        else:
+            # Fallback на отдельные переменные
+            self.config = {
+                'host': os.getenv('POSTGRES_HOST', 'localhost'),
+                'port': os.getenv('POSTGRES_PORT', '5432'),
+                'dbname': os.getenv('POSTGRES_DB', 'postgres'),
+                'user': os.getenv('POSTGRES_USER', 'postgres'),
+                'password': os.getenv('POSTGRES_PASSWORD', 'postgres')
+            }
     
     @contextmanager
     def get_connection(self):
         """Context manager для подключения к БД"""
-        conn = psycopg2.connect(**self.config)
+        conn = psycopg.connect(**self.config)
         try:
             yield conn
             conn.commit()
@@ -35,7 +52,7 @@ class Database:
             conn.close()
     
     def get_file_state_stats(self) -> Dict[str, int]:
-        """Получает статистику по файлам в file_state
+        """Получает статистику по файлам в таблице files
         
         Returns:
             Dict с количеством файлов по каждому статусу:
@@ -56,7 +73,7 @@ class Database:
                     SELECT 
                         status_sync,
                         COUNT(*) as count
-                    FROM file_state
+                    FROM files
                     GROUP BY status_sync
                     ORDER BY status_sync
                 """)
@@ -76,7 +93,7 @@ class Database:
                 return stats
     
     def get_documents_stats(self) -> Dict[str, Any]:
-        """Получает статистику по таблице documents
+        """Получает статистику по таблице chunks
         
         Returns:
             Dict со статистикой:
@@ -89,13 +106,13 @@ class Database:
         with self.get_connection() as conn:
             with conn.cursor() as cur:
                 # Общее количество чанков
-                cur.execute("SELECT COUNT(*) FROM documents")
+                cur.execute("SELECT COUNT(*) FROM chunks")
                 total_chunks = cur.fetchone()[0]
                 
                 # Количество уникальных файлов
                 cur.execute("""
                     SELECT COUNT(DISTINCT metadata->>'file_hash') 
-                    FROM documents 
+                    FROM chunks 
                     WHERE metadata->>'file_hash' IS NOT NULL
                 """)
                 unique_files = cur.fetchone()[0]
@@ -135,7 +152,7 @@ class Database:
                         status_sync,
                         file_mtime,
                         last_checked
-                    FROM file_state
+                    FROM files
                 """
                 
                 params = []
@@ -180,7 +197,7 @@ class Database:
                         file_hash,
                         file_size,
                         status_sync
-                    FROM file_state
+                    FROM files
                     WHERE status_sync IN ('added', 'updated', 'deleted')
                     ORDER BY status_sync, file_path
                     LIMIT 1000
@@ -219,7 +236,7 @@ class Database:
                         file_hash,
                         file_size,
                         last_checked
-                    FROM file_state
+                    FROM files
                     WHERE status_sync = 'error'
                     ORDER BY last_checked DESC
                 """)
@@ -255,11 +272,11 @@ class Database:
                     """)
                     pgvector = cur.fetchone()
                     
-                    # Размер таблиц
+                    # Размер таблиц (используем правильные имена таблиц)
                     cur.execute("""
                         SELECT 
-                            pg_size_pretty(pg_total_relation_size('file_state')) as file_state_size,
-                            pg_size_pretty(pg_total_relation_size('documents')) as documents_size
+                            pg_size_pretty(pg_total_relation_size('files')) as file_state_size,
+                            pg_size_pretty(pg_total_relation_size('chunks')) as documents_size
                     """)
                     sizes = cur.fetchone()
                     
@@ -268,8 +285,8 @@ class Database:
                         'connected': True,
                         'pgvector_version': pgvector[1] if pgvector else None,
                         'table_sizes': {
-                            'file_state': sizes[0] if sizes else 'unknown',
-                            'documents': sizes[1] if sizes else 'unknown'
+                            'files': sizes[0] if sizes else 'unknown',
+                            'chunks': sizes[1] if sizes else 'unknown'
                         }
                     }
         except Exception as e:

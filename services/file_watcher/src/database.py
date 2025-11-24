@@ -94,8 +94,11 @@ class Database:
         """
         # Строка 2 таблицы: Хэш совпадает (файл не изменился)
         if hash_matches:
-            # Для всех статусов кроме NULL → ничего не делаем
-            if current_status in ('added', 'updated', 'processed', 'deleted', 'ok', 'error'):
+            # ИСКЛЮЧЕНИЕ: если файл был deleted, а теперь появился снова → помечаем как updated
+            if current_status == 'deleted':
+                return ('update_status', 'updated')
+            # Для остальных статусов (added, updated, processed, ok, error) → ничего не делаем
+            elif current_status in ('added', 'updated', 'processed', 'ok', 'error'):
                 return ('skip', None)
             # Для NULL → помечаем updated
             elif current_status is None:

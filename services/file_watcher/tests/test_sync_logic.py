@@ -168,7 +168,7 @@ class TestSyncLogic:
             ('added', 'added'),       # added → added (не меняется)
             ('updated', 'updated'),   # updated → updated (не меняется)
             ('processed', 'processed'), # processed → processed (не меняется)
-            ('deleted', 'deleted'),   # deleted → deleted (не меняется)
+            ('deleted', 'updated'),   # deleted → updated (файл вернулся!)
             ('ok', 'ok'),             # ok → ok (не меняется)
             ('error', 'error'),       # error → error (не меняется)
             (None, 'updated'),        # NULL → updated (меняется!)
@@ -199,9 +199,9 @@ class TestSyncLogic:
             assert current_status == expected_status, \
                 f"{filename}: ожидали {expected_status}, получили {current_status}"
         
-        # 6 файлов не изменились (skip), 1 файл (NULL) обновился
-        assert stats['unchanged'] == 6, "6 файлов должны быть unchanged (все кроме NULL)"
-        assert stats['updated'] == 1, "1 файл (NULL) должен быть updated"
+        # 5 файлов не изменились (skip), 2 файла обновились (NULL и deleted)
+        assert stats['unchanged'] == 5, "5 файлов должны быть unchanged (все кроме NULL и deleted)"
+        assert stats['updated'] == 2, "2 файла (NULL и deleted) должны быть updated"
         print("✅ Passed: Хэш совпадает - статусы не меняются (кроме NULL → updated)")
     
     # ========== СТРОКА 3: ХЭШ НЕ СОВПАДАЕТ (файл изменился) ==========

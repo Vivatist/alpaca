@@ -95,7 +95,7 @@ db = Database()
 # ============================================
 
 class FileStateStats(BaseModel):
-    """Статистика по файлам в file_state"""
+    """Статистика по файлам в таблице files"""
     total: int = Field(..., description="Общее количество файлов")
     ok: int = Field(..., description="Файлы успешно обработаны")
     added: int = Field(..., description="Новые файлы ожидают обработки")
@@ -106,7 +106,7 @@ class FileStateStats(BaseModel):
 
 
 class DocumentsStats(BaseModel):
-    """Статистика по таблице documents"""
+    """Статистика по таблице chunks"""
     total_chunks: int = Field(..., description="Общее количество чанков")
     unique_files: int = Field(..., description="Количество уникальных файлов")
     avg_chunks_per_file: float = Field(..., description="Среднее количество чанков на файл")
@@ -177,12 +177,12 @@ async def health_check():
 
 
 # ============================================
-# File State Endpoints
+# Files Endpoints
 # ============================================
 
-@app.get("/api/file-state/stats", response_model=FileStateStats, tags=["File State"])
+@app.get("/api/files/stats", response_model=FileStateStats, tags=["Files"])
 async def get_file_state_stats():
-    """Получить статистику по файлам в file_state
+    """Получить статистику по файлам в таблице files
     
     Возвращает количество файлов в каждом статусе:
     - ok: успешно обработаны
@@ -199,7 +199,7 @@ async def get_file_state_stats():
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
-@app.get("/api/file-state/files", response_model=List[FileDetail], tags=["File State"])
+@app.get("/api/files/list", response_model=List[FileDetail], tags=["Files"])
 async def get_file_state_files(
     status: Optional[str] = Query(None, description="Фильтр по статусу"),
     limit: int = Query(100, ge=1, le=1000, description="Максимальное количество записей"),
@@ -218,7 +218,7 @@ async def get_file_state_files(
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
-@app.get("/api/file-state/queue", tags=["File State"])
+@app.get("/api/files/queue", tags=["Files"])
 async def get_processing_queue():
     """Получить текущую очередь файлов на обработку
     
@@ -239,7 +239,7 @@ async def get_processing_queue():
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
-@app.get("/api/file-state/errors", tags=["File State"])
+@app.get("/api/files/errors", tags=["Files"])
 async def get_error_files():
     """Получить список файлов со статусом error
     
@@ -256,12 +256,12 @@ async def get_error_files():
 
 
 # ============================================
-# Documents Endpoints
+# Chunks Endpoints
 # ============================================
 
-@app.get("/api/documents/stats", response_model=DocumentsStats, tags=["Documents"])
+@app.get("/api/chunks/stats", response_model=DocumentsStats, tags=["Chunks"])
 async def get_documents_stats():
-    """Получить статистику по таблице documents
+    """Получить статистику по таблице chunks
     
     Возвращает:
     - Общее количество чанков
@@ -459,8 +459,8 @@ async def get_dashboard_data():
     """Получить все данные для дашборда одним запросом
     
     Агрегирует данные из всех эндпоинтов для оптимизации:
-    - Статистика file_state
-    - Статистика documents
+    - Статистика files
+    - Статистика chunks
     - Очередь обработки
     - Файлы с ошибками
     - Статус системы
@@ -482,8 +482,8 @@ async def get_dashboard_data():
             }
         
         return {
-            "file_state": db.get_file_state_stats(),
-            "documents": db.get_documents_stats(),
+            "files": db.get_file_state_stats(),
+            "chunks": db.get_documents_stats(),
             "queue": db.get_processing_queue(),
             "errors": db.get_error_files(),
             "health": db.get_database_health(),
