@@ -92,6 +92,45 @@ services:
       retries: 3
       start_period: 10s
 
+  # File Watcher для мониторинга файлов
+  filewatcher:
+    build:
+      context: ../services/file_watcher
+      dockerfile: Dockerfile
+    restart: always
+    networks:
+      - alpaca_network
+    volumes:
+      - ${MONITORED_PATH:-../monitored_folder}:/monitored_folder:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      # === CREDENTIALS (из .env) ===
+      - DATABASE_URL=${DATABASE_URL}
+      
+      # === SYSTEM SETTINGS ===
+      - TZ=Europe/Moscow
+      - LOG_LEVEL=INFO
+      
+      # === FILE WATCHER SETTINGS (настройки только здесь) ===
+      - FILES_TABLE_NAME=files
+      - MONITORED_PATH=/monitored_folder
+      - SCAN_INTERVAL_SECONDS=10
+      - ALLOWED_EXTENSIONS=.docx,.pdf,.txt
+      - FILE_MIN_SIZE=100
+      - FILE_MAX_SIZE=10485760
+      - EXCLUDED_DIRS=TMP
+      - EXCLUDED_PATTERNS=~*,.*
+      - PRE_LAUNCH_TESTS=true  # Тесты при запуске
+    depends_on:
+      - prefect
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "python"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
 volumes:
   unstructured_data:
   ollama_storage:

@@ -14,12 +14,12 @@ import time
 import tempfile
 from pathlib import Path
 
-# Добавляем путь к корню проекта
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+# Добавляем src/ в PYTHONPATH
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from app.file_watcher.database import Database
-from app.file_watcher.scanner import Scanner
-from app.file_watcher.vector_sync import VectorSync
+from database import Database
+from scanner import Scanner
+from vector_sync import VectorSync
 
 
 class TestFileWatcher:
@@ -40,11 +40,52 @@ class TestFileWatcher:
                 cur.execute("DELETE FROM files WHERE file_path LIKE 'test_%'")
         
         # Инициализируем компоненты
-        from app.file_watcher.file_filter import FileFilter
+        from file_filter import FileFilter
         # Для тестов создаём фильтр без ограничений
         test_filter = FileFilter(min_size=0, max_size=100*1024*1024, excluded_dirs=[], excluded_patterns=[])
         self.scanner = Scanner(self.test_folder, ['.txt', '.pdf', '.docx'], test_filter)
         self.vector_sync = VectorSync(self.db)
+    
+    def run_all_tests(self) -> bool:
+        """Запускает все тесты класса. Возвращает True если все прошли."""
+        import traceback
+        
+        test_methods = [
+            method for method in dir(self)
+            if method.startswith('test_') and callable(getattr(self, method))
+        ]
+        
+        passed = 0
+        failed = 0
+        
+        for test_name in sorted(test_methods):
+            try:
+                self.setup_method()  # Инициализация перед каждым тестом
+                getattr(self, test_name)()
+                passed += 1
+            except Exception as e:
+                failed += 1
+                print(f"  ✗ {test_name}: {e}")
+                # traceback.print_exc()  # Отключаем полный traceback для краткости
+            finally:
+                # Очистка после каждого теста
+                try:
+                    self.teardown_method()
+                except:
+                    pass
+        
+        print(f"  📊 Результаты: {passed} passed, {failed} failed")
+        
+        # Финальная очистка БД
+        try:
+            # Нужен setup для инициализации self.db
+            if not hasattr(self, 'db'):
+                self.setup_method()
+            self._cleanup_test_records()
+        except Exception as e:
+            print(f"  ⚠ Ошибка очистки БД: {e}")
+        
+        return failed == 0
     
     def teardown_method(self):
         """Очистка после каждого теста"""

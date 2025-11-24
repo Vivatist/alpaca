@@ -26,20 +26,12 @@ class Settings(BaseSettings):
     # Supabase Database (PostgreSQL с pgvector)
     DATABASE_URL: str
     
-    # File Monitoring
+    # File Monitoring (используется парсерами для построения полного пути)
     MONITORED_PATH: str = "/home/alpaca/monitored_folder"
-    SCAN_MONITORED_FOLDER_INTERVAL: int = 10  # секунды
-    ALLOWED_EXTENSIONS: str = ".docx,.pdf,.txt"  # Разрешённые расширения файлов
     
     # File Status Processor
     PROCESS_FILE_CHANGES_INTERVAL: int = 7  # секунды
     MAX_HEAVY_WORKFLOWS: int = 2  # Максимум одновременных тяжёлых воркфлоу
-
-    # File Filter
-    FILE_MIN_SIZE: int = 100  # Минимальный размер файла в байтах
-    FILE_MAX_SIZE: int = 10 * 1024 * 1024  # Максимальный размер файла в байтах (10 МБ)
-    EXCLUDED_DIRS: str = "TMP"  # Исключённые директории (через запятую)
-    EXCLUDED_PATTERNS: str = "~*,.*"  # Исключённые паттерны файлов (через запятую)
     
     # Unstructured API
     UNSTRUCTURED_API_URL: str = "http://localhost:9000/general/v0/general"

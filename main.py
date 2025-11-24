@@ -33,7 +33,6 @@ class FileID(BaseModel):
         
 from utils.logging import setup_logging, get_logger
 from utils.process_lock import ProcessLock
-from app.file_watcher import FileWatcherService
 from settings import settings
 from database import Database
 
@@ -42,25 +41,11 @@ setup_logging()
 logger = get_logger("alpaca.main")
 
 # Сервисы
-file_watcher = FileWatcherService(
-    database_url=settings.DATABASE_URL,
-    monitored_path=settings.MONITORED_PATH,
-    allowed_extensions=settings.ALLOWED_EXTENSIONS.split(','),
-    file_min_size=settings.FILE_MIN_SIZE,
-    file_max_size=settings.FILE_MAX_SIZE,
-    excluded_dirs=settings.EXCLUDED_DIRS.split(','),
-    excluded_patterns=settings.EXCLUDED_PATTERNS.split(',')
-)
-
 db = Database(settings.DATABASE_URL)
 
 
-@flow(name="file_watcher_flow")
-def file_watcher_flow():
-    """Сканирование и синхронизация файлов"""
-    result = file_watcher.scan_and_sync()
-    
-    return result
+# NOTE: file_watcher_flow удален - теперь работает в отдельном контейнере
+# См. docker/docker-compose.yml сервис filewatcher
 
 
 @task(name="process_deleted_file", retries=2, persist_result=True)
@@ -294,17 +279,9 @@ if __name__ == "__main__":
     try:
         logger.info("Starting ALPACA RAG system...")
         
-        # Сброс статусов processed у файлов в базе при старте
-        reset_count = file_watcher.reset_processed_statuses()
-            
-        # Запуск нескольких flows с ограничением параллелизма
+        # NOTE: file_watcher теперь работает в отдельном контейнере
+        # Запуск process_pending_files_flow для обработки изменений
         serve(
-            file_watcher_flow.to_deployment(
-                name="file-watcher",
-                interval=timedelta(seconds=settings.SCAN_MONITORED_FOLDER_INTERVAL),
-                description="Сканирование и синхронизация файлов",
-                concurrency_limit=1
-            ),
             process_pending_files_flow.to_deployment(
                 name="process_pending_files_flow",
                 interval=timedelta(seconds=settings.PROCESS_FILE_CHANGES_INTERVAL),

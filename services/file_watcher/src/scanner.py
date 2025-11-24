@@ -2,7 +2,7 @@ import os
 import hashlib
 from pathlib import Path
 from typing import List, Dict
-from .file_filter import FileFilter
+from file_filter import FileFilter
 
 class Scanner:
     def __init__(self, monitored_path: str, allowed_extensions: List[str], file_filter: FileFilter = None):

@@ -1,12 +1,19 @@
 {
 	"folders": [
 		{
+			"name": "alpaca",
 			"path": "."
 		},
 		{
+			"name": "monitored_folder",
 			"path": "../monitored_folder"
 		},
 		{
+			"name": "tmp",
+			"path": "../tmp"
+		},
+		{
+			"name": "alpaca-n8n",
 			"path": "../alpaca-n8n"
 		}
 	],

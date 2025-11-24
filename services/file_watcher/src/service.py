@@ -2,43 +2,13 @@
 File Watcher Service - изолированный сервис для мониторинга файлов
 """
 from typing import Dict, Any
-from prefect import task
-from utils.logging import get_logger
-from .scanner import Scanner
-from .database import Database
-from .vector_sync import VectorSync
-from .file_filter import FileFilter
+from scanner import Scanner
+from database import Database
+from vector_sync import VectorSync
+from file_filter import FileFilter
 
-
-logger = get_logger(__name__)
-
-
-# Prefect tasks для file watcher
-@task(name="scan_disk", retries=3, persist_result=True)
-def task_scan_disk(scanner: Scanner) -> list:
-    """Task: сканирование диска"""
-    return scanner.scan()
-
-
-@task(name="sync_files_to_db", retries=3, persist_result=True)
-def task_sync_files(db: Database, files: list) -> dict:
-    """Task: синхронизация файлов с БД по хешам"""
-    return db.sync_by_hash(files)
-
-
-@task(name="sync_vector_status", retries=3, persist_result=True)
-def task_sync_status(vector_sync) -> dict:
-    """Task: синхронизация статусов с векторной БД"""
-    return vector_sync.sync_status()
-
-
-@task(name="reset_processed_statuses", persist_result=True)
-def task_reset_processed(db: Database) -> int:
-    """Task: сброс статусов 'processed' на 'ok'"""
-    count = db.reset_processed_to_ok()
-    if count > 0:
-        logger.info(f"🔄 Reset {count} processed statuses")
-    return count
+import logging
+logger = logging.getLogger(__name__)
 
 
 class FileWatcherService:
@@ -52,7 +22,8 @@ class FileWatcherService:
         file_min_size: int = 100,
         file_max_size: int = 10 * 1024 * 1024,
         excluded_dirs: list[str] = None,
-        excluded_patterns: list[str] = None
+        excluded_patterns: list[str] = None,
+        table_name: str = "files"
     ):
         """
         Args:
@@ -63,8 +34,9 @@ class FileWatcherService:
             file_max_size: Максимальный размер файла в байтах
             excluded_dirs: Исключённые директории
             excluded_patterns: Исключённые паттерны файлов
+            table_name: Название таблицы файлов в БД
         """
-        self.db = Database(database_url=database_url)
+        self.db = Database(database_url=database_url, table_name=table_name)
         
         file_filter = FileFilter(
             min_size=file_min_size,
@@ -84,7 +56,6 @@ class FileWatcherService:
     def scan_and_sync(self) -> Dict[str, Any]:
         """
         Выполняет полный цикл сканирования и синхронизации.
-        Использует Prefect tasks для каждого шага.
         
         Returns:
             dict: Результаты сканирования и синхронизации
@@ -93,14 +64,14 @@ class FileWatcherService:
         start_time = time.time()
         
         try:
-            # Каждый шаг - отдельная task с retry и мониторингом
-            files = task_scan_disk(self.scanner)
-            file_sync = task_sync_files(self.db, files)
-            # NOTE: vector_sync отключен - логика синхронизации статусов теперь в sync_by_hash
-            # status_sync = task_sync_status(self.vector_sync)
+            # Сканирование диска
+            files = self.scanner.scan()
+            
+            # Синхронизация с БД
+            file_sync = self.db.sync_by_hash(files)
             
             duration = time.time() - start_time
-            logger.info(
+            logger.debug(
                 f"disc[total:{len(files)}, "
                 f"+{file_sync['added']}, "
                 f"~{file_sync['updated']}, "

@@ -1,0 +1,1 @@
+cd /home/alpaca/alpaca/docker && docker compose logs -f filewatcher --tail=50

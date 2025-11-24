@@ -5,10 +5,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-# Добавляем путь к корню проекта
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+# Добавляем src/ в PYTHONPATH
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from app.file_watcher.file_filter import FileFilter
+from file_filter import FileFilter
 
 
 class TestFileFilter:
@@ -17,6 +17,32 @@ class TestFileFilter:
     def setup_method(self):
         """Подготовка перед каждым тестом"""
         self.test_folder = tempfile.mkdtemp()
+    
+    def run_all_tests(self) -> bool:
+        """Запускает все тесты класса. Возвращает True если все прошли."""
+        import traceback
+        
+        test_methods = [
+            method for method in dir(self)
+            if method.startswith('test_') and callable(getattr(self, method))
+        ]
+        
+        passed = 0
+        failed = 0
+        
+        for test_name in sorted(test_methods):
+            try:
+                self.setup_method()
+                getattr(self, test_name)()
+                self.teardown_method()
+                passed += 1
+            except Exception as e:
+                failed += 1
+                print(f"  ✗ {test_name}: {e}")
+                traceback.print_exc()
+        
+        print(f"  📊 Результаты: {passed} passed, {failed} failed")
+        return failed == 0
     
     def teardown_method(self):
         """Очистка после каждого теста"""
