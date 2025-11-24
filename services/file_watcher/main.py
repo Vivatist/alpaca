@@ -111,17 +111,15 @@ def main():
         iteration += 1
         
         try:
-            logger.info(f"🔍 Starting scan iteration #{iteration}")
-            
             result = file_watcher.scan_and_sync()
             
             logger.info(
-                f"✅ Scan complete | "
-                f"disk={result['disk_files']}, "
+                f"#{iteration} disc[total:{result['disk_files']}, "
                 f"+{result['file_sync']['added']}, "
                 f"~{result['file_sync']['updated']}, "
                 f"-{result['file_sync']['deleted']}, "
-                f"ok={result['file_sync']['unchanged']}"
+                f"ok:{result['file_sync']['unchanged']}] "
+                f"in {result['duration']:.2f}s"
             )
             
         except KeyboardInterrupt:

@@ -71,14 +71,6 @@ class FileWatcherService:
             file_sync = self.db.sync_by_hash(files)
             
             duration = time.time() - start_time
-            logger.debug(
-                f"disc[total:{len(files)}, "
-                f"+{file_sync['added']}, "
-                f"~{file_sync['updated']}, "
-                f"-{file_sync['deleted']}, "
-                f"ok:{file_sync['unchanged']}] "
-                f"in {duration:.2f}s"
-            )
             
             return {
                 'success': True,

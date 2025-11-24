@@ -6,8 +6,8 @@ set -e
 SUPABASE_HOME="/home/alpaca/supabase"
 SUPABASE_DOCKER="$SUPABASE_HOME/docker"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-NETWORK_PATCH="$SCRIPT_DIR/setup_supabase/supabase-network-patch.yml"
-DB_PORT_PATCH="$SCRIPT_DIR/setup_supabase/supabase-db-port-patch.yml"
+NETWORK_PATCH="$SCRIPT_DIR/supabase-network-patch.yml"
+DB_PORT_PATCH="$SCRIPT_DIR/supabase-db-port-patch.yml"
 
 echo "🚀 Установка Supabase..."
 echo ""
@@ -112,11 +112,11 @@ echo "✅ PostgreSQL готов"
 
 # Применение схем
 echo "📋 Применение схемы chunks..."
-docker exec -i supabase-db psql -U postgres -d postgres < "$SCRIPT_DIR/setup_supabase/schema_chunks.sql" >/dev/null 2>&1
+docker exec -i supabase-db psql -U postgres -d postgres < "$SCRIPT_DIR/schema_chunks.sql" >/dev/null 2>&1
 echo "✅ Таблица chunks создана"
 
 echo "📋 Применение схемы files..."
-docker exec -i supabase-db psql -U postgres -d postgres < "$SCRIPT_DIR/setup_supabase/schema_files.sql" >/dev/null 2>&1
+docker exec -i supabase-db psql -U postgres -d postgres < "$SCRIPT_DIR/schema_files.sql" >/dev/null 2>&1
 echo "✅ Таблица files создана"
 
 echo ""
