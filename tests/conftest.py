@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 from typing import Generator
 
-from database import Database
+from utils.database import Database
 from settings import settings
 
 

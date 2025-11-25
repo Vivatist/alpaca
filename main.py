@@ -12,7 +12,7 @@ from app.embedders.custom_embedder import embedding
 from utils.logging import setup_logging, get_logger
 from utils.worker import Worker
 from settings import settings
-from database import Database
+from utils.database import Database
 from tests.runner import run_tests_on_startup
 
 setup_logging()

@@ -17,7 +17,7 @@ from pathlib import Path
 # Добавляем src/ в PYTHONPATH
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from database import Database
+from utils.database import Database
 from scanner import Scanner
 
 

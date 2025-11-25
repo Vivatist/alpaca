@@ -16,7 +16,7 @@ import os
 import docker
 import httpx
 
-from database import Database
+from utils.database import Database
 
 # Инициализация FastAPI
 app = FastAPI(

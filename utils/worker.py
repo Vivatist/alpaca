@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, Optional, Dict, Any
 
 from utils.logging import get_logger
-from database import Database
+from utils.database import Database
 
 logger = get_logger("alpaca.worker.manager")
 

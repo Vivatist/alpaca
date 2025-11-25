@@ -11,7 +11,7 @@ class FileID(BaseModel):
 
 # Импорты из проекта (будут доступны при запуске из main.py)
 from settings import settings
-from database import Database
+from utils.database import Database
 from utils.logging import get_logger
 
 logger = get_logger("alpaca.parser")

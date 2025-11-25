@@ -5,7 +5,7 @@ import psycopg2.extras
 
 from utils.logging import get_logger
 from settings import settings
-from database import Database
+from utils.database import Database
 
 logger = get_logger("alpaca.embedder")
 

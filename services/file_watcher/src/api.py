@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 import os
 
-from database import Database
+from utils.database import Database
 
 # Инициализация FastAPI
 app = FastAPI(
