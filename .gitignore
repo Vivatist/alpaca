@@ -1,3 +1,6 @@
+# Application specific
+*.pid
+
 
 # Python
 __pycache__/
@@ -79,7 +82,3 @@ temp/
 Thumbs.db
 .DS_Store
 
-# Application specific
-monitored_folder/
-*.pid
-SUPABASE_CREDENTIALS.txt
