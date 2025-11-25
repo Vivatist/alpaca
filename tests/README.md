@@ -26,7 +26,7 @@ RUN_TESTS_ON_START: bool = True  # Запускать тесты перед ст
 TEST_SUITE: str = "unit"         # unit, integration или all
 ```
 
-Теперь при запуске `python worker.py` автоматически выполнятся тесты.
+Теперь при запуске `python main.py` автоматически выполнятся тесты.
 
 ### Запуск тестов вручную
 

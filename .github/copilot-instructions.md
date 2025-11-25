@@ -13,7 +13,7 @@ monitored_folder/ → FileWatcher → PostgreSQL+pgvector ← Worker → Ollama 
 
 1. **Supabase (Self-hosted)** - PostgreSQL с расширением pgvector, отдельная установка в `~/supabase/docker`
 2. **File Watcher** - Docker-сервис, сканирующий `monitored_folder`, отслеживает состояние файлов в таблице `files`, предоставляет REST API который возвращает ОДИН файл для обработки
-3. **Worker** - Python-процесс (`worker.py`), обрабатывающий очередь: парсинг → клининг → чанкинг → эмбеддинг
+3. **Worker** - Python-процесс (`main.py`), обрабатывающий очередь: парсинг → клининг → чанкинг → эмбеддинг
 4. **Ollama** - Docker-сервис с поддержкой GPU, запускающий `qwen2.5:32b` (LLM) и `bge-m3` (эмбеддинги)
 5. **Unstructured API** - Docker-сервис для парсинга документов (DOCX, PDF, TXT) - используется не для всех типов файлов
 6. **Admin Backend** - Docker-сервис с REST API для мониторинга и управления
@@ -86,7 +86,7 @@ cd ~/alpaca/services && docker compose up -d
 # Запускает: unstructured (9000), ollama (11434), filewatcher (8081), admin-backend (8080)
 
 # 3. Запустить worker (отдельный Python-процесс)
-cd ~/alpaca && source venv/bin/activate && python worker.py
+cd ~/alpaca && source venv/bin/activate && python main.py
 ```
 
 ### Порты сервисов
@@ -277,4 +277,4 @@ python tests/runner.py --suite all -v
 - **Новые зависимости**: Добавьте в `requirements.txt` в корне проекта
 - **Изменения Docker-сервисов**: Отредактируйте `services/docker-compose.yml`
 - **Изменения тестов**: Запустите `python tests/runner.py --suite unit` перед коммитом
-- **Изменения пайплайна**: Обновите как `worker.py`, так и соответствующие модули app/
+- **Изменения пайплайна**: Обновите как `main.py`, так и соответствующие модули app/

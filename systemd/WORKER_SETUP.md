@@ -27,7 +27,7 @@ sudo journalctl -u alpaca-worker -f
 ```bash
 cd /home/alpaca/alpaca
 source venv/bin/activate
-python worker.py
+python main.py
 ```
 
 ## Переменные окружения
@@ -67,13 +67,13 @@ Worker обрабатывает файлы по приоритету:
 
 ```bash
 # Terminal 1
-python worker.py
+python main.py
 
 # Terminal 2  
-python worker.py
+python main.py
 
 # Terminal 3
-python worker.py
+python main.py
 ```
 
 Каждый worker будет брать следующий файл из очереди независимо.

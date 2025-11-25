@@ -71,7 +71,7 @@ python -c "from app.settings import settings; print(settings.DATABASE_URL)"
 ```bash
 # В отдельном терминале
 source venv/bin/activate
-python worker.py
+python main.py
 ```
 
 ## Остановка сервисов

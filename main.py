@@ -1,19 +1,16 @@
 """
-Простой worker для обработки файлов из очереди без Prefect
+Worker - бизнес-логика обработки файлов
+Содержит функции парсинга, чанкинга, эмбеддинга и обработки файлов
 """
 import os
-import time
-import requests
-import psycopg2
-import psycopg2.extras
-from typing import Optional, Dict, Any, List
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Dict, Any
 from threading import Semaphore
 
 from app.parsers.word.parser_word import parser_word_old_task
 from app.chunkers.custom_chunker import chunking
 from app.embedders.custom_embedder import embedding
 from utils.logging import setup_logging, get_logger
+from utils.worker import Worker
 from settings import settings
 from database import Database
 from tests.runner import run_tests_on_startup
@@ -29,19 +26,6 @@ FILEWATCHER_API = os.getenv("FILEWATCHER_API_URL", "http://localhost:8081")
 PARSE_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_PARSING)
 EMBED_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_EMBEDDING)
 LLM_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_LLM)
-
-
-def get_next_file() -> Optional[Dict[str, Any]]:
-    """Получить следующий файл из очереди filewatcher"""
-    try:
-        response = requests.get(f"{FILEWATCHER_API}/api/next-file", timeout=5)
-        if response.status_code == 204:
-            return None  # Очередь пуста
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        logger.error(f"Failed to get next file from filewatcher: {e}")
-        return None
 
 
 def process_deleted_file(file_hash: str, file_path: str) -> bool:
@@ -168,101 +152,18 @@ def process_file(file_info: Dict[str, Any]) -> bool:
         db.mark_as_error(file_hash)
         return False
 
-
-def run_worker(poll_interval: int = None, max_workers: int = None):
-    """Основной цикл worker с параллельной обработкой
-    
-    Args:
-        poll_interval: Интервал опроса очереди в секундах (из settings если None)
-        max_workers: Максимальное количество файлов обрабатываемых параллельно (из settings если None)
-    """
-    
-    
-    processed_count = 0
-    
-    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="worker") as executor:
-        futures = {}  # future -> file_path mapping
-        
-        while True:
-            try:
-                # Удаляем завершённые задачи и считаем успешные
-                done_futures = [f for f in list(futures.keys()) if f.done()]
-                for future in done_futures:
-                    file_path = futures[future]
-                    try:
-                        success = future.result()
-                        if success:
-                            processed_count += 1
-                            logger.info(f"📊 Total processed: {processed_count}")
-                    except Exception as e:
-                        logger.error(f"Task failed for {file_path}: {e}")
-                    del futures[future]
-                
-                # Если есть свободные слоты, берём новые файлы
-                while len(futures) < max_workers:
-                    file_info = get_next_file()
-                    
-                    if file_info is None:
-                        # Очередь пуста
-                        break
-                    
-                    # Помечаем файл как processed СРАЗУ, чтобы избежать дублирования
-                    db.mark_as_processed(file_info['file_hash'])
-                    
-                    # Запускаем обработку в отдельном потоке
-                    future = executor.submit(process_file, file_info)
-                    futures[future] = file_info['file_path']
-                    logger.info(f"🚀 Started: {file_info['file_path']} | Active: {len(futures)}/{max_workers}")
-                
-                # Если нет активных задач и очередь пуста, ждём
-                if not futures:
-                    logger.debug("Queue is empty, waiting...")
-                    time.sleep(poll_interval)
-                else:
-                    # Есть активные задачи, проверяем чаще
-                    time.sleep(0.5)
-                    
-            except KeyboardInterrupt:
-                logger.info("Shutting down worker...")
-                logger.info(f"Waiting for {len(futures)} active tasks to complete...")
-                # Ждём завершения активных задач
-                for future in as_completed(futures.keys()):
-                    try:
-                        future.result()
-                    except Exception:
-                        pass
-                break
-            except Exception as e:
-                logger.error(f"Unexpected error in worker loop: {e}")
-                time.sleep(poll_interval)
-
-
 if __name__ == "__main__":
     # Запуск тестов при старте (если включено в настройках)
     tests_passed = run_tests_on_startup(settings)
-    
-    # После тестов переинициализируем логирование
-    # (тесты очищают handlers в конце выполнения)
-    setup_logging()
-    logger = get_logger("alpaca.worker")
-    
+
     if not tests_passed:
-        logger.error("Тесты провалились - выход из программы")
         exit(1)
 
-    # Берём значения из settings
-    poll_interval = settings.WORKER_POLL_INTERVAL
-    max_workers = settings.WORKER_MAX_CONCURRENT_FILES
-    
-    logger.info("=" * 60)
-    logger.info("A L P A K A   W O R K E R    S T A R T E D")
-    logger.info(f"Filewatcher API: {FILEWATCHER_API}")
-    logger.info(f"Max concurrent files: {max_workers}")
-    logger.info(f"Max concurrent parsing: {settings.WORKER_MAX_CONCURRENT_PARSING}")
-    logger.info(f"Max concurrent embedding: {settings.WORKER_MAX_CONCURRENT_EMBEDDING}")
-    logger.info(f"Poll interval: {poll_interval}s")
-    logger.info("=" * 60)
-    
-    # Запуск worker с настройками из settings.py
-    run_worker(poll_interval=poll_interval, max_workers=max_workers)
+    # Создаём worker и запускаем
+    worker = Worker(
+        database_url=settings.DATABASE_URL,
+        filewatcher_api_url=FILEWATCHER_API,
+        process_file_func=process_file # передаем функцию которую будем дергать при изменении на диске
+    )
+    worker.start(poll_interval=settings.WORKER_POLL_INTERVAL, max_workers=settings.WORKER_MAX_CONCURRENT_FILES)
 

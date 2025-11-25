@@ -7,7 +7,7 @@ import hashlib
 from unittest.mock import Mock, patch, MagicMock
 import responses
 
-from worker import process_deleted_file, ingest_pipeline, process_file
+from main import process_deleted_file, ingest_pipeline, process_file
 from settings import settings
 
 
@@ -55,7 +55,7 @@ class TestWorkerIntegration:
                 assert cur.fetchone()[0] == 0
     
     @responses.activate
-    @patch('worker.parser_word_old_task')
+    @patch('main.parser_word_old_task')
     def test_ingest_pipeline_success(self, mock_parser, test_db, temp_docx_file, cleanup_temp_parsed):
         """Тест успешного прохождения полного пайплайна"""
         # Mock парсера
@@ -94,7 +94,7 @@ class TestWorkerIntegration:
                 if status:
                     assert status[0] == "ok"
     
-    @patch('worker.parser_word_old_task')
+    @patch('main.parser_word_old_task')
     def test_ingest_pipeline_parse_error(self, mock_parser, test_db, temp_docx_file):
         """Тест обработки ошибки парсинга"""
         # Mock парсера с ошибкой
@@ -125,8 +125,8 @@ class TestWorkerIntegration:
                     assert status[0] == "error"
     
     @responses.activate
-    @patch('worker.ingest_pipeline')
-    def test_process_file_added(self, mock_ingest, test_db, mock_file_info):
+    @patch('main.ingest_pipeline')
+    def test_process_file_added(self, mock_ingest, test_db, temp_docx_file, mock_file_info):
         """Тест обработки добавленного файла"""
         mock_ingest.return_value = True
         
@@ -139,7 +139,7 @@ class TestWorkerIntegration:
         assert mock_ingest.call_count == 1
     
     @responses.activate
-    @patch('worker.process_deleted_file')
+    @patch('main.process_deleted_file')
     def test_process_file_deleted(self, mock_delete, test_db, mock_file_info):
         """Тест обработки удалённого файла"""
         mock_delete.return_value = True
@@ -153,12 +153,12 @@ class TestWorkerIntegration:
         assert mock_delete.call_count == 1
     
     @responses.activate
-    @patch('worker.process_deleted_file')
-    @patch('worker.ingest_pipeline')
-    def test_process_file_updated(self, mock_ingest, mock_delete, test_db, mock_file_info):
+    @patch('main.process_deleted_file')
+    @patch('main.ingest_pipeline')
+    def test_process_file_updated(self, mock_ingest, mock_delete, test_db, temp_docx_file, mock_file_info):
         """Тест обработки обновлённого файла"""
-        mock_delete.return_value = True
         mock_ingest.return_value = True
+        mock_delete.return_value = True
         
         file_info = mock_file_info("/tmp/test_updated.docx", "hash_updated_123", "updated")
         

@@ -7,7 +7,7 @@ import tempfile
 from unittest.mock import patch, MagicMock
 import responses
 
-from worker import ingest_pipeline
+from main import ingest_pipeline
 from settings import settings
 
 
@@ -84,7 +84,7 @@ class TestWorkerPipeline:
                     assert row[0] == "error"
     
     @responses.activate
-    @patch('worker.parser_word_old_task')
+    @patch('main.parser_word_old_task')
     def test_pipeline_empty_parsed_text(self, mock_parser, test_db, temp_docx_file):
         """Тест обработки файла с пустым результатом парсинга"""
         mock_parser.return_value = ""  # Пустой текст
@@ -114,8 +114,8 @@ class TestWorkerPipeline:
                     assert row[0] == "error"
     
     @responses.activate
-    @patch('worker.parser_word_old_task')
-    @patch('worker.chunking')
+    @patch('main.parser_word_old_task')
+    @patch('main.chunking')
     def test_pipeline_no_chunks_created(self, mock_chunking, mock_parser, test_db, temp_docx_file):
         """Тест когда чанкование не создаёт чанков"""
         mock_parser.return_value = "Текст был распарсен"
@@ -138,7 +138,7 @@ class TestWorkerPipeline:
         assert result is False
     
     @responses.activate
-    @patch('worker.parser_word_old_task')
+    @patch('main.parser_word_old_task')
     def test_pipeline_creates_temp_file(self, mock_parser, test_db, temp_docx_file, cleanup_temp_parsed):
         """Тест что пайплайн создаёт временный .md файл"""
         test_text = "Тестовый текст для сохранения"
