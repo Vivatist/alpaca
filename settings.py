@@ -61,8 +61,8 @@ class Settings(BaseSettings):
     OLLAMA_EMBEDDING_MODEL: str = "bge-m3"
     
     # Testing
-    RUN_TESTS_ON_START: bool = False  # Запускать ли тесты при старте приложения
-    TEST_SUITE: str = "unit"  # "unit", "integration", "all"
+    RUN_TESTS_ON_START: bool = True  # Запускать ли тесты при старте приложения
+    TEST_SUITE: str = "all"  # "unit", "integration", "all"
 
 
 settings = Settings()

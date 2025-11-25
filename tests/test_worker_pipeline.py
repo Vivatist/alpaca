@@ -32,8 +32,8 @@ class TestWorkerPipeline:
         with test_db.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "INSERT INTO files (file_hash, file_path, status_sync) VALUES (%s, %s, %s)",
-                    (file_hash, file_path, "processing")
+                    "INSERT INTO files (file_hash, file_path, file_size, status_sync) VALUES (%s, %s, %s, %s)",
+                    (file_hash, file_path, 1024, "processed")
                 )
             conn.commit()
         
@@ -66,8 +66,8 @@ class TestWorkerPipeline:
         with test_db.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "INSERT INTO files (file_hash, file_path, status_sync) VALUES (%s, %s, %s)",
-                    (file_hash, file_path, "processing")
+                    "INSERT INTO files (file_hash, file_path, file_size, status_sync) VALUES (%s, %s, %s, %s)",
+                    (file_hash, file_path, 1024, "processed")
                 )
             conn.commit()
         
@@ -96,8 +96,8 @@ class TestWorkerPipeline:
         with test_db.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "INSERT INTO files (file_hash, file_path, status_sync) VALUES (%s, %s, %s)",
-                    (file_hash, file_path, "processing")
+                    "INSERT INTO files (file_hash, file_path, file_size, status_sync) VALUES (%s, %s, %s, %s)",
+                    (file_hash, file_path, 1024, "processed")
                 )
             conn.commit()
         
@@ -128,8 +128,8 @@ class TestWorkerPipeline:
         with test_db.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "INSERT INTO files (file_hash, file_path, status_sync) VALUES (%s, %s, %s)",
-                    (file_hash, file_path, "processing")
+                    "INSERT INTO files (file_hash, file_path, file_size, status_sync) VALUES (%s, %s, %s, %s)",
+                    (file_hash, file_path, 1024, "processed")
                 )
             conn.commit()
         
@@ -159,8 +159,8 @@ class TestWorkerPipeline:
         with test_db.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "INSERT INTO files (file_hash, file_path, status_sync) VALUES (%s, %s, %s)",
-                    (file_hash, file_path, "processing")
+                    "INSERT INTO files (file_hash, file_path, file_size, status_sync) VALUES (%s, %s, %s, %s)",
+                    (file_hash, file_path, 1024, "processed")
                 )
             conn.commit()
         

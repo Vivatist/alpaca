@@ -176,14 +176,7 @@ def run_worker(poll_interval: int = 10, max_workers: int = 15):
         poll_interval: Интервал опроса очереди в секундах
         max_workers: Максимальное количество файлов обрабатываемых параллельно
     """
-    logger.info("=" * 60)
-    logger.info("Worker started")
-    logger.info(f"Filewatcher API: {FILEWATCHER_API}")
-    logger.info(f"Max concurrent files: {max_workers}")
-    logger.info(f"Max concurrent parsing: 2")
-    logger.info(f"Max concurrent embedding: 3")
-    logger.info(f"Poll interval: {poll_interval}s")
-    logger.info("=" * 60)
+
     
     processed_count = 0
     
@@ -246,7 +239,14 @@ def run_worker(poll_interval: int = 10, max_workers: int = 15):
 
 if __name__ == "__main__":
     # Запуск тестов при старте (если включено в настройках)
-    if not run_tests_on_startup(settings):
+    tests_passed = run_tests_on_startup(settings)
+    
+    # После тестов переинициализируем логирование
+    # (тесты очищают handlers в конце выполнения)
+    setup_logging()
+    logger = get_logger("alpaca.worker")
+    
+    if not tests_passed:
         logger.error("Тесты провалились - выход из программы")
         exit(1)
     

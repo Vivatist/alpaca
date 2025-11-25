@@ -24,14 +24,16 @@ class TestWorkerIntegration:
             with conn.cursor() as cur:
                 # Добавляем файл
                 cur.execute(
-                    "INSERT INTO files (file_hash, file_path, status_sync) VALUES (%s, %s, %s)",
-                    (file_hash, file_path, "ok")
+                    "INSERT INTO files (file_hash, file_path, file_size, status_sync) VALUES (%s, %s, %s, %s)",
+                    (file_hash, file_path, 1024, "ok")
                 )
                 # Добавляем чанк
+                import psycopg2.extras
+                test_embedding = "[" + ",".join(["0.1"] * 1024) + "]"
                 cur.execute(
                     """INSERT INTO chunks (content, metadata, embedding) 
                        VALUES (%s, %s, %s::vector)""",
-                    ("Test content", {"file_hash": file_hash}, "[0.1, 0.2, 0.3]")
+                    ("Test content", psycopg2.extras.Json({"file_hash": file_hash}), test_embedding)
                 )
             conn.commit()
         
@@ -75,8 +77,8 @@ class TestWorkerIntegration:
         with test_db.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "INSERT INTO files (hash, path, status) VALUES (%s, %s, %s)",
-                    (file_hash, file_path, "processing")
+                    "INSERT INTO files (file_hash, file_path, file_size, status_sync) VALUES (%s, %s, %s, %s)",
+                    (file_hash, file_path, 1024, "processed")
                 )
             conn.commit()
         
@@ -105,8 +107,8 @@ class TestWorkerIntegration:
         with test_db.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "INSERT INTO files (file_hash, file_path, status_sync) VALUES (%s, %s, %s)",
-                    (file_hash, file_path, "processing")
+                    "INSERT INTO files (file_hash, file_path, file_size, status_sync) VALUES (%s, %s, %s, %s)",
+                    (file_hash, file_path, 1024, "processed")
                 )
             conn.commit()
         

@@ -5,11 +5,36 @@ import os
 import tempfile
 import pytest
 import psycopg2
+import logging
 from pathlib import Path
 from typing import Generator
 
 from database import Database
 from settings import settings
+
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_logging():
+    """Настройка логирования для тестов - изолированно от основного приложения"""
+    # Настраиваем логирование для тестов
+    root_logger = logging.getLogger()
+    
+    # Очищаем все существующие handlers
+    root_logger.handlers.clear()
+    
+    # Создаём новый handler для тестов
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.ERROR)  # В тестах показываем только ошибки
+    formatter = logging.Formatter('%(asctime)s | %(levelname)-8s | %(name)s - %(message)s')
+    handler.setFormatter(formatter)
+    root_logger.addHandler(handler)
+    root_logger.setLevel(logging.ERROR)
+    
+    yield
+    
+    # После тестов НЕ восстанавливаем handlers - они будут созданы заново
+    # при следующем вызове setup_logging() в основном приложении
+    root_logger.handlers.clear()
 
 
 @pytest.fixture
