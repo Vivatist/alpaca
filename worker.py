@@ -7,6 +7,8 @@ import requests
 import psycopg2
 import psycopg2.extras
 from typing import Optional, Dict, Any, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Semaphore
 
 from app.parsers.word.parser_word import parser_word_old_task
 from utils.logging import setup_logging, get_logger
@@ -19,6 +21,11 @@ logger = get_logger("alpaca.worker")
 # Инициализация
 db = Database(settings.DATABASE_URL)
 FILEWATCHER_API = os.getenv("FILEWATCHER_API_URL", "http://localhost:8081")
+
+# Семафоры для ограничения конкурентности разных операций
+PARSE_SEMAPHORE = Semaphore(2)   # Максимум 2 парсинга одновременно
+EMBED_SEMAPHORE = Semaphore(3)   # Максимум 3 embedding одновременно
+LLM_SEMAPHORE = Semaphore(2)     # Максимум 2 LLM запроса одновременно
 
 
 def get_next_file() -> Optional[Dict[str, Any]]:
@@ -178,13 +185,13 @@ def ingest_pipeline(file_hash: str, file_path: str) -> bool:
         bool: True если успешно обработан
     """
     logger.info(f"🍎 Start ingest pipeline: {file_path} (hash: {file_hash[:8]}...)")
-    db.mark_as_processed(file_hash)
     
     try:
-        # 1. Парсинг
+        # 1. Парсинг (с ограничением конкурентности)
         if file_path.lower().endswith('.docx'):
             logger.info(f"📖 Parsing file: {file_path}")
-            raw_text = parser_word_old_task({'hash': file_hash, 'path': file_path})
+            with PARSE_SEMAPHORE:
+                raw_text = parser_word_old_task({'hash': file_hash, 'path': file_path})
             logger.info(f"✅ Parsed: {len(raw_text) if raw_text else 0} chars")
         else:
             logger.error(f"Unsupported file type: {file_path}")
@@ -212,8 +219,9 @@ def ingest_pipeline(file_hash: str, file_path: str) -> bool:
             db.mark_as_error(file_hash)
             return False
         
-        # 4. Эмбеддинг
-        chunks_count = embedding(file_hash, file_path, chunks)
+        # 4. Эмбеддинг (с ограничением конкурентности)
+        with EMBED_SEMAPHORE:
+            chunks_count = embedding(file_hash, file_path, chunks)
         
         if chunks_count == 0:
             logger.warning(f"No embeddings created for {file_path}")
@@ -271,44 +279,80 @@ def process_file(file_info: Dict[str, Any]) -> bool:
         return False
 
 
-def run_worker(poll_interval: int = 10):
-    """Основной цикл worker
+def run_worker(poll_interval: int = 10, max_workers: int = 15):
+    """Основной цикл worker с параллельной обработкой
     
     Args:
         poll_interval: Интервал опроса очереди в секундах
+        max_workers: Максимальное количество файлов обрабатываемых параллельно
     """
     logger.info("=" * 60)
     logger.info("Worker started")
     logger.info(f"Filewatcher API: {FILEWATCHER_API}")
+    logger.info(f"Max concurrent files: {max_workers}")
+    logger.info(f"Max concurrent parsing: 2")
+    logger.info(f"Max concurrent embedding: 3")
     logger.info(f"Poll interval: {poll_interval}s")
     logger.info("=" * 60)
     
-
+    processed_count = 0
     
-    while True:
-        try:
-            # Получаем следующий файл
-            file_info = get_next_file()
-            
-            if file_info is None:
-                # Очередь пуста, ждем
-                logger.debug("Queue is empty, waiting...")
+    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="worker") as executor:
+        futures = {}  # future -> file_path mapping
+        
+        while True:
+            try:
+                # Удаляем завершённые задачи и считаем успешные
+                done_futures = [f for f in list(futures.keys()) if f.done()]
+                for future in done_futures:
+                    file_path = futures[future]
+                    try:
+                        success = future.result()
+                        if success:
+                            processed_count += 1
+                            logger.info(f"📊 Total processed: {processed_count}")
+                    except Exception as e:
+                        logger.error(f"Task failed for {file_path}: {e}")
+                    del futures[future]
+                
+                # Если есть свободные слоты, берём новые файлы
+                while len(futures) < max_workers:
+                    file_info = get_next_file()
+                    
+                    if file_info is None:
+                        # Очередь пуста
+                        break
+                    
+                    # Помечаем файл как processed СРАЗУ, чтобы избежать дублирования
+                    db.mark_as_processed(file_info['file_hash'])
+                    
+                    # Запускаем обработку в отдельном потоке
+                    future = executor.submit(process_file, file_info)
+                    futures[future] = file_info['file_path']
+                    logger.info(f"🚀 Started: {file_info['file_path']} | Active: {len(futures)}/{max_workers}")
+                
+                # Если нет активных задач и очередь пуста, ждём
+                if not futures:
+                    logger.debug("Queue is empty, waiting...")
+                    time.sleep(poll_interval)
+                else:
+                    # Есть активные задачи, проверяем чаще
+                    time.sleep(0.5)
+                    
+            except KeyboardInterrupt:
+                logger.info("Shutting down worker...")
+                logger.info(f"Waiting for {len(futures)} active tasks to complete...")
+                # Ждём завершения активных задач
+                for future in as_completed(futures.keys()):
+                    try:
+                        future.result()
+                    except Exception:
+                        pass
+                break
+            except Exception as e:
+                logger.error(f"Unexpected error in worker loop: {e}")
                 time.sleep(poll_interval)
-                continue
-            
-            # Обрабатываем файл
-            success = process_file(file_info)
-
-            # Небольшая пауза между файлами
-            time.sleep(0.1)
-            
-        except KeyboardInterrupt:
-            logger.info("Worker stopped by user")
-            break
-        except Exception as e:
-            logger.error(f"Unexpected error in worker loop: {e}")
-            time.sleep(poll_interval)
 
 
 if __name__ == "__main__":
-    run_worker(poll_interval=5)
+    run_worker(poll_interval=5, max_workers=5)
