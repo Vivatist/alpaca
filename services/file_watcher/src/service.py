@@ -3,7 +3,7 @@ File Watcher Service - изолированный сервис для монит
 """
 from typing import Dict, Any
 from scanner import Scanner
-from utils.database import Database
+from utils.database import PostgreDatabase
 from vector_sync import VectorSync
 from file_filter import FileFilter
 
@@ -36,7 +36,7 @@ class FileWatcherService:
             excluded_patterns: Исключённые паттерны файлов
             table_name: Название таблицы файлов в БД
         """
-        self.db = Database(database_url=database_url, table_name=table_name)
+        self.db = PostgreDatabase(database_url=database_url, table_name=table_name)
         
         file_filter = FileFilter(
             min_size=file_min_size,

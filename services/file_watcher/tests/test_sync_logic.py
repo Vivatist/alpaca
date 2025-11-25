@@ -17,7 +17,7 @@ from pathlib import Path
 # Добавляем src/ в PYTHONPATH
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from utils.database import Database
+from utils.database import PostgreDatabase
 from scanner import Scanner
 
 
@@ -25,7 +25,7 @@ class TestSyncLogic:
     """Тесты синхронизации согласно таблице сценариев"""
     
     def __init__(self, database_url: str):
-        self.db = Database(database_url, table_name='test_files')
+        self.db = PostgreDatabase(database_url, table_name='test_files')
         self.test_dir = tempfile.mkdtemp(prefix='filewatcher_test_')
         
         # Создаём file_filter без ограничений для тестов

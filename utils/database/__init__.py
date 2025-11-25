@@ -1,4 +1,4 @@
 """Database utilities package"""
-from .postgre_sql import Database
+from .postgre_sql import PostgreDatabase
 
-__all__ = ['Database']
+__all__ = ['PostgreDatabase']

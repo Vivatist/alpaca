@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 import os
 
-from utils.database import Database
+from utils.database import PostgreDatabase
 
 # Инициализация FastAPI
 app = FastAPI(
@@ -18,7 +18,7 @@ app = FastAPI(
 )
 
 # Инициализация БД
-db = Database()
+db = PostgreDatabase()
 
 
 class FileResponse(BaseModel):

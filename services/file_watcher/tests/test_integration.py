@@ -17,7 +17,7 @@ from pathlib import Path
 # Добавляем src/ в PYTHONPATH
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from utils.database import Database
+from utils.database import PostgreDatabase
 from scanner import Scanner
 from vector_sync import VectorSync
 
@@ -32,7 +32,7 @@ class TestFileWatcher:
         
         # Загружаем DATABASE_URL из settings
         from settings import settings
-        self.db = Database(database_url=settings.DATABASE_URL)
+        self.db = PostgreDatabase(database_url=settings.DATABASE_URL)
         
         # Очищаем таблицу files перед тестом
         with self.db.get_connection() as conn:

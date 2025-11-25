@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 from typing import Generator
 
-from utils.database import Database
+from utils.database import PostgreDatabase
 from settings import settings
 
 
@@ -38,9 +38,9 @@ def setup_test_logging():
 
 
 @pytest.fixture
-def test_db() -> Generator[Database, None, None]:
+def test_db() -> Generator[PostgreDatabase, None, None]:
     """Создание тестовой БД"""
-    db = Database(settings.DATABASE_URL)
+    db = PostgreDatabase(settings.DATABASE_URL)
     yield db
     # Cleanup после тестов
     with db.get_connection() as conn:

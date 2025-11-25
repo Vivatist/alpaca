@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-class Database:
+class PostgreDatabase:
     """Класс для работы с БД в контексте обработки изменений файлов"""
     
     def __init__(self, database_url: str):

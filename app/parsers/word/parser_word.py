@@ -11,11 +11,9 @@ class FileID(BaseModel):
 
 # Импорты из проекта (будут доступны при запуске из main.py)
 from settings import settings
-from utils.database import Database
 from utils.logging import get_logger
 
 logger = get_logger("alpaca.parser")
-db = Database(settings.DATABASE_URL)
 
 
 def parser_word_old_task(file_id: dict) -> str:
@@ -32,7 +30,6 @@ def parser_word_old_task(file_id: dict) -> str:
         
     except Exception as e:
         logger.error(f"Failed to parse file | file={file_id.path} error={type(e).__name__}: {e}")
-        db.mark_as_error(file_id.hash)
         return ""
     logger.info(f"✅ Parsed successfully | file={file_id.path} length={len(parse_result)}")
     return parse_result
@@ -52,7 +49,7 @@ def parser_word_task(file_id: dict) -> str:
         
         if not os.path.exists(full_path):
             logger.error(f"File not found: {full_path}")
-            db.mark_as_error(file_id.hash)
+
             return ""
         
         with open(full_path, 'rb') as f:
@@ -74,7 +71,6 @@ def parser_word_task(file_id: dict) -> str:
         
         if response.status_code != 200:
             logger.error(f"Unstructured API error | status={response.status_code} response={response.text[:200]}")
-            db.mark_as_error(file_id.hash)
             return ""
         
         # Парсим ответ
@@ -121,11 +117,9 @@ def parser_word_task(file_id: dict) -> str:
         
     except requests.exceptions.Timeout:
         logger.error(f"Unstructured API timeout | file={file_id.path}")
-        db.mark_as_error(file_id.hash)
         return ""
     except Exception as e:
         logger.error(f"Failed to parse file | file={file_id.path} error={type(e).__name__}: {e}")
-        db.mark_as_error(file_id.hash)
         return ""
 
 
