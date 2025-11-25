@@ -11,9 +11,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Semaphore
 
 from app.parsers.word.parser_word import parser_word_old_task
+from app.chunkers.custom_chunker import chunking
+from app.embedders.custom_embedder import embedding
 from utils.logging import setup_logging, get_logger
 from settings import settings
 from database import Database
+from tests.runner import run_tests_on_startup
 
 setup_logging()
 logger = get_logger("alpaca.worker")
@@ -39,119 +42,6 @@ def get_next_file() -> Optional[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Failed to get next file from filewatcher: {e}")
         return None
-
-
-def chunking(file_path: str, text: str) -> List[str]:
-    """Разбивка текста на чанки
-    
-    Args:
-        file_path: Путь к файлу (для логов)
-        text: Распарсенный текст документа
-        
-    Returns:
-        List[str]: список чанков
-    """
-    try:
-        logger.info(f"🔪 Chunking: {file_path}")
-        
-        chunks = []
-        max_chunk_size = 1000  # символов
-        paragraphs = text.split('\n\n')
-        
-        current_chunk = ""
-        for para in paragraphs:
-            para = para.strip()
-            if not para:
-                continue
-            
-            if len(current_chunk) + len(para) > max_chunk_size and current_chunk:
-                chunks.append(current_chunk.strip())
-                current_chunk = para
-            else:
-                current_chunk += "\n\n" + para if current_chunk else para
-        
-        if current_chunk:
-            chunks.append(current_chunk.strip())
-        
-        logger.info(f"✅ Created {len(chunks)} chunks for {file_path}")
-        return chunks
-        
-    except Exception as e:
-        logger.error(f"Failed to chunk text | file={file_path} error={e}")
-        return []
-
-
-def embedding(file_hash: str, file_path: str, chunks: List[str]) -> int:
-    """Создание эмбеддингов через Ollama и сохранение в БД
-    
-    Args:
-        file_hash: Хэш файла
-        file_path: Путь к файлу
-        chunks: Список текстовых чанков
-        
-    Returns:
-        int: количество успешно сохранённых чанков
-    """
-    try:
-        if not chunks:
-            logger.warning(f"No chunks to embed for {file_path}")
-            return 0
-        
-        logger.info(f"🔮 Embedding {len(chunks)} chunks: {file_path}")
-        
-        with db.get_connection() as conn:
-            with conn.cursor() as cur:
-                inserted_count = 0
-                
-                for idx, chunk_text in enumerate(chunks):
-                    try:
-                        response = requests.post(
-                            f"{settings.OLLAMA_BASE_URL}/api/embeddings",
-                            json={
-                                "model": settings.OLLAMA_EMBEDDING_MODEL,
-                                "prompt": chunk_text
-                            },
-                            timeout=60
-                        )
-                        
-                        if response.status_code != 200:
-                            logger.error(f"Ollama embedding error | status={response.status_code}")
-                            continue
-                        
-                        embedding = response.json().get('embedding')
-                        
-                        if not embedding:
-                            logger.error(f"No embedding in response for chunk {idx}")
-                            continue
-                        
-                        embedding_str = '[' + ','.join(map(str, embedding)) + ']'
-                        
-                        metadata = {
-                            'file_hash': file_hash,
-                            'file_path': file_path,
-                            'chunk_index': idx,
-                            'total_chunks': len(chunks)
-                        }
-                        
-                        cur.execute("""
-                            INSERT INTO chunks (content, metadata, embedding)
-                            VALUES (%s, %s, %s::vector)
-                        """, (chunk_text, psycopg2.extras.Json(metadata), embedding_str))
-                        
-                        inserted_count += 1
-                        
-                    except Exception as e:
-                        logger.error(f"Error embedding chunk {idx}: {e}")
-                        continue
-                
-                conn.commit()
-        
-        logger.info(f"✅ Embedded {inserted_count}/{len(chunks)} chunks for {file_path}")
-        return inserted_count
-        
-    except Exception as e:
-        logger.error(f"Failed to embed chunks | file={file_path} error={e}")
-        return 0
 
 
 def process_deleted_file(file_hash: str, file_path: str) -> bool:
@@ -221,7 +111,7 @@ def ingest_pipeline(file_hash: str, file_path: str) -> bool:
         
         # 4. Эмбеддинг (с ограничением конкурентности)
         with EMBED_SEMAPHORE:
-            chunks_count = embedding(file_hash, file_path, chunks)
+            chunks_count = embedding(db, file_hash, file_path, chunks)
         
         if chunks_count == 0:
             logger.warning(f"No embeddings created for {file_path}")
@@ -355,4 +245,9 @@ def run_worker(poll_interval: int = 10, max_workers: int = 15):
 
 
 if __name__ == "__main__":
+    # Запуск тестов при старте (если включено в настройках)
+    if not run_tests_on_startup(settings):
+        logger.error("Тесты провалились - выход из программы")
+        exit(1)
+    
     run_worker(poll_interval=5, max_workers=5)

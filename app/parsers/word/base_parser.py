@@ -158,7 +158,7 @@ class BaseParser(ABC):
         # Начинаем с системных полей
         yaml_data = {
             'document_type': document_type,
-            'parsed_date': datetime.utcnow().isoformat() + 'Z',
+            'parsed_date': datetime.now(datetime.UTC).isoformat(),
             'parser': f'alpaca-{document_type}-parser',
         }
         
