@@ -45,11 +45,6 @@ def setup_logging():
     logging.getLogger('asyncpg').setLevel(logging.WARNING)
     logging.getLogger('uvicorn.access').setLevel(logging.WARNING)
     
-    # Отключаем избыточное логирование Prefect
-    logging.getLogger('prefect').setLevel(logging.ERROR)
-    logging.getLogger('prefect.flow_runs').setLevel(logging.ERROR)
-    logging.getLogger('prefect.flow_runs.runner').setLevel(logging.ERROR)
-
 
 def get_logger(name: str) -> logging.Logger:
     """Получить logger для модуля"""
