@@ -1,14 +1,20 @@
 """
 Настройки приложения
 """
+import os
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Определяем путь к корню проекта (где находится settings.py)
+PROJECT_ROOT = Path(__file__).parent
+ENV_FILE = PROJECT_ROOT / ".env"
 
 
 class Settings(BaseSettings):
     """Настройки приложения"""
     
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(ENV_FILE),
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore"
@@ -40,13 +46,6 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_LLM_MODEL: str = "qwen2.5:32b"
     OLLAMA_EMBEDDING_MODEL: str = "bge-m3"
-    
-    # Prefect
-    PREFECT_API_URL: str = "http://localhost:4200/api"
-    PREFECT_SERVER_HOST: str = "0.0.0.0"
-    PREFECT_SERVER_PORT: int = 4200
-    PREFECT_LOGGING_LEVEL: str = "INFO"
-    
 
 
 settings = Settings()

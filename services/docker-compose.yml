@@ -62,36 +62,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # Prefect Server для оркестрации задач
-  prefect:
-    image: prefecthq/prefect:3-python3.13
-    restart: always
-    networks:
-      - alpaca_network
-    ports:
-      - "4200:4200"
-    volumes:
-      - prefect_data:/root/.prefect
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
-    environment:
-      - TZ=Europe/Moscow
-      - PREFECT_SERVER_API_HOST=0.0.0.0
-      - PREFECT_SERVER_API_PORT=4200
-      - PREFECT_API_URL=http://127.0.0.1:4200/api
-      - PREFECT_LOGGING_LEVEL=WARNING
-      # Оптимизация производительности - увеличиваем интервалы опроса
-      - PREFECT_API_SERVICES_SCHEDULER_LOOP_SECONDS=60  
-      - PREFECT_API_SERVICES_EVENT_PERSISTER_FLUSH_INTERVAL=5  
-      - PREFECT_API_SERVICES_FOREMAN_FALLBACK_HEARTBEAT_INTERVAL_SECONDS=30  
-    command: prefect server start --host 0.0.0.0
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4200/api/health').read()"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
   # File Watcher для мониторинга файлов
   filewatcher:
     build:
@@ -122,8 +92,6 @@ services:
       - EXCLUDED_DIRS=TMP
       - EXCLUDED_PATTERNS=~*,.*
       - PRE_LAUNCH_TESTS=true  # Тесты при запуске
-    depends_on:
-      - prefect
     healthcheck:
       test: ["CMD", "pgrep", "-f", "python"]
       interval: 30s
@@ -152,7 +120,6 @@ services:
 volumes:
   unstructured_data:
   ollama_storage:
-  prefect_data:
 
 networks:
   alpaca_network:

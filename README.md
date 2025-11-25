@@ -32,15 +32,16 @@ cd ~/alpaca
 cp .env.example .env
 # Отредактируйте .env и укажите DATABASE_URL от Supabase
 
-# Запуск Docker сервисов (Ollama, Unstructured, Prefect)
-chmod +x scripts/start_services.sh
-./scripts/start_services.sh
+# Запуск Docker сервисов
+cd services
+docker compose up -d
 ```
 
 Это запустит:
 - **Ollama** (http://localhost:11434) - LLM qwen2.5:32b + embeddings bge-m3 (GPU)
 - **Unstructured** (http://localhost:9000) - парсинг документов
-- **Prefect UI** (http://localhost:4200) - оркестрация задач
+- **File Watcher** (http://localhost:8081) - мониторинг файлов + API
+- **Admin Backend** (http://localhost:8080) - REST API для управления
 
 ### 3. Проверка
 
@@ -61,13 +62,24 @@ python -c "from app.settings import settings; print(settings.DATABASE_URL)"
 - **Supabase** - PostgreSQL + pgvector (отдельная установка)
 - **Ollama** - LLM и embeddings (Docker + GPU)
 - **Unstructured** - парсинг документов (Docker)
-- **Prefect** - оркестрация задач (Docker)
+- **File Watcher** - мониторинг файлов с REST API (Docker)
+- **Admin Backend** - REST API для управления (Docker)
+- **Worker** - обработка очереди файлов (Python процесс)
+
+## Запуск Worker
+
+```bash
+# В отдельном терминале
+source venv/bin/activate
+python worker.py
+```
 
 ## Остановка сервисов
 
 ```bash
-# Остановка сервисов проекта
-./scripts/stop_services.sh
+# Остановка Docker контейнеров
+cd services
+docker compose down
 
 # Остановка Supabase (в его директории)
 cd ~/supabase/docker

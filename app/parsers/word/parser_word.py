@@ -1,6 +1,5 @@
 import os
 import requests
-from prefect import task
 from pydantic import BaseModel
 
 
@@ -19,8 +18,8 @@ logger = get_logger("alpaca.parser")
 db = Database(settings.DATABASE_URL)
 
 
-@task(name="parser_word_old_task", retries=2, persist_result=True)
 def parser_word_old_task(file_id: dict) -> str:
+    """Парсинг DOCX файла через old parser (python-docx + OCR)"""
     file_id = FileID(**file_id)
     logger.info(f"🍆 Processing parsing with old parser: {file_id.path}")
     
@@ -39,9 +38,8 @@ def parser_word_old_task(file_id: dict) -> str:
     return parse_result
 
 
-@task(name="parser_word_task", retries=2, persist_result=True)
 def parser_word_task(file_id: dict) -> str:
-    """Task: парсинг документа через Unstructured API"""
+    """Парсинг документа через Unstructured API"""
     file_id = FileID(**file_id)
     
     try:
