@@ -100,6 +100,8 @@ services:
     restart: always
     networks:
       - alpaca_network
+    ports:
+      - "8081:8081"
     volumes:
       - /home/alpaca/monitored_folder:/monitored_folder:ro
     environment:

@@ -18,5 +18,9 @@ COPY . /app/
 # Создаем точку монтирования для наблюдаемой папки
 RUN mkdir -p /monitored_folder
 
-# Запускаем file_watcher
-CMD ["python", "/app/main.py"]
+# Копируем и делаем исполняемым entrypoint
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# Запускаем через entrypoint (API + Scanner)
+CMD ["/app/entrypoint.sh"]

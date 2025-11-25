@@ -298,3 +298,73 @@ class Database:
                     updates
                 )
                 return cur.rowcount
+    
+    def get_next_file_for_processing(self) -> dict:
+        """Получить следующий файл для обработки по приоритету
+        
+        Приоритет:
+        1. deleted (самый старый по last_checked)
+        2. updated (самый старый по last_checked)
+        3. added (самый старый по last_checked)
+        
+        Returns:
+            dict или None: Информация о файле или None если очередь пуста
+        """
+        with self.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                    SELECT 
+                        file_path,
+                        file_hash,
+                        file_size,
+                        status_sync,
+                        last_checked
+                    FROM {self.table_name}
+                    WHERE status_sync IN ('deleted', 'updated', 'added')
+                    ORDER BY 
+                        CASE status_sync
+                            WHEN 'deleted' THEN 1
+                            WHEN 'updated' THEN 2
+                            WHEN 'added' THEN 3
+                        END,
+                        last_checked ASC
+                    LIMIT 1
+                """)
+                
+                row = cur.fetchone()
+                if row is None:
+                    return None
+                
+                return {
+                    'file_path': row[0],
+                    'file_hash': row[1],
+                    'file_size': row[2],
+                    'status_sync': row[3],
+                    'last_checked': row[4].isoformat() if row[4] else None
+                }
+    
+    def get_queue_stats(self) -> dict:
+        """Получить статистику очереди обработки
+        
+        Returns:
+            dict: Количество файлов по каждому статусу в очереди
+        """
+        with self.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                    SELECT 
+                        status_sync,
+                        COUNT(*) as count
+                    FROM {self.table_name}
+                    WHERE status_sync IN ('deleted', 'updated', 'added')
+                    GROUP BY status_sync
+                """)
+                
+                stats = {'deleted': 0, 'updated': 0, 'added': 0, 'total': 0}
+                for row in cur.fetchall():
+                    status = row[0]
+                    count = row[1]
+                    stats[status] = count
+                    stats['total'] += count
+                
+                return stats
