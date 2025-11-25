@@ -25,10 +25,10 @@ logger = get_logger("alpaca.worker")
 db = Database(settings.DATABASE_URL)
 FILEWATCHER_API = os.getenv("FILEWATCHER_API_URL", "http://localhost:8081")
 
-# Семафоры для ограничения конкурентности разных операций
-PARSE_SEMAPHORE = Semaphore(2)   # Максимум 2 парсинга одновременно
-EMBED_SEMAPHORE = Semaphore(3)   # Максимум 3 embedding одновременно
-LLM_SEMAPHORE = Semaphore(2)     # Максимум 2 LLM запроса одновременно
+# Семафоры для ограничения конкурентности разных операций (из settings)
+PARSE_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_PARSING)
+EMBED_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_EMBEDDING)
+LLM_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_LLM)
 
 
 def get_next_file() -> Optional[Dict[str, Any]]:
@@ -169,14 +169,14 @@ def process_file(file_info: Dict[str, Any]) -> bool:
         return False
 
 
-def run_worker(poll_interval: int = 10, max_workers: int = 15):
+def run_worker(poll_interval: int = None, max_workers: int = None):
     """Основной цикл worker с параллельной обработкой
     
     Args:
-        poll_interval: Интервал опроса очереди в секундах
-        max_workers: Максимальное количество файлов обрабатываемых параллельно
+        poll_interval: Интервал опроса очереди в секундах (из settings если None)
+        max_workers: Максимальное количество файлов обрабатываемых параллельно (из settings если None)
     """
-
+    
     
     processed_count = 0
     
@@ -249,5 +249,20 @@ if __name__ == "__main__":
     if not tests_passed:
         logger.error("Тесты провалились - выход из программы")
         exit(1)
+
+    # Берём значения из settings
+    poll_interval = settings.WORKER_POLL_INTERVAL
+    max_workers = settings.WORKER_MAX_CONCURRENT_FILES
     
-    run_worker(poll_interval=5, max_workers=5)
+    logger.info("=" * 60)
+    logger.info("A L P A K A   W O R K E R    S T A R T E D")
+    logger.info(f"Filewatcher API: {FILEWATCHER_API}")
+    logger.info(f"Max concurrent files: {max_workers}")
+    logger.info(f"Max concurrent parsing: {settings.WORKER_MAX_CONCURRENT_PARSING}")
+    logger.info(f"Max concurrent embedding: {settings.WORKER_MAX_CONCURRENT_EMBEDDING}")
+    logger.info(f"Poll interval: {poll_interval}s")
+    logger.info("=" * 60)
+    
+    # Запуск worker с настройками из settings.py
+    run_worker(poll_interval=poll_interval, max_workers=max_workers)
+

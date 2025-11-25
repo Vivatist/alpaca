@@ -61,7 +61,16 @@ MONITORED_PATH: str = "/home/alpaca/monitored_folder"
 OLLAMA_BASE_URL: str = "http://localhost:11434"
 OLLAMA_LLM_MODEL: str = "qwen2.5:32b"
 OLLAMA_EMBEDDING_MODEL: str = "bge-m3"
-RUN_TESTS_ON_START: bool = False  # Флаг для автотестирования
+
+# Worker настройки
+WORKER_POLL_INTERVAL: int = 5  # Интервал опроса очереди
+WORKER_MAX_CONCURRENT_FILES: int = 5  # Макс. файлов параллельно
+WORKER_MAX_CONCURRENT_PARSING: int = 2  # Макс. операций парсинга
+WORKER_MAX_CONCURRENT_EMBEDDING: int = 3  # Макс. операций эмбеддинга
+WORKER_MAX_CONCURRENT_LLM: int = 2  # Макс. LLM-запросов
+
+RUN_TESTS_ON_START: bool = True  # Флаг для автотестирования
+TEST_SUITE: str = "all"  # "unit", "integration", "all"
 ```
 
 ## Рабочие процессы разработки
@@ -149,17 +158,18 @@ cur.execute("DELETE FROM chunks WHERE metadata->>'file_hash' = %s", (file_hash,)
 
 ### Управление конкурентностью
 
-Worker использует **семафоры** для ограничения параллельных операций:
+Worker использует **семафоры** для ограничения параллельных операций (настраивается через settings.py):
 ```python
-PARSE_SEMAPHORE = Semaphore(2)   # Максимум 2 операции парсинга
-EMBED_SEMAPHORE = Semaphore(3)   # Максимум 3 операции эмбеддинга
-LLM_SEMAPHORE = Semaphore(2)     # Максимум 2 LLM-запроса
+# Семафоры инициализируются из settings
+PARSE_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_PARSING)
+EMBED_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_EMBEDDING)
+LLM_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_LLM)
 
 with PARSE_SEMAPHORE:
     result = parser_word_old_task(file_info)
 ```
 
-ThreadPoolExecutor управляет параллелизмом на уровне файлов (типично max_workers=5).
+ThreadPoolExecutor управляет параллелизмом на уровне файлов (настройка `WORKER_MAX_CONCURRENT_FILES`).
 
 ### Обработка ошибок
 

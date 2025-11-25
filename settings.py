@@ -60,6 +60,13 @@ class Settings(BaseSettings):
     OLLAMA_LLM_MODEL: str = "qwen2.5:32b"
     OLLAMA_EMBEDDING_MODEL: str = "bge-m3"
     
+    # Worker Settings
+    WORKER_POLL_INTERVAL: int = 5  # Интервал опроса очереди (секунды)
+    WORKER_MAX_CONCURRENT_FILES: int = 5  # Максимум файлов обрабатываемых параллельно
+    WORKER_MAX_CONCURRENT_PARSING: int = 2  # Максимум операций парсинга одновременно
+    WORKER_MAX_CONCURRENT_EMBEDDING: int = 3  # Максимум операций эмбеддинга одновременно
+    WORKER_MAX_CONCURRENT_LLM: int = 2  # Максимум LLM-запросов одновременно
+    
     # Testing
     RUN_TESTS_ON_START: bool = True  # Запускать ли тесты при старте приложения
     TEST_SUITE: str = "all"  # "unit", "integration", "all"
