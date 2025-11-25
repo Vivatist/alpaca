@@ -545,7 +545,19 @@ class WordParser(BaseParser):
             self.logger.info(f"Using fallback parser for {file_ext} file after markitdown failure")
             return self._fallback_parse(file_path)
             
-        except (ValueError, TypeError, AttributeError) as e:
+        except ValueError as e:
+            # Специфичные ошибки формата файла (например, неверный PPTX)
+            error_msg = str(e)
+            if 'pptx' in error_msg.lower() or 'presentation' in error_msg.lower():
+                self.logger.warning(f"Invalid PowerPoint file format | file={file_path}")
+            else:
+                self.logger.warning(f"Markitdown ValueError | error={e}")
+            
+            file_ext = Path(file_path).suffix.lower()
+            self.logger.info(f"Using fallback parser for {file_ext} file")
+            return self._fallback_parse(file_path)
+            
+        except (TypeError, AttributeError) as e:
             self.logger.warning(f"Markitdown parsing failed with known error | error={type(e).__name__}: {e}")
             file_ext = Path(file_path).suffix.lower()
             

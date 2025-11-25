@@ -283,7 +283,7 @@ def run_worker(poll_interval: int = 10):
     logger.info(f"Poll interval: {poll_interval}s")
     logger.info("=" * 60)
     
-    processed_count = 0
+
     
     while True:
         try:
@@ -298,12 +298,9 @@ def run_worker(poll_interval: int = 10):
             
             # Обрабатываем файл
             success = process_file(file_info)
-            if success:
-                processed_count += 1
-                logger.info(f"Total processed: {processed_count}")
-            
+
             # Небольшая пауза между файлами
-            time.sleep(1)
+            time.sleep(0.1)
             
         except KeyboardInterrupt:
             logger.info("Worker stopped by user")
