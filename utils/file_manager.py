@@ -7,8 +7,9 @@ import hashlib
 from pathlib import Path
 from typing import Optional, List, TYPE_CHECKING
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
+from settings import settings
 from utils.chunk_manager import ChunkManager
 from utils.logging import get_logger
 
@@ -21,13 +22,19 @@ logger = get_logger(__name__)
 
 class File(BaseModel):
     """Модель файла для работы с БД"""
-    path: str
+    path: str  # Относительный путь от MONITORED_PATH
     hash: str
     raw_text: Optional[str] = None
     status_sync: str
     size: Optional[int] = None
     last_checked: Optional[datetime] = None
     mtime: Optional[float] = None
+    
+    @computed_field
+    @property
+    def full_path(self) -> str:
+        """Полный абсолютный путь к файлу"""
+        return os.path.join(settings.MONITORED_PATH, self.path)
 
 
 

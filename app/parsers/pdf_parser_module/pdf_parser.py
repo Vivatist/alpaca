@@ -67,15 +67,15 @@ class PDFParser(BaseParser):
         Returns:
             str: Распарсенный текст документа (пустая строка при ошибке)
         """
-        file_path = file.path
+        file_path = file.full_path
         file_hash = file.hash
         
         try:
             if not os.path.exists(file_path):
-                self.logger.error(f"File not found | file={file_path}")
+                self.logger.error(f"File not found | file={file.path}")
                 return ""
             
-            self.logger.info(f"Parsing PDF document | file={file_path}")
+            self.logger.info(f"Parsing PDF document | file={file.path}")
             
             # 1. Добавляем ОБЩИЕ метаданные (в базовом классе)
             common_metadata = self._add_common_metadata(file_path, file_hash)

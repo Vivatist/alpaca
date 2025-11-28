@@ -75,7 +75,7 @@ class WordParser(BaseParser):
             str: Распарсенный текст документа (пустая строка при ошибке)
         """
         converted = False
-        file_path = file.path
+        file_path = file.full_path
         file_hash = file.hash
         
         try:
@@ -83,7 +83,7 @@ class WordParser(BaseParser):
                 self.logger.error(f"File not found | file={file_path}")
                 return ""
             
-            self.logger.info(f"Parsing Word document | file={file_path}")
+            self.logger.info(f"Parsing Word document | file={file.path}")
             
             # 1. Конвертация .doc → .docx через LibreOffice если нужно
             file_ext = Path(file_path).suffix.lower()
