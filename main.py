@@ -45,8 +45,17 @@ def ingest_pipeline(file: File) -> bool:
         # 1. Парсинг (с ограничением конкурентности)
         if file.path.lower().endswith('.docx'):
             logger.info(f"📖 Parsing file: {file.path}")
+            
+            # Создаем временный File объект с полным путем для парсера
+            full_path = os.path.join(settings.MONITORED_PATH, file.path)
+            file_for_parser = File(
+                path=full_path,
+                hash=file.hash,
+                status_sync=file.status_sync
+            )
+            
             with PARSE_SEMAPHORE:
-                file.raw_text = word_parser.parse(file)
+                file.raw_text = word_parser.parse(file_for_parser)
             logger.info(f"✅ Parsed: {len(file.raw_text) if file.raw_text else 0} chars")
         else:
             logger.error(f"Unsupported file type: {file.path}")

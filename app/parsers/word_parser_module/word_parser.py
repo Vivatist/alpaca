@@ -30,46 +30,17 @@ from base_parser import BaseParser
 if TYPE_CHECKING:
     from utils.file_manager import File
 
-try:
-    from markitdown import MarkItDown  # type: ignore
-    MARKITDOWN_AVAILABLE = True
-except ImportError:
-    MARKITDOWN_AVAILABLE = False
-
-try:
-    from unstructured.partition.auto import partition  # type: ignore
-    from unstructured.partition.image import partition_image  # type: ignore
-    UNSTRUCTURED_AVAILABLE = True
-except ImportError:
-    UNSTRUCTURED_AVAILABLE = False
-
-try:
-    from docx import Document  # type: ignore
-    from docx.oxml.table import CT_Tbl  # type: ignore
-    from docx.oxml.text.paragraph import CT_P  # type: ignore
-    from docx.table import _Cell, Table  # type: ignore
-    from docx.text.paragraph import Paragraph  # type: ignore
-    PYTHON_DOCX_AVAILABLE = True
-except ImportError:
-    PYTHON_DOCX_AVAILABLE = False
-
-try:
-    from PIL import Image  # type: ignore
-    PIL_AVAILABLE = True
-except ImportError:
-    PIL_AVAILABLE = False
-
-try:
-    import pytesseract  # type: ignore
-    PYTESSERACT_AVAILABLE = True
-except ImportError:
-    PYTESSERACT_AVAILABLE = False
-
-try:
-    import pdf2image  # type: ignore
-    PDF2IMAGE_AVAILABLE = True
-except ImportError:
-    PDF2IMAGE_AVAILABLE = False
+from markitdown import MarkItDown  # type: ignore
+from unstructured.partition.auto import partition  # type: ignore
+from unstructured.partition.image import partition_image  # type: ignore
+from docx import Document  # type: ignore
+from docx.oxml.table import CT_Tbl  # type: ignore
+from docx.oxml.text.paragraph import CT_P  # type: ignore
+from docx.table import _Cell, Table  # type: ignore
+from docx.text.paragraph import Paragraph  # type: ignore
+from PIL import Image  # type: ignore
+import pytesseract  # type: ignore
+import pdf2image  # type: ignore
 
 
 class WordParser(BaseParser):
@@ -95,66 +66,33 @@ class WordParser(BaseParser):
         self.enable_ocr = enable_ocr
         self.ocr_strategy = ocr_strategy
         
-        # Проверка зависимостей
-        self._check_dependencies()
-        
         # Инициализация Markitdown
-        if MARKITDOWN_AVAILABLE:
-            self.markitdown = MarkItDown()
-        else:
-            self.markitdown = None
-            
-    def _check_dependencies(self):
-        """Проверка наличия необходимых библиотек"""
-        missing = []
-        
-        if not MARKITDOWN_AVAILABLE:
-            missing.append("markitdown")
-        if not PYTHON_DOCX_AVAILABLE:
-            missing.append("python-docx")
-        if self.enable_ocr and not UNSTRUCTURED_AVAILABLE:
-            missing.append("unstructured[all-docs]")
-            
-        if missing:
-            self.logger.warning(f"Missing dependencies: {', '.join(missing)}")
+        self.markitdown = MarkItDown()
     
-    def parse(self, file_path: str, file_hash: Optional[str] = None) -> Dict:
+    def parse(self, file: 'File') -> str:
         """
-        Парсинг Word документа в Markdown с метаданными
+        Парсинг Word документа в текст
         
         Args:
-            file_path: Путь к .docx/.doc файлу
-            file_hash: Хэш файла от file-watcher (опционально)
+            file: Объект File с информацией о файле
             
         Returns:
-            Dict с ключами:
-                - markdown: str - Текст в Markdown формате
-                - metadata: Dict - Метаданные документа
-                - images: List[Dict] - Информация об изображениях
-                - yaml_header: str - YAML header для документа
-                - success: bool - Статус парсинга
-                - error: Optional[str] - Сообщение об ошибке
+            str: Распарсенный текст документа (пустая строка при ошибке)
         """
-        result = {
-            'markdown': '',
-            'metadata': {},
-            'images': [],
-            'yaml_header': '',
-            'success': False,
-            'error': None
-        }
+        converted = False  # Инициализируем перед try для использования в finally
+        file_path = file.path  # Извлекаем путь из объекта File
+        file_hash = file.hash  # Извлекаем хэш из объекта File
         
         try:
             if not os.path.exists(file_path):
-                result['error'] = f"File not found: {file_path}"
-                return result
+                self.logger.error(f"File not found | file={file_path}")
+                return ""
             
             self.logger.info(f"Parsing Word document | file={file_path}")
             
             # 1. Конвертация .doc → .docx через LibreOffice если нужно
             file_ext = Path(file_path).suffix.lower()
             original_file_path = file_path
-            converted = False
             
             if file_ext == '.doc':
                 self.logger.info(f"Old .doc format detected, converting to .docx via LibreOffice")
@@ -173,7 +111,7 @@ class WordParser(BaseParser):
             # 3. Извлечение СПЕЦИФИЧНЫХ метаданных Word через python-docx (только для .docx)
             specific_metadata = {}
             
-            if file_ext == '.docx' and PYTHON_DOCX_AVAILABLE:
+            if file_ext == '.docx':
                 # Полные метаданные только для .docx
                 try:
                     specific_metadata = self._extract_word_specific_metadata(file_path)
@@ -186,73 +124,61 @@ class WordParser(BaseParser):
                         file_path = original_file_path
                         file_ext = '.doc'
             
-            # 4. Извлечение изображений для OCR (только для .docx)
-            images_info = []
-            if self.enable_ocr and PYTHON_DOCX_AVAILABLE and file_ext == '.docx':
-                self.logger.info(f"Extracting images for OCR | enable_ocr={self.enable_ocr}")
-                images_info = self._extract_images(file_path)
-                result['images'] = images_info
-                self.logger.info(f"Images extracted | count={len(images_info)}")
-            
-            # Добавляем информацию об OCR в специфичные метаданные
-            if self.enable_ocr and images_info:
-                specific_metadata['ocr_enabled'] = True
-                specific_metadata['images_count'] = len(images_info)
-            else:
-                specific_metadata['ocr_enabled'] = False
-            
-            # 5. Основной парсинг через Markitdown
+            # 4. Основной парсинг через Markitdown (сначала получаем весь документ)
             markdown_content = self._parse_with_markitdown(file_path)
             
-            # 6. OCR для изображений (если есть)
-            if self.enable_ocr and images_info:
-                self.logger.info(f"Starting OCR processing | images={len(images_info)}")
-                ocr_content = self._process_images_with_ocr(images_info)
-                if ocr_content:
-                    self.logger.info(f"OCR content generated | length={len(ocr_content)}")
-                    # Добавляем OCR текст без заголовков, просто через двойной перенос
-                    markdown_content += "\n\n" + ocr_content
+            # 5. OCR для изображений (если включено и это .docx)
+            if self.enable_ocr and file_ext == '.docx':
+                self.logger.info(f"Processing document with OCR | enable_ocr={self.enable_ocr}")
+                
+                # Извлекаем изображения
+                images_info = self._extract_images(file_path)
+                self.logger.info(f"Images extracted | count={len(images_info)}")
+                
+                if images_info:
+                    self.logger.info(f"Starting OCR processing | images={len(images_info)}")
+                    
+                    # Получаем OCR текст для каждого изображения
+                    ocr_texts = self._process_images_with_ocr_individually(images_info)
+                    
+                    if ocr_texts:
+                        # Заменяем base64 изображения на OCR текст в правильном порядке
+                        import re
+                        image_pattern = r'!\[\]\(data:image/[^)]+\)'
+                        
+                        def replace_image(match):
+                            nonlocal ocr_texts
+                            if ocr_texts:
+                                return ocr_texts.pop(0)  # Берем следующий OCR текст
+                            return match.group(0)  # Если OCR текстов не хватает, оставляем как есть
+                        
+                        markdown_content = re.sub(image_pattern, replace_image, markdown_content)
+                        self.logger.info(f"OCR content inserted | replaced_images={len(images_info) - len(ocr_texts)}")
+                    else:
+                        self.logger.warning("OCR processing returned no content")
                 else:
-                    self.logger.warning("OCR processing returned empty content")
-            elif self.enable_ocr and not images_info:
-                self.logger.info("OCR enabled but no images found in document")
+                    self.logger.info("No images found in document for OCR")
             elif not self.enable_ocr:
                 self.logger.debug("OCR disabled, skipping image processing")
             
-            result['markdown'] = markdown_content
+            self.logger.info(f"Word document parsed successfully | file={original_file_path} length={len(markdown_content)}")
             
-            # 7. Объединяем все метаданные для результата
-            result['metadata'] = {**common_metadata, **specific_metadata}
-            
-            # 8. Генерация YAML header с разделением общих и специфичных метаданных
-            yaml_header = self._generate_yaml_header(
-                common_metadata,
-                specific_metadata,
-                'word'
-            )
-            result['yaml_header'] = yaml_header
-            
-            result['success'] = True
-            
-            self.logger.info(f"Word document parsed successfully | file={original_file_path}")
+            return markdown_content
             
         except Exception as e:
-            result['error'] = str(e)
-            result['success'] = False
             self.logger.error(f"Error parsing Word document | file={file_path} error={type(e).__name__}: {e}")
+            return ""
         
         finally:
             # 9. Очистка временных файлов после конвертации
-            if converted and file_path != original_file_path:
+            if converted:
                 try:
                     converted_dir = Path(file_path).parent
                     if converted_dir.name.startswith("alpaca_doc_convert_"):
                         shutil.rmtree(converted_dir)
                         self.logger.info(f"Cleaned up temp conversion directory | dir={converted_dir}")
                 except Exception as e:
-                    self.logger.warning(f"Failed to clean up temp directory | dir={converted_dir} error={type(e).__name__}: {e}")
-        
-        return result
+                    self.logger.warning(f"Failed to clean up temp directory | error={type(e).__name__}: {e}")
     
     def _convert_doc_to_docx(self, doc_path: str) -> Optional[str]:
         """
@@ -327,9 +253,6 @@ class WordParser(BaseParser):
             'images': 0
         }
         
-        if not PYTHON_DOCX_AVAILABLE:
-            return specific_metadata
-        
         try:
             doc = Document(file_path)
             core_props = doc.core_properties
@@ -370,9 +293,6 @@ class WordParser(BaseParser):
             List[Dict] с информацией об изображениях
         """
         images = []
-        
-        if not PYTHON_DOCX_AVAILABLE:
-            return images
         
         try:
             doc = Document(file_path)
@@ -416,7 +336,16 @@ class WordParser(BaseParser):
                                 ext = '.png'
                                 self.logger.info(f"Converted WMF/EMF to PNG | index={image_idx} path={converted_path}")
                             else:
-                                self.logger.warning(f"WMF/EMF conversion failed | index={image_idx}")
+                                self.logger.warning(f"WMF/EMF conversion failed, trying PDF method | index={image_idx}")
+                                # Альтернатива: конвертируем весь DOCX в PDF, затем в изображения
+                                pdf_converted = self._extract_images_via_pdf(file_path, image_idx, temp_dir)
+                                if pdf_converted:
+                                    image_path = pdf_converted
+                                    ext = '.png'
+                                    self.logger.info(f"Converted via PDF method | index={image_idx} path={pdf_converted}")
+                                else:
+                                    self.logger.error(f"All conversion methods failed | index={image_idx}")
+                                    continue
                         
                         images.append({
                             'index': image_idx,
@@ -449,6 +378,66 @@ class WordParser(BaseParser):
         }
         return extensions.get(content_type, '.jpg')
     
+    def _extract_images_via_pdf(self, docx_path: str, image_idx: int, temp_dir: str) -> Optional[str]:
+        """
+        Извлечение изображений через конвертацию DOCX→PDF→PNG
+        
+        Используется когда WMF/EMF не могут быть конвертированы напрямую.
+        
+        Args:
+            docx_path: Путь к DOCX файлу
+            image_idx: Индекс изображения
+            temp_dir: Временная директория
+            
+        Returns:
+            Путь к PNG файлу или None если конвертация не удалась
+        """
+        try:
+            # Конвертируем DOCX в PDF через LibreOffice
+            pdf_temp_dir = tempfile.mkdtemp(prefix="alpaca_pdf_convert_")
+            
+            result = subprocess.run(
+                ['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', pdf_temp_dir, docx_path],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            
+            if result.returncode != 0:
+                self.logger.error(f"LibreOffice PDF conversion failed | returncode={result.returncode}")
+                return None
+            
+            # Находим созданный PDF
+            pdf_files = list(Path(pdf_temp_dir).glob('*.pdf'))
+            if not pdf_files:
+                self.logger.error(f"No PDF file created | dir={pdf_temp_dir}")
+                return None
+            
+            pdf_path = str(pdf_files[0])
+            self.logger.info(f"PDF created | path={pdf_path}")
+            
+            # Конвертируем PDF в изображения
+            from pdf2image import convert_from_path
+            images = convert_from_path(pdf_path, dpi=200)
+            
+            if not images:
+                self.logger.error(f"No images extracted from PDF")
+                return None
+            
+            # Сохраняем первую страницу (где обычно находится изображение)
+            png_path = os.path.join(temp_dir, f"image_{image_idx}_from_pdf.png")
+            images[0].save(png_path, 'PNG')
+            
+            # Очистка временных файлов
+            shutil.rmtree(pdf_temp_dir, ignore_errors=True)
+            
+            self.logger.info(f"Image extracted via PDF | path={png_path}")
+            return png_path
+            
+        except Exception as e:
+            self.logger.error(f"PDF extraction failed | error={type(e).__name__}: {e}")
+            return None
+    
     def _convert_wmf_to_png(self, wmf_path: str, image_idx: int, temp_dir: str) -> Optional[str]:
         """
         Конвертация WMF/EMF изображения в PNG для OCR
@@ -465,10 +454,6 @@ class WordParser(BaseParser):
         Returns:
             Путь к PNG файлу или None если конвертация не удалась
         """
-        if not PIL_AVAILABLE:
-            self.logger.warning("PIL not available, cannot convert WMF  ")
-            return None
-        
         png_path = os.path.join(temp_dir, f"image_{image_idx}_converted.png")
         
         try:
@@ -528,10 +513,6 @@ class WordParser(BaseParser):
         Returns:
             Markdown текст
         """
-        if not MARKITDOWN_AVAILABLE or not self.markitdown:
-            self.logger.warning("Markitdown not available, using fallback parser")
-            return self._fallback_parse(file_path)
-        
         try:
             result = self.markitdown.convert(file_path)
             markdown = result.text_content if hasattr(result, 'text_content') else str(result)
@@ -540,8 +521,9 @@ class WordParser(BaseParser):
             
             return markdown
             
-        except Exception as e:
-            self.logger.error(f"Markitdown parsing failed | error={type(e).__name__}: {e}")
+        except BaseException as e:
+            # Используем BaseException чтобы поймать FileConversionException
+            self.logger.warning(f"Markitdown parsing failed | error={type(e).__name__}: {str(e)[:200]}")
             # Для .doc файлов пробуем альтернативные методы
             file_ext = Path(file_path).suffix.lower()
             if file_ext == '.doc':
@@ -566,6 +548,7 @@ class WordParser(BaseParser):
                 except Exception as ole_error:
                     self.logger.warning(f"Olefile parsing failed | error={type(ole_error).__name__}: {ole_error}")
             
+            self.logger.info(f"Using fallback parser for {file_ext} file")
             return self._fallback_parse(file_path)
     
     def _fallback_parse(self, file_path: str) -> str:
@@ -606,9 +589,6 @@ class WordParser(BaseParser):
             return f"ERROR: Cannot parse old .doc format. Please convert to .docx manually."
         
         # Для .docx используем python-docx
-        if not PYTHON_DOCX_AVAILABLE:
-            return "ERROR: No parser available (install markitdown or python-docx)"
-        
         try:
             doc = Document(file_path)
             paragraphs = []
@@ -656,23 +636,19 @@ class WordParser(BaseParser):
         
         return "\n".join(lines)
     
-    def _process_images_with_ocr(self, images: List[Dict]) -> str:
+    def _process_images_with_ocr_individually(self, images: List[Dict]) -> List[str]:
         """
-        OCR обработка изображений через Unstructured
+        OCR обработка изображений через Unstructured (возвращает список текстов)
         
         Args:
             images: List изображений с путями
             
         Returns:
-            Объединенный текст из всех изображений
+            List OCR текстов для каждого изображения (в том же порядке)
         """
-        if not UNSTRUCTURED_AVAILABLE:
-            self.logger.warning("Unstructured not available, skipping OCR")
-            return ""
-        
         if not images:
             self.logger.info("No images to process with OCR")
-            return ""
+            return []
         
         ocr_texts = []
         successful = 0
@@ -685,6 +661,7 @@ class WordParser(BaseParser):
                 # Проверка существования файла
                 if not os.path.exists(img['path']):
                     self.logger.error(f"Image file not found | index={img['index']} path={img['path']}")
+                    ocr_texts.append("")  # Пустой текст для этого изображения
                     failed += 1
                     continue
                 
@@ -692,6 +669,7 @@ class WordParser(BaseParser):
                 file_size = os.path.getsize(img['path'])
                 if file_size == 0:
                     self.logger.error(f"Image file is empty | index={img['index']} path={img['path']}")
+                    ocr_texts.append("")
                     failed += 1
                     continue
                 
@@ -707,6 +685,7 @@ class WordParser(BaseParser):
                 
                 if not elements:
                     self.logger.warning(f"No OCR elements extracted | index={img['index']}")
+                    ocr_texts.append("")
                     failed += 1
                     continue
                 
@@ -714,16 +693,17 @@ class WordParser(BaseParser):
                 image_text = "\n\n".join([str(el) for el in elements if str(el).strip()])
                 
                 if image_text.strip():
-                    # Добавляем только текст без заголовка "Изображение N"
                     ocr_texts.append(image_text)
                     successful += 1
                     self.logger.info(f"OCR completed | index={img['index']} text_length={len(image_text)}")
                 else:
                     self.logger.warning(f"OCR produced empty text | index={img['index']}")
+                    ocr_texts.append("")
                     failed += 1
                 
             except Exception as e:
                 self.logger.error(f"OCR failed | index={img['index']} error={type(e).__name__}: {e}")
+                ocr_texts.append("")
                 failed += 1
             
             finally:
@@ -737,5 +717,21 @@ class WordParser(BaseParser):
         
         self.logger.info(f"OCR processing complete | total={len(images)} successful={successful} failed={failed}")
         
+        return ocr_texts
+    
+    def _process_images_with_ocr(self, images: List[Dict]) -> str:
+        """
+        OCR обработка изображений через Unstructured (возвращает объединенный текст)
+        
+        Этот метод сохранен для обратной совместимости.
+        Использует _process_images_with_ocr_individually внутри.
+        
+        Args:
+            images: List изображений с путями
+            
+        Returns:
+            Объединенный текст из всех изображений
+        """
+        ocr_texts = self._process_images_with_ocr_individually(images)
         return "\n\n".join(ocr_texts)
 
