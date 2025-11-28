@@ -7,8 +7,8 @@ import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, Optional, Dict, Any
 
+from utils.database.database import Database
 from utils.logging import get_logger
-from utils.database import PostgreDataBase
 
 logger = get_logger("alpaca.worker.manager")
 
@@ -19,17 +19,17 @@ class Worker:
     
     def __init__(
         self,
-        database_url: str,
+        db: Database,
         filewatcher_api_url: str,
         process_file_func: Callable[[Dict[str, Any]], bool]
     ):
         """
         Args:
-            database_url: URL для подключения к БД
+            db: Объект базы данных
             filewatcher_api_url: URL API FileWatcher для получения файлов
             process_file_func: Функция для обработки файла
         """
-        self.db = PostgreDataBase(database_url)
+        self.db = db
         self.filewatcher_api_url = filewatcher_api_url
         self.process_file = process_file_func
         self.processed_count = 0

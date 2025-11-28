@@ -16,7 +16,6 @@ from utils.database import PostgreDataBase
 from utils.file_manager import File, FileManager
 from tests.runner import run_tests_on_startup
 
-# Logger будет инициализирован в блоке if __name__ == "__main__" после тестов
 logger = get_logger("alpaca.worker")
 
 # Инициализация
@@ -142,7 +141,7 @@ if __name__ == "__main__":
 
     # Создаём worker и запускаем
     worker = Worker(
-        database_url=settings.DATABASE_URL,
+        db = db,
         filewatcher_api_url=FILEWATCHER_API,
         process_file_func=process_file # передаем функцию которую будем дергать при изменении на диске
     )
