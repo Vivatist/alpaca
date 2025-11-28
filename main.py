@@ -6,7 +6,7 @@ import os
 from typing import Dict, Any
 from threading import Semaphore
 
-from app.parsers.word.parser_word import parser_word_old_task
+#from app.parsers.word.parser_word import parser_word_old_task
 from app.chunkers.custom_chunker import chunking
 from app.embedders.custom_embedder import embedding
 from utils.logging import setup_logging, get_logger
@@ -42,6 +42,7 @@ def ingest_pipeline(file: File) -> bool:
     logger.info(f"🍎 Start ingest pipeline: {file.path} (hash: {file.hash[:8]}...)")
     
     try:
+        parser = BaseParser()
         # 1. Парсинг (с ограничением конкурентности)
         if file.path.lower().endswith('.docx'):
             logger.info(f"📖 Parsing file: {file.path}")
