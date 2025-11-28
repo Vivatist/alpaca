@@ -1,11 +1,12 @@
 """Custom chunker для разбивки текста на чанки"""
 from typing import List
 from utils.logging import get_logger
+from utils.file_manager import File
 
 logger = get_logger("alpaca.chunker")
 
 
-def chunking(file_path: str, text: str) -> List[str]:
+def chunking(file: File) -> List[str]:
     """Разбивка текста на чанки
     
     Args:
@@ -16,11 +17,11 @@ def chunking(file_path: str, text: str) -> List[str]:
         List[str]: список чанков
     """
     try:
-        logger.info(f"🔪 Chunking: {file_path}")
+        logger.info(f"🔪 Chunking: {file.path}")
         
         chunks = []
         max_chunk_size = 1000  # символов
-        paragraphs = text.split('\n\n')
+        paragraphs = file.raw_text.split('\n\n')
         
         current_chunk = ""
         for para in paragraphs:
@@ -37,9 +38,9 @@ def chunking(file_path: str, text: str) -> List[str]:
         if current_chunk:
             chunks.append(current_chunk.strip())
         
-        logger.info(f"✅ Created {len(chunks)} chunks for {file_path}")
+        logger.info(f"✅ Created {len(chunks)} chunks for {file.path}")
         return chunks
         
     except Exception as e:
-        logger.error(f"Failed to chunk text | file={file_path} error={e}")
+        logger.error(f"Failed to chunk text | file={file.path} error={e}")
         return []

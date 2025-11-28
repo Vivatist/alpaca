@@ -26,7 +26,9 @@ class TestEmbedding:
         file_hash = "test_hash_embed_123"
         file_path = "/tmp/test_embed.txt"
         
-        result = embedding(test_db, file_hash, file_path, chunks)
+        from utils.file_manager import File
+        file = File(hash=file_hash, path=file_path, status_sync="added")
+        result = embedding(test_db, file, chunks)
         
         assert result == 2
         assert len(responses.calls) == 2
@@ -37,7 +39,9 @@ class TestEmbedding:
         file_hash = "test_hash_empty"
         file_path = "/tmp/test_empty.txt"
         
-        result = embedding(test_db, file_hash, file_path, chunks)
+        from utils.file_manager import File
+        file = File(hash=file_hash, path=file_path, status_sync="added")
+        result = embedding(test_db, file, chunks)
         
         assert result == 0
     
@@ -56,7 +60,9 @@ class TestEmbedding:
         file_hash = "test_hash_error"
         file_path = "/tmp/test_error.txt"
         
-        result = embedding(test_db, file_hash, file_path, chunks)
+        from utils.file_manager import File
+        file = File(hash=file_hash, path=file_path, status_sync="added")
+        result = embedding(test_db, file, chunks)
         
         assert result == 0
     
@@ -87,7 +93,9 @@ class TestEmbedding:
         file_hash = "test_hash_partial"
         file_path = "/tmp/test_partial.txt"
         
-        result = embedding(test_db, file_hash, file_path, chunks)
+        from utils.file_manager import File
+        file = File(hash=file_hash, path=file_path, status_sync="added")
+        result = embedding(test_db, file, chunks)
         
         # Должны быть сохранены 2 из 3 чанков
         assert result == 2
@@ -106,7 +114,9 @@ class TestEmbedding:
         file_hash = "test_hash_no_embed"
         file_path = "/tmp/test_no_embed.txt"
         
-        result = embedding(test_db, file_hash, file_path, chunks)
+        from utils.file_manager import File
+        file = File(hash=file_hash, path=file_path, status_sync="added")
+        result = embedding(test_db, file, chunks)
         
         assert result == 0
     
@@ -124,7 +134,9 @@ class TestEmbedding:
         file_hash = "test_hash_db_123"
         file_path = "/tmp/test_db.txt"
         
-        result = embedding(test_db, file_hash, file_path, chunks)
+        from utils.file_manager import File
+        file = File(hash=file_hash, path=file_path, status_sync="added")
+        result = embedding(test_db, file, chunks)
         
         assert result == 1
         

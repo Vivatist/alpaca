@@ -13,7 +13,7 @@ from utils.logging import setup_logging, get_logger
 from utils.worker import Worker
 from settings import settings
 from utils.database import PostgreDataBase
-from utils.file_manager import File
+from utils.file_manager import File, FileManager
 from tests.runner import run_tests_on_startup
 
 setup_logging()
@@ -21,6 +21,7 @@ logger = get_logger("alpaca.worker")
 
 # Инициализация
 db = PostgreDataBase(settings.DATABASE_URL)
+fm = FileManager(db)
 FILEWATCHER_API = os.getenv("FILEWATCHER_API_URL", "http://localhost:8081")
 
 # Семафоры для ограничения конкурентности разных операций (из settings)
@@ -39,9 +40,9 @@ def process_deleted_file(file: File) -> bool:
         bool: True если успешно
     """
     try:
-        chunks_deleted = db.delete_chunks_by_hash(file.hash)
-        db.delete_file_by_hash(file.hash)
-        logger.info(f"🪓 Deleted {file.path} and {chunks_deleted} chunks")
+        #chunks_deleted = db.delete_chunks_by_hash(file.hash)
+        fm.delete(file)
+        logger.info(f"🪓 Deleted {file.path} and her chunks")
         return True
     except Exception as e:
         logger.error(f"Error deleting file {file.path}: {e}")
@@ -68,40 +69,36 @@ def ingest_pipeline(file: File) -> bool:
             logger.info(f"✅ Parsed: {len(raw_text) if raw_text else 0} chars")
         else:
             logger.error(f"Unsupported file type: {file.path}")
-            db.mark_as_error(file.hash)
+            fm.mark_as_error(file)
             return False
 
         if not raw_text or not raw_text.strip():
             logger.error(f"Empty parsed text for {file.path}")
-            db.mark_as_error(file.hash)
+            fm.mark_as_error(file)
             return False
         
+        file.raw_text = raw_text
         # 2. Сохранение в temp_parsed
-        temp_dir = "/home/alpaca/tmp_md"
-        temp_file_path = os.path.join(temp_dir, f"{file.path}.md")
-        os.makedirs(os.path.dirname(temp_file_path), exist_ok=True)
-        
-        with open(temp_file_path, "w", encoding="utf-8") as f:
-            f.write(raw_text)
+        fm.save_file_to_disk(file)
         
         # 3. Чанкинг
-        chunks = chunking(file.path, raw_text)
+        chunks = chunking(file)
         
         if not chunks:
             logger.warning(f"No chunks created for {file.path}")
-            db.mark_as_error(file.hash)
+            fm.mark_as_error(file)
             return False
         
         # 4. Эмбеддинг (с ограничением конкурентности)
         with EMBED_SEMAPHORE:
-            chunks_count = embedding(db, file.hash, file.path, chunks)
+            chunks_count = embedding(db, file, chunks)
         
         if chunks_count == 0:
             logger.warning(f"No embeddings created for {file.path}")
-            db.mark_as_error(file.hash)
+            fm.mark_as_error(file)
             return False
         
-        db.mark_as_ok(file.hash)
+        fm.mark_as_ok(file)
         logger.info(f"✅ File processed successfully: {file.path} | chunks={chunks_count}")
         return True
         
@@ -109,7 +106,7 @@ def ingest_pipeline(file: File) -> bool:
         import traceback
         logger.error(f"Pipeline failed for {file.path}: {e}")
         logger.error(f"Traceback:\n{traceback.format_exc()}")
-        db.mark_as_error(file.hash)
+        fm.mark_as_error(file)
         return False
 
 
@@ -147,7 +144,7 @@ def process_file(file_info: Dict[str, Any]) -> bool:
             
     except Exception as e:
         logger.error(f"✗ Error processing {file.path}: {e}")
-        db.mark_as_error(file.hash)
+        fm.mark_as_error(file)
         return False
 
 if __name__ == "__main__":

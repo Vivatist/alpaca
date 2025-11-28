@@ -95,3 +95,25 @@ class FileManager:
         # Затем удаляем запись о файле
         self.db.delete_file_by_hash(file.hash)
         logger.info(f"🗑️ Файл удалён | path={file.path} deleted_chunks={deleted_chunks_count}")
+    
+    def save_file_to_disk(self, file: File, temp_dir: str = "/home/alpaca/tmp_md") -> str:
+        """
+        Сохранить распарсенный текст на диск в формате Markdown
+        
+        Args:
+            file: Объект File
+            temp_dir: Директория для временных файлов (по умолчанию /home/alpaca/tmp_md)
+            
+        Returns:
+            str: Полный путь к сохранённому файлу
+        """
+        import os
+        
+        temp_file_path = os.path.join(temp_dir, f"{file.path}.md")
+        os.makedirs(os.path.dirname(temp_file_path), exist_ok=True)
+        
+        with open(temp_file_path, "w", encoding="utf-8") as f:
+            f.write(file.raw_text)
+        
+        logger.debug(f"💾 Распарсенный текст сохранён | path={temp_file_path} length={len(file.raw_text)}")
+        return temp_file_path
