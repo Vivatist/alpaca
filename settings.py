@@ -40,15 +40,9 @@ class Settings(BaseSettings):
     
     # File Monitoring
     MONITORED_PATH: str = "/home/alpaca/monitored_folder"
-    SCAN_INTERVAL_SECONDS: int = 10  # Интервал сканирования папки
     FILES_TABLE_NAME: str = "files"  # Имя таблицы в БД
-    ALLOWED_EXTENSIONS: str = ".docx,.doc,.pdf,.txt"  # Разрешённые расширения файлов
-    FILE_MIN_SIZE: int = 100  # Минимальный размер файла (bytes)
-    FILE_MAX_SIZE: int = 10485760  # Максимальный размер файла (10MB)
-    EXCLUDED_DIRS: str = "TMP"  # Исключённые директории (через запятую)
-    EXCLUDED_PATTERNS: str = "~*,.*"  # Исключённые паттерны файлов (через запятую)
     
-    # File Status Processor
+    # File Status Processor (настройки фильтрации файлов находятся в file_watcher Docker-контейнере)
     PROCESS_FILE_CHANGES_INTERVAL: int = 7  # секунды
     MAX_HEAVY_WORKFLOWS: int = 2  # Максимум одновременных тяжёлых воркфлоу
     
