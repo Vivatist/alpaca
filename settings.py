@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     MONITORED_PATH: str = "/home/alpaca/monitored_folder"
     SCAN_INTERVAL_SECONDS: int = 10  # Интервал сканирования папки
     FILES_TABLE_NAME: str = "files"  # Имя таблицы в БД
-    ALLOWED_EXTENSIONS: str = ".docx,.pdf,.txt"  # Разрешённые расширения файлов
+    ALLOWED_EXTENSIONS: str = ".docx,.doc,.pdf,.txt"  # Разрешённые расширения файлов
     FILE_MIN_SIZE: int = 100  # Минимальный размер файла (bytes)
     FILE_MAX_SIZE: int = 10485760  # Максимальный размер файла (10MB)
     EXCLUDED_DIRS: str = "TMP"  # Исключённые директории (через запятую)

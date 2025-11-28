@@ -43,7 +43,7 @@ def ingest_pipeline(file: File) -> bool:
     
     try:
         # 1. Парсинг (с ограничением конкурентности)
-        if file.path.lower().endswith('.docx'):
+        if file.path.lower().endswith('.docx') or file.path.lower().endswith('.doc'):
             logger.info(f"📖 Parsing file: {file.path}")
             
             # Создаем временный File объект с полным путем для парсера
