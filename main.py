@@ -30,25 +30,6 @@ EMBED_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_EMBEDDING)
 LLM_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_LLM)
 
 
-def process_deleted_file(file: File) -> bool:
-    """Обработка deleted файла - удаление чанков и записи
-    
-    Args:
-        file: Объект File с информацией о файле
-        
-    Returns:
-        bool: True если успешно
-    """
-    try:
-        #chunks_deleted = db.delete_chunks_by_hash(file.hash)
-        fm.delete(file)
-        logger.info(f"🪓 Deleted {file.path} and her chunks")
-        return True
-    except Exception as e:
-        logger.error(f"Error deleting file {file.path}: {e}")
-        return False
-
-
 def ingest_pipeline(file: File) -> bool:
     """Полный пайплайн обработки файла: парсинг → чанкинг → эмбеддинг
     
@@ -65,19 +46,19 @@ def ingest_pipeline(file: File) -> bool:
         if file.path.lower().endswith('.docx'):
             logger.info(f"📖 Parsing file: {file.path}")
             with PARSE_SEMAPHORE:
-                raw_text = parser_word_old_task({'hash': file.hash, 'path': file.path})
-            logger.info(f"✅ Parsed: {len(raw_text) if raw_text else 0} chars")
+                file.raw_text = parser_word_old_task({'hash': file.hash, 'path': file.path})
+            logger.info(f"✅ Parsed: {len(file.raw_text) if file.raw_text else 0} chars")
         else:
             logger.error(f"Unsupported file type: {file.path}")
             fm.mark_as_error(file)
             return False
 
-        if not raw_text or not raw_text.strip():
+        if not file.raw_text or not file.raw_text.strip():
             logger.error(f"Empty parsed text for {file.path}")
             fm.mark_as_error(file)
             return False
         
-        file.raw_text = raw_text
+        
         # 2. Сохранение в temp_parsed
         fm.save_file_to_disk(file)
         
@@ -127,11 +108,11 @@ def process_file(file_info: Dict[str, Any]) -> bool:
     try:
         if file.status_sync == 'deleted':
             # Сначала удаляем чанки, потом обрабатываем как updated если это был updated
-            return process_deleted_file(file)
+            return fm.delete(file)
             
         elif file.status_sync == 'updated':
             # Удаляем старые чанки, затем обрабатываем заново
-            process_deleted_file(file)
+            fm.delete(file)
             return ingest_pipeline(file)
             
         elif file.status_sync == 'added':
