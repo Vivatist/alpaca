@@ -25,7 +25,7 @@ from typing import Dict, Optional, List
 
 # Добавляем путь к базовому парсеру
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from app.parsers.word.base_parser import BaseParser
+from base_parser import BaseParser
 
 try:
     from markitdown import MarkItDown  # type: ignore

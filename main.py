@@ -6,7 +6,7 @@ import os
 from typing import Dict, Any
 from threading import Semaphore
 
-#from app.parsers.word.parser_word import parser_word_old_task
+from app.parsers.old_parsers.word.parser_word import parser_word_old_task
 from app.chunkers.custom_chunker import chunking
 from app.embedders.custom_embedder import embedding
 from utils.logging import setup_logging, get_logger
@@ -42,23 +42,24 @@ def ingest_pipeline(file: File) -> bool:
     logger.info(f"🍎 Start ingest pipeline: {file.path} (hash: {file.hash[:8]}...)")
     
     try:
-        parser = BaseParser()
         # 1. Парсинг (с ограничением конкурентности)
         if file.path.lower().endswith('.docx'):
             logger.info(f"📖 Parsing file: {file.path}")
             with PARSE_SEMAPHORE:
-                file.raw_text = parser_word_old_task({'hash': file.hash, 'path': file.path})
-            logger.info(f"✅ Parsed: {len(file.raw_text) if file.raw_text else 0} chars")
+                raw_text = parser_word_old_task(file)
+            logger.info(f"✅ Parsed: {len(raw_text) if raw_text else 0} chars")
         else:
             logger.error(f"Unsupported file type: {file.path}")
             fm.mark_as_error(file)
             return False
 
-        if not file.raw_text or not file.raw_text.strip():
+        if not raw_text or not raw_text.strip():
             logger.error(f"Empty parsed text for {file.path}")
             fm.mark_as_error(file)
             return False
         
+        # Устанавливаем распарсенный текст в объект File
+        file.raw_text = raw_text
         
         # 2. Сохранение в temp_parsed
         fm.save_file_to_disk(file)
@@ -108,12 +109,13 @@ def process_file(file_info: Dict[str, Any]) -> bool:
     
     try:
         if file.status_sync == 'deleted':
-            # Сначала удаляем чанки, потом обрабатываем как updated если это был updated
-            return fm.delete(file)
+            # Удаляем чанки и файл из БД
+            fm.delete_file_and_chunks(file)
+            return True
             
         elif file.status_sync == 'updated':
-            # Удаляем старые чанки, затем обрабатываем заново
-            fm.delete(file)
+            # Удаляем только старые чанки, файл остаётся в БД
+            fm.delete_chunks_only(file)
             return ingest_pipeline(file)
             
         elif file.status_sync == 'added':

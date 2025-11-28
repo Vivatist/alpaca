@@ -7,7 +7,7 @@ import hashlib
 from unittest.mock import Mock, patch, MagicMock
 import responses
 
-from main import process_deleted_file, ingest_pipeline, process_file
+from main import ingest_pipeline, process_file
 from settings import settings
 
 
@@ -37,10 +37,10 @@ class TestWorkerIntegration:
                 )
             conn.commit()
         
-        # Удаляем
+        # Удаляем через process_file
         from utils.file_manager import File
-        file = File(hash=file_hash, path=file_path, status_sync='deleted')
-        result = process_deleted_file(file)
+        file_info = {"hash": file_hash, "path": file_path, "status_sync": "deleted"}
+        result = process_file(file_info)
         
         assert result is True
         
@@ -145,35 +145,61 @@ class TestWorkerIntegration:
         assert mock_ingest.call_count == 1
     
     @responses.activate
-    @patch('main.process_deleted_file')
-    def test_process_file_deleted(self, mock_delete, test_db, mock_file_info):
+    def test_process_file_deleted(self, test_db, mock_file_info):
         """Тест обработки удалённого файла"""
-        mock_delete.return_value = True
-        
         file_info = mock_file_info("/tmp/test_deleted.docx", "hash_deleted_123", "deleted")
         
+        # Добавляем файл и чанки в БД для удаления
+        with test_db.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO files (hash, path, size, status_sync) VALUES (%s, %s, %s, %s)",
+                    ("hash_deleted_123", "/tmp/test_deleted.docx", 1024, "deleted")
+                )
+            conn.commit()
+        
         result = process_file(file_info)
         
         assert result is True
-        assert mock_delete.called
-        assert mock_delete.call_count == 1
+        
+        # Проверяем что файл удалён
+        with test_db.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM files WHERE hash = %s", ("hash_deleted_123",))
+                assert cur.fetchone()[0] == 0
     
     @responses.activate
-    @patch('main.process_deleted_file')
-    @patch('main.ingest_pipeline')
-    def test_process_file_updated(self, mock_ingest, mock_delete, test_db, temp_docx_file, mock_file_info):
+    def test_process_file_updated(self, test_db, temp_docx_file, mock_file_info):
         """Тест обработки обновлённого файла"""
-        mock_ingest.return_value = True
-        mock_delete.return_value = True
+        # Мокаем Ollama API для эмбеддингов
+        responses.add(
+            responses.POST,
+            "http://localhost:11434/api/embeddings",
+            json={'embedding': [0.1] * 1024},
+            status=200
+        )
         
-        file_info = mock_file_info("/tmp/test_updated.docx", "hash_updated_123", "updated")
+        file_info = mock_file_info(temp_docx_file, "hash_updated_123", "updated")
+        
+        # Добавляем файл и старые чанки в БД
+        with test_db.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO files (hash, path, size, status_sync) VALUES (%s, %s, %s, %s)",
+                    ("hash_updated_123", temp_docx_file, 1024, "updated")
+                )
+            conn.commit()
         
         result = process_file(file_info)
         
         assert result is True
-        # Для updated должны вызваться оба метода
-        assert mock_delete.called
-        assert mock_ingest.called
+        
+        # Проверяем что файл помечен как ok
+        with test_db.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT status_sync FROM files WHERE hash = %s", ("hash_updated_123",))
+                status = cur.fetchone()
+                assert status[0] == "ok"
     
     def test_process_file_unknown_status(self, test_db, mock_file_info):
         """Тест обработки файла с неизвестным статусом"""

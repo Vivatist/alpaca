@@ -96,6 +96,35 @@ class FileManager:
         self.db.delete_file_by_hash(file.hash)
         logger.info(f"🗑️ Файл удалён | path={file.path} deleted_chunks={deleted_chunks_count}")
     
+    def delete_chunks_only(self, file: File) -> int:
+        """
+        Удалить только чанки файла, не трогая запись о файле в БД
+        Используется для updated файлов перед повторной обработкой
+        
+        Args:
+            file: Объект File
+            
+        Returns:
+            int: Количество удалённых чанков
+        """
+        deleted_count = self.chunk_manager.delete_chunks(file)
+        logger.info(f"🪓 Удалены только чанки | path={file.path} count={deleted_count}")
+        return deleted_count
+    
+    def delete_file_and_chunks(self, file: File) -> None:
+        """
+        Удалить файл и все его чанки из БД
+        Используется для deleted файлов
+        
+        Args:
+            file: Объект File для удаления
+        """
+        # Сначала удаляем чанки
+        deleted_chunks_count = self.chunk_manager.delete_chunks(file)
+        # Затем удаляем запись о файле
+        self.db.delete_file_by_hash(file.hash)
+        logger.info(f"🗑️ Файл и чанки удалены | path={file.path} deleted_chunks={deleted_chunks_count}")
+    
     def save_file_to_disk(self, file: File, temp_dir: str = "/home/alpaca/tmp_md") -> str:
         """
         Сохранить распарсенный текст на диск в формате Markdown

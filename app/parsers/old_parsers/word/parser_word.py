@@ -24,7 +24,8 @@ def parser_word_old_task(file: File) -> str:
     from .word_parser_module.word_parser import WordParser
     try:
         word_parser = WordParser(enable_ocr=True, ocr_strategy='auto')
-        full_path = os.path.join(settings.MONITORED_PATH, file.path)
+        # Если путь абсолютный, используем как есть, иначе добавляем MONITORED_PATH
+        full_path = file.path if os.path.isabs(file.path) else os.path.join(settings.MONITORED_PATH, file.path)
         parse_result_dict = word_parser.parse(full_path)
         parse_result = parse_result_dict.get('markdown', '')
         

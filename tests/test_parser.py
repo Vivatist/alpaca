@@ -3,7 +3,8 @@
 """
 import pytest
 import os
-from app.parsers.word.parser_word import parser_word_old_task
+from app.parsers.old_parsers.word.parser_word import parser_word_old_task
+from utils.file_manager import File
 
 
 class TestParserWord:
@@ -11,12 +12,9 @@ class TestParserWord:
     
     def test_parse_docx_file(self, temp_docx_file):
         """Тест парсинга реального DOCX файла"""
-        file_info = {
-            'hash': 'test_hash_123',
-            'path': temp_docx_file
-        }
+        file = File(hash='test_hash_123', path=temp_docx_file, status_sync='added')
         
-        result = parser_word_old_task(file_info)
+        result = parser_word_old_task(file)
         
         assert result is not None
         assert isinstance(result, str)
@@ -26,12 +24,9 @@ class TestParserWord:
     
     def test_parse_nonexistent_file(self):
         """Тест парсинга несуществующего файла"""
-        file_info = {
-            'hash': 'test_hash_456',
-            'path': '/tmp/nonexistent_file_12345.docx'
-        }
+        file = File(hash='test_hash_456', path='/nonexistent/file.docx', status_sync='added')
         
-        result = parser_word_old_task(file_info)
+        result = parser_word_old_task(file)
         
         # Должен вернуть пустую строку или None при ошибке
         assert result is None or result == ""
@@ -47,12 +42,9 @@ class TestParserWord:
             temp_path = f.name
         
         try:
-            file_info = {
-                'hash': 'test_hash_empty',
-                'path': temp_path
-            }
+            file = File(hash='test_hash_empty', path=temp_path, status_sync='added')
             
-            result = parser_word_old_task(file_info)
+            result = parser_word_old_task(file)
             
             # Пустой документ должен вернуть пустую строку
             assert result is not None
@@ -80,12 +72,9 @@ class TestParserWord:
             temp_path = f.name
         
         try:
-            file_info = {
-                'hash': 'test_hash_multi',
-                'path': temp_path
-            }
+            file = File(hash='test_hash_multi', path=temp_path, status_sync='added')
             
-            result = parser_word_old_task(file_info)
+            result = parser_word_old_task(file)
             
             assert result is not None
             assert len(result) > 0

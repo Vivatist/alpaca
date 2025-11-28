@@ -3,6 +3,7 @@
 """
 import pytest
 from app.chunkers.custom_chunker import chunking
+from utils.file_manager import File
 
 
 class TestChunking:
@@ -13,7 +14,8 @@ class TestChunking:
         text = "Это первый параграф.\n\nЭто второй параграф.\n\nЭто третий параграф."
         file_path = "/tmp/test_file.txt"
         
-        chunks = chunking(file_path, text)
+        file = File(hash="test_hash", path=file_path, status_sync="added", raw_text=text)
+        chunks = chunking(file)
         
         assert len(chunks) > 0
         assert all(isinstance(chunk, str) for chunk in chunks)
@@ -26,7 +28,8 @@ class TestChunking:
         text = paragraph + "\n\n" + paragraph + "\n\n" + paragraph
         file_path = "/tmp/test_file.txt"
         
-        chunks = chunking(file_path, text)
+        file = File(hash="test_hash", path=file_path, status_sync="added", raw_text=text)
+        chunks = chunking(file)
         
         # Должно получиться несколько чанков, так как параграфы объединяются до 1000 символов
         assert len(chunks) > 0
@@ -40,7 +43,8 @@ class TestChunking:
         text = ""
         file_path = "/tmp/test_file.txt"
         
-        chunks = chunking(file_path, text)
+        file = File(hash="test_hash", path=file_path, status_sync="added", raw_text=text)
+        chunks = chunking(file)
         
         assert len(chunks) == 0
     
@@ -49,7 +53,8 @@ class TestChunking:
         text = "   \n\n   \n\n   "
         file_path = "/tmp/test_file.txt"
         
-        chunks = chunking(file_path, text)
+        file = File(hash="test_hash", path=file_path, status_sync="added", raw_text=text)
+        chunks = chunking(file)
         
         # Пустые параграфы должны игнорироваться
         assert len(chunks) == 0
@@ -59,7 +64,8 @@ class TestChunking:
         text = "Это очень длинный параграф. " * 100  # > 1000 символов
         file_path = "/tmp/test_file.txt"
         
-        chunks = chunking(file_path, text)
+        file = File(hash="test_hash", path=file_path, status_sync="added", raw_text=text)
+        chunks = chunking(file)
         
         # Текущая реализация не разбивает длинные параграфы без \n\n
         # Просто проверяем что чанк создан
@@ -71,7 +77,8 @@ class TestChunking:
         text = "Параграф 1.\n\nПараграф 2.\n\nПараграф 3."
         file_path = "/tmp/test_file.txt"
         
-        chunks = chunking(file_path, text)
+        file = File(hash="test_hash", path=file_path, status_sync="added", raw_text=text)
+        chunks = chunking(file)
         combined = ''.join(chunks)
         
         # Проверяем что все параграфы присутствуют
@@ -84,7 +91,8 @@ class TestChunking:
         text = "Параграф 1.\n\n\n\nПараграф 2.\n\n\n\n\n\nПараграф 3."
         file_path = "/tmp/test_file.txt"
         
-        chunks = chunking(file_path, text)
+        file = File(hash="test_hash", path=file_path, status_sync="added", raw_text=text)
+        chunks = chunking(file)
         
         assert len(chunks) > 0
         combined = ''.join(chunks)
