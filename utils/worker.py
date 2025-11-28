@@ -82,12 +82,12 @@ class Worker:
                             break
                         
                         # Помечаем файл как processed СРАЗУ, чтобы избежать дублирования
-                        self.db.mark_as_processed(file_info['file_hash'])
+                        self.db.mark_as_processed(file_info['hash'])
                         
                         # Запускаем обработку в отдельном потоке
                         future = executor.submit(self.process_file, file_info)
-                        futures[future] = file_info['file_path']
-                        logger.info(f"🚀 Started: {file_info['file_path']} | Active: {len(futures)}/{max_workers}")
+                        futures[future] = file_info['path']
+                        logger.info(f"🚀 Started: {file_info['path']} | Active: {len(futures)}/{max_workers}")
                     
                     # Если нет активных задач и очередь пуста, ждём
                     if not futures:

@@ -16,7 +16,7 @@ from utils.database import PostgreDataBase
 from utils.file_manager import File, FileManager
 from tests.runner import run_tests_on_startup
 
-setup_logging()
+# Logger будет инициализирован в блоке if __name__ == "__main__" после тестов
 logger = get_logger("alpaca.worker")
 
 # Инициализация
@@ -46,20 +46,18 @@ def ingest_pipeline(file: File) -> bool:
         if file.path.lower().endswith('.docx'):
             logger.info(f"📖 Parsing file: {file.path}")
             with PARSE_SEMAPHORE:
-                raw_text = parser_word_old_task(file)
-            logger.info(f"✅ Parsed: {len(raw_text) if raw_text else 0} chars")
+                file.raw_text = parser_word_old_task(file)
+            logger.info(f"✅ Parsed: {len(file.raw_text) if file.raw_text else 0} chars")
         else:
             logger.error(f"Unsupported file type: {file.path}")
             fm.mark_as_error(file)
             return False
 
-        if not raw_text or not raw_text.strip():
+        if not file.raw_text or not file.raw_text.strip():
             logger.error(f"Empty parsed text for {file.path}")
             fm.mark_as_error(file)
             return False
-        
-        # Устанавливаем распарсенный текст в объект File
-        file.raw_text = raw_text
+    
         
         # 2. Сохранение в temp_parsed
         fm.save_file_to_disk(file)
@@ -137,6 +135,10 @@ if __name__ == "__main__":
 
     if not tests_passed:
         exit(1)
+
+    # Переинициализируем logging после тестов (pytest может закрыть handlers)
+    setup_logging()
+    logger.info("🚀 Запуск worker после успешного прохождения тестов")
 
     # Создаём worker и запускаем
     worker = Worker(
