@@ -16,6 +16,7 @@ unstructured==0.18.21
 unstructured-inference==1.1.2
 unstructured-pytesseract==0.3.15
 olefile==0.47
+chardet==5.2.0
 
 # Database
 psycopg2-binary==2.9.10
