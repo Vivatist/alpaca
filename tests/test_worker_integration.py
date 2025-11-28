@@ -38,7 +38,9 @@ class TestWorkerIntegration:
             conn.commit()
         
         # Удаляем
-        result = process_deleted_file(file_hash, file_path)
+        from utils.file_manager import File
+        file = File(hash=file_hash, path=file_path, status_sync='deleted')
+        result = process_deleted_file(file)
         
         assert result is True
         
@@ -82,7 +84,9 @@ class TestWorkerIntegration:
                 )
             conn.commit()
         
-        result = ingest_pipeline(file_hash, file_path)
+        from utils.file_manager import File
+        file = File(hash=file_hash, path=file_path, status_sync="added")
+        result = ingest_pipeline(file)
         
         assert result is True
         
@@ -112,7 +116,9 @@ class TestWorkerIntegration:
                 )
             conn.commit()
         
-        result = ingest_pipeline(file_hash, file_path)
+        from utils.file_manager import File
+        file = File(hash=file_hash, path=file_path, status_sync="added")
+        result = ingest_pipeline(file)
         
         assert result is False
         

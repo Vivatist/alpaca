@@ -37,7 +37,9 @@ class TestWorkerPipeline:
                 )
             conn.commit()
         
-        result = ingest_pipeline(file_hash, file_path)
+        from utils.file_manager import File
+        file = File(hash=file_hash, path=file_path, status_sync="added")
+        result = ingest_pipeline(file)
         
         assert result is True
         
@@ -71,7 +73,9 @@ class TestWorkerPipeline:
                 )
             conn.commit()
         
-        result = ingest_pipeline(file_hash, file_path)
+        from utils.file_manager import File
+        file = File(hash=file_hash, path=file_path, status_sync="added")
+        result = ingest_pipeline(file)
         
         assert result is False
         
@@ -101,7 +105,9 @@ class TestWorkerPipeline:
                 )
             conn.commit()
         
-        result = ingest_pipeline(file_hash, file_path)
+        from utils.file_manager import File
+        file = File(hash=file_hash, path=file_path, status_sync="added")
+        result = ingest_pipeline(file)
         
         assert result is False
         
@@ -133,7 +139,9 @@ class TestWorkerPipeline:
                 )
             conn.commit()
         
-        result = ingest_pipeline(file_hash, file_path)
+        from utils.file_manager import File
+        file = File(hash=file_hash, path=file_path, status_sync="added")
+        result = ingest_pipeline(file)
         
         assert result is False
     
@@ -164,7 +172,9 @@ class TestWorkerPipeline:
                 )
             conn.commit()
         
-        result = ingest_pipeline(file_hash, file_path)
+        from utils.file_manager import File
+        file = File(hash=file_hash, path=file_path, status_sync="added")
+        result = ingest_pipeline(file)
         
         assert result is True
         

@@ -25,9 +25,9 @@ class File(BaseModel):
     hash: str
     raw_text: Optional[str] = None
     status_sync: str
-    size: int
-    last_checked: datetime
-    mtime: float
+    size: Optional[int] = None
+    last_checked: Optional[datetime] = None
+    mtime: Optional[float] = None
 
 
 
