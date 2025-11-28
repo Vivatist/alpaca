@@ -1,4 +1,4 @@
-"""Database module для FileStatusProcessor
+"""PostgreSQL implementation для FileStatusProcessor
 
 Отвечает за:
 - Получение файлов с определёнными статусами (added, updated, deleted)
@@ -10,6 +10,7 @@ import psycopg2
 from contextlib import contextmanager
 from typing import Dict, List, Tuple, TYPE_CHECKING
 from utils.logging import get_logger
+from .database import Database
 
 if TYPE_CHECKING:
     from main import FileID
@@ -17,7 +18,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-class PostgreDatabase:
+class PostgreDataBase(Database):
     """Класс для работы с БД в контексте обработки изменений файлов"""
     
     def __init__(self, database_url: str):
@@ -239,4 +240,103 @@ class PostgreDatabase:
                     return cur.rowcount
         except Exception as e:
             logger.error(f"Error deleting chunks for path {file_path}: {e}")
+            return 0
+    
+    def set_raw_text(self, file_hash: str, raw_text: str) -> bool:
+        """Сохраняет распарсенный текст файла в БД
+        
+        Args:
+            file_hash: SHA256 хэш файла
+            raw_text: Распарсенный текст документа
+        
+        Returns:
+            bool: True если обновление успешно
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        UPDATE files
+                        SET raw_text = %s,
+                            last_checked = CURRENT_TIMESTAMP
+                        WHERE file_hash = %s
+                    """, (raw_text, file_hash))
+                    return cur.rowcount > 0
+        except Exception as e:
+            logger.error(f"Error setting raw_text for hash {file_hash}: {e}")
+            return False
+    
+    def get_chunks_by_hash(self, file_hash: str) -> List[tuple]:
+        """Получает все чанки файла по хэшу
+        
+        Args:
+            file_hash: SHA256 хэш файла
+        
+        Returns:
+            List[tuple]: Список кортежей (content, metadata, embedding)
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT content, metadata, embedding
+                        FROM chunks
+                        WHERE metadata->>'file_hash' = %s
+                        ORDER BY (metadata->>'chunk_index')::int
+                    """, (file_hash,))
+                    return cur.fetchall()
+        except Exception as e:
+            logger.error(f"Error getting chunks for hash {file_hash}: {e}")
+            return []
+    
+    def save_chunk(self, content: str, metadata: dict, embedding: List[float] = None) -> bool:
+        """Сохраняет чанк в БД
+        
+        Args:
+            content: Текст чанка
+            metadata: Метаданные чанка (JSONB)
+            embedding: Векторное представление чанка (опционально)
+        
+        Returns:
+            bool: True если сохранение успешно
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    if embedding:
+                        embedding_str = '[' + ','.join(map(str, embedding)) + ']'
+                        cur.execute("""
+                            INSERT INTO chunks (content, metadata, embedding)
+                            VALUES (%s, %s, %s::vector)
+                        """, (content, psycopg2.extras.Json(metadata), embedding_str))
+                    else:
+                        cur.execute("""
+                            INSERT INTO chunks (content, metadata)
+                            VALUES (%s, %s)
+                        """, (content, psycopg2.extras.Json(metadata)))
+                    return True
+        except Exception as e:
+            logger.error(f"Error saving chunk: {e}")
+            return False
+    
+    def get_chunks_count(self, file_hash: str) -> int:
+        """Получает количество чанков файла
+        
+        Args:
+            file_hash: SHA256 хэш файла
+        
+        Returns:
+            int: Количество чанков в БД
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT COUNT(*)
+                        FROM chunks
+                        WHERE metadata->>'file_hash' = %s
+                    """, (file_hash,))
+                    return cur.fetchone()[0]
+        except Exception as e:
+            logger.error(f"Error getting chunks count for hash {file_hash}: {e}")
             return 0

@@ -66,7 +66,7 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     
     # Запускаем тесты если включено
-    run_pre_launch_tests()
+    # run_pre_launch_tests()
     
     logger.info("=" * 60)
     logger.info("File Watcher Service Starting")

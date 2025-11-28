@@ -12,14 +12,14 @@ from app.embedders.custom_embedder import embedding
 from utils.logging import setup_logging, get_logger
 from utils.worker import Worker
 from settings import settings
-from utils.database import PostgreDatabase
+from utils.database import PostgreDataBase
 from tests.runner import run_tests_on_startup
 
 setup_logging()
 logger = get_logger("alpaca.worker")
 
 # Инициализация
-db = PostgreDatabase(settings.DATABASE_URL)
+db = PostgreDataBase(settings.DATABASE_URL)
 FILEWATCHER_API = os.getenv("FILEWATCHER_API_URL", "http://localhost:8081")
 
 # Семафоры для ограничения конкурентности разных операций (из settings)

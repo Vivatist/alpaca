@@ -16,7 +16,7 @@ import os
 import docker
 import httpx
 
-from utils.database import PostgreDatabase
+from database import Database
 
 # Инициализация FastAPI
 app = FastAPI(
@@ -107,7 +107,7 @@ app.add_middleware(
 )
 
 # Инициализация БД
-db = PostgreDatabase()
+db = Database()
 
 
 # ============================================

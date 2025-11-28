@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 from typing import Generator
 
-from utils.database import PostgreDatabase
+from utils.database import PostgreDataBase
 from settings import settings
 
 
@@ -32,15 +32,14 @@ def setup_test_logging():
     
     yield
     
-    # После тестов НЕ восстанавливаем handlers - они будут созданы заново
-    # при следующем вызове setup_logging() в основном приложении
-    root_logger.handlers.clear()
+    # После тестов не очищаем handlers - main.py уже настроил своё логирование
+    # перед запуском тестов и продолжит использовать его
 
 
 @pytest.fixture
-def test_db() -> Generator[PostgreDatabase, None, None]:
+def test_db() -> Generator[PostgreDataBase, None, None]:
     """Создание тестовой БД"""
-    db = PostgreDatabase(settings.DATABASE_URL)
+    db = PostgreDataBase(settings.DATABASE_URL)
     yield db
     # Cleanup после тестов
     with db.get_connection() as conn:

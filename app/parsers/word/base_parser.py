@@ -10,7 +10,7 @@ import os
 import yaml
 from pathlib import Path
 from typing import Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from abc import ABC, abstractmethod
 
 # Добавляем путь к корню проекта для импортов
@@ -158,7 +158,7 @@ class BaseParser(ABC):
         # Начинаем с системных полей
         yaml_data = {
             'document_type': document_type,
-            'parsed_date': datetime.now(datetime.UTC).isoformat(),
+            'parsed_date': datetime.now(timezone.utc).isoformat(),
             'parser': f'alpaca-{document_type}-parser',
         }
         

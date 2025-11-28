@@ -15,11 +15,11 @@ COMMENT ON TYPE public.status_sync IS 'Статусы синхронизации
 -- File state table для отслеживания состояния файлов
 CREATE TABLE public.files (
     id integer NOT NULL,
-    file_path text NOT NULL,
-    file_size bigint NOT NULL,
+    path text NOT NULL,
+    size bigint NOT NULL,
     last_checked timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-    file_hash text NOT NULL,
-    file_mtime double precision,
+    hash text NOT NULL,
+    mtime double precision,
     status_sync public.status_sync,
     raw_text text
 );
@@ -44,10 +44,10 @@ ALTER TABLE ONLY public.files
     ADD CONSTRAINT files_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.files
-    ADD CONSTRAINT files_file_path_key UNIQUE (file_path);
+    ADD CONSTRAINT files_path_key UNIQUE (path);
 
 -- Indexes для быстрого поиска
-CREATE INDEX idx_file_hash ON public.files USING btree (file_hash);
+CREATE INDEX idx_hash ON public.files USING btree (hash);
 CREATE INDEX idx_file_path ON public.files USING btree (file_path);
 CREATE INDEX idx_status_mtime ON public.files USING btree (status_sync, file_mtime DESC);
 

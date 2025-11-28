@@ -5,12 +5,12 @@ import psycopg2.extras
 
 from utils.logging import get_logger
 from settings import settings
-from utils.database import PostgreDatabase
+from utils.database import PostgreDataBase
 
 logger = get_logger("alpaca.embedder")
 
 
-def embedding(db: PostgreDatabase, file_hash: str, file_path: str, chunks: List[str]) -> int:
+def embedding(db: PostgreDataBase, file_hash: str, file_path: str, chunks: List[str]) -> int:
     """Создание эмбеддингов через Ollama и сохранение в БД
     
     Args:
