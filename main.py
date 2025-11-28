@@ -6,7 +6,7 @@ import os
 from typing import Dict, Any
 from threading import Semaphore
 
-from app.parsers.old_parsers.word.parser_word import parser_word_old_task
+from app.parsers.word_parser_module.word_parser import WordParser
 from app.chunkers.custom_chunker import chunking
 from app.embedders.custom_embedder import embedding
 from utils.logging import setup_logging, get_logger
@@ -21,6 +21,7 @@ logger = get_logger("alpaca.worker")
 # Инициализация
 db = PostgreDataBase(settings.DATABASE_URL)
 fm = FileManager(db)
+word_parser = WordParser(enable_ocr=True)  # Создаём экземпляр парсера
 FILEWATCHER_API = os.getenv("FILEWATCHER_API_URL", "http://localhost:8081")
 
 # Семафоры для ограничения конкурентности разных операций (из settings)
@@ -45,7 +46,7 @@ def ingest_pipeline(file: File) -> bool:
         if file.path.lower().endswith('.docx'):
             logger.info(f"📖 Parsing file: {file.path}")
             with PARSE_SEMAPHORE:
-                file.raw_text = parser_word_old_task(file)
+                file.raw_text = word_parser.parse(file)
             logger.info(f"✅ Parsed: {len(file.raw_text) if file.raw_text else 0} chars")
         else:
             logger.error(f"Unsupported file type: {file.path}")

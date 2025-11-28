@@ -3,7 +3,7 @@
 """
 import pytest
 import os
-from app.parsers.old_parsers.word.parser_word import parser_word_old_task
+from app.parsers.word_parser_module.word_parser import WordParser
 from utils.file_manager import File
 
 
@@ -13,8 +13,9 @@ class TestParserWord:
     def test_parse_docx_file(self, temp_docx_file):
         """Тест парсинга реального DOCX файла"""
         file = File(hash='test_hash_123', path=temp_docx_file, status_sync='added')
+        parser = WordParser(enable_ocr=False)
         
-        result = parser_word_old_task(file)
+        result = parser.parse(file)
         
         assert result is not None
         assert isinstance(result, str)
@@ -26,7 +27,7 @@ class TestParserWord:
         """Тест парсинга несуществующего файла"""
         file = File(hash='test_hash_456', path='/nonexistent/file.docx', status_sync='added')
         
-        result = parser_word_old_task(file)
+        result = WordParser(enable_ocr=False).parse(file)
         
         # Должен вернуть пустую строку или None при ошибке
         assert result is None or result == ""
@@ -44,7 +45,7 @@ class TestParserWord:
         try:
             file = File(hash='test_hash_empty', path=temp_path, status_sync='added')
             
-            result = parser_word_old_task(file)
+            result = WordParser(enable_ocr=False).parse(file)
             
             # Пустой документ должен вернуть пустую строку
             assert result is not None
@@ -74,7 +75,7 @@ class TestParserWord:
         try:
             file = File(hash='test_hash_multi', path=temp_path, status_sync='added')
             
-            result = parser_word_old_task(file)
+            result = WordParser(enable_ocr=False).parse(file)
             
             assert result is not None
             assert len(result) > 0

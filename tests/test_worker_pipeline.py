@@ -88,7 +88,7 @@ class TestWorkerPipeline:
                     assert row[0] == "error"
     
     @responses.activate
-    @patch('main.parser_word_old_task')
+    @patch('main.word_parser.parse')
     def test_pipeline_empty_parsed_text(self, mock_parser, test_db, temp_docx_file):
         """Тест обработки файла с пустым результатом парсинга"""
         mock_parser.return_value = ""  # Пустой текст
@@ -120,7 +120,7 @@ class TestWorkerPipeline:
                     assert row[0] == "error"
     
     @responses.activate
-    @patch('main.parser_word_old_task')
+    @patch('main.word_parser.parse')
     @patch('main.chunking')
     def test_pipeline_no_chunks_created(self, mock_chunking, mock_parser, test_db, temp_docx_file):
         """Тест когда чанкование не создаёт чанков"""
@@ -146,7 +146,7 @@ class TestWorkerPipeline:
         assert result is False
     
     @responses.activate
-    @patch('main.parser_word_old_task')
+    @patch('main.word_parser.parse')
     def test_pipeline_creates_temp_file(self, mock_parser, test_db, temp_docx_file, cleanup_temp_parsed):
         """Тест что пайплайн создаёт временный .md файл"""
         test_text = "Тестовый текст для сохранения"

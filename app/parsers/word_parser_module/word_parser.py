@@ -21,11 +21,14 @@ import tempfile
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, TYPE_CHECKING
 
 # Добавляем путь к базовому парсеру
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from base_parser import BaseParser
+
+if TYPE_CHECKING:
+    from utils.file_manager import File
 
 try:
     from markitdown import MarkItDown  # type: ignore
@@ -41,20 +44,32 @@ except ImportError:
     UNSTRUCTURED_AVAILABLE = False
 
 try:
-    from docx import Document # type: ignore
-    from docx.oxml.table import CT_Tbl # type: ignore
-    from docx.oxml.text.paragraph import CT_P # type: ignore
-    from docx.table import _Cell, Table # type: ignore
-    from docx.text.paragraph import Paragraph     # type: ignore
+    from docx import Document  # type: ignore
+    from docx.oxml.table import CT_Tbl  # type: ignore
+    from docx.oxml.text.paragraph import CT_P  # type: ignore
+    from docx.table import _Cell, Table  # type: ignore
+    from docx.text.paragraph import Paragraph  # type: ignore
     PYTHON_DOCX_AVAILABLE = True
 except ImportError:
     PYTHON_DOCX_AVAILABLE = False
 
 try:
-    from PIL import Image
+    from PIL import Image  # type: ignore
     PIL_AVAILABLE = True
 except ImportError:
     PIL_AVAILABLE = False
+
+try:
+    import pytesseract  # type: ignore
+    PYTESSERACT_AVAILABLE = True
+except ImportError:
+    PYTESSERACT_AVAILABLE = False
+
+try:
+    import pdf2image  # type: ignore
+    PDF2IMAGE_AVAILABLE = True
+except ImportError:
+    PDF2IMAGE_AVAILABLE = False
 
 
 class WordParser(BaseParser):

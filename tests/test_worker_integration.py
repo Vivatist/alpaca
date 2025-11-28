@@ -57,7 +57,7 @@ class TestWorkerIntegration:
                 assert cur.fetchone()[0] == 0
     
     @responses.activate
-    @patch('main.parser_word_old_task')
+    @patch('main.word_parser.parse')
     def test_ingest_pipeline_success(self, mock_parser, test_db, temp_docx_file, cleanup_temp_parsed):
         """Тест успешного прохождения полного пайплайна"""
         # Mock парсера
@@ -98,7 +98,7 @@ class TestWorkerIntegration:
                 if status:
                     assert status[0] == "ok"
     
-    @patch('main.parser_word_old_task')
+    @patch('main.word_parser.parse')
     def test_ingest_pipeline_parse_error(self, mock_parser, test_db, temp_docx_file):
         """Тест обработки ошибки парсинга"""
         # Mock парсера с ошибкой
