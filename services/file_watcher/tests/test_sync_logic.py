@@ -47,7 +47,7 @@ class TestSyncLogic:
     
     def _create_file(self, filename: str, content: str = "test content") -> dict:
         """Создаёт тестовый файл и возвращает его метаданные"""
-        file_path = Path(self.test_dir) / filename
+        path = Path(self.test_dir) / filename
         file_path.write_text(content * 20)  # 20 повторений для размера > 100 байт
         
         # Получаем метаданные через scanner
@@ -79,7 +79,7 @@ class TestSyncLogic:
         """Получает текущий статус файла из БД"""
         with self.db.get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute(f"SELECT status_sync FROM {self.db.table_name} WHERE file_path = %s", (path,))
+                cur.execute(f"SELECT status_sync FROM {self.db.table_name} WHERE path = %s", (path,))
                 row = cur.fetchone()
                 return row[0] if row else None
     
@@ -87,7 +87,7 @@ class TestSyncLogic:
         """Получает текущий хэш файла из БД"""
         with self.db.get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute(f"SELECT file_hash FROM {self.db.table_name} WHERE file_path = %s", (path,))
+                cur.execute(f"SELECT hash FROM {self.db.table_name} WHERE path = %s", (path,))
                 row = cur.fetchone()
                 return row[0] if row else None
     

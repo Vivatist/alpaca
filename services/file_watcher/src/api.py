@@ -23,9 +23,9 @@ db = Database()
 
 class FileResponse(BaseModel):
     """Модель файла для обработки"""
-    file_path: str = Field(..., description="Путь к файлу")
-    file_hash: str = Field(..., description="SHA256 хэш файла")
-    file_size: int = Field(..., description="Размер файла в байтах")
+    path: str = Field(..., description="Путь к файлу")
+    hash: str = Field(..., description="SHA256 хэш файла")
+    size: int = Field(..., description="Размер файла в байтах")
     status_sync: str = Field(..., description="Текущий статус файла")
     last_checked: Optional[str] = Field(None, description="Время последней проверки")
 

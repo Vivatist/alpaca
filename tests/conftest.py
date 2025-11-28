@@ -46,7 +46,7 @@ def test_db() -> Generator[PostgreDataBase, None, None]:
         with conn.cursor() as cur:
             # Очистка тестовых данных
             cur.execute("DELETE FROM chunks WHERE metadata->>'file_path' LIKE '/tmp/test_%'")
-            cur.execute("DELETE FROM files WHERE file_path LIKE '/tmp/test_%'")
+            cur.execute("DELETE FROM files WHERE path LIKE '/tmp/test_%'")
         conn.commit()
 
 
@@ -91,8 +91,8 @@ def mock_file_info():
     """Создание мока информации о файле"""
     def _create_mock(file_path: str, file_hash: str, status: str = 'added'):
         return {
-            'file_path': file_path,
-            'file_hash': file_hash,
+            'path': file_path,
+            'hash': file_hash,
             'status_sync': status
         }
     return _create_mock

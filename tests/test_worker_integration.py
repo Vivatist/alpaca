@@ -24,7 +24,7 @@ class TestWorkerIntegration:
             with conn.cursor() as cur:
                 # Добавляем файл
                 cur.execute(
-                    "INSERT INTO files (file_hash, file_path, file_size, status_sync) VALUES (%s, %s, %s, %s)",
+                    "INSERT INTO files (hash, path, size, status_sync) VALUES (%s, %s, %s, %s)",
                     (file_hash, file_path, 1024, "ok")
                 )
                 # Добавляем чанк
@@ -45,7 +45,7 @@ class TestWorkerIntegration:
         # Проверяем что файл удалён
         with test_db.get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT COUNT(*) FROM files WHERE file_hash = %s", (file_hash,))
+                cur.execute("SELECT COUNT(*) FROM files WHERE hash = %s", (file_hash,))
                 assert cur.fetchone()[0] == 0
                 
                 cur.execute(
@@ -77,7 +77,7 @@ class TestWorkerIntegration:
         with test_db.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "INSERT INTO files (file_hash, file_path, file_size, status_sync) VALUES (%s, %s, %s, %s)",
+                    "INSERT INTO files (hash, path, size, status_sync) VALUES (%s, %s, %s, %s)",
                     (file_hash, file_path, 1024, "processed")
                 )
             conn.commit()
@@ -89,7 +89,7 @@ class TestWorkerIntegration:
         # Проверяем что файл помечен как ok
         with test_db.get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT status_sync FROM files WHERE file_hash = %s", (file_hash,))
+                cur.execute("SELECT status_sync FROM files WHERE hash = %s", (file_hash,))
                 status = cur.fetchone()
                 if status:
                     assert status[0] == "ok"
@@ -107,7 +107,7 @@ class TestWorkerIntegration:
         with test_db.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "INSERT INTO files (file_hash, file_path, file_size, status_sync) VALUES (%s, %s, %s, %s)",
+                    "INSERT INTO files (hash, path, size, status_sync) VALUES (%s, %s, %s, %s)",
                     (file_hash, file_path, 1024, "processed")
                 )
             conn.commit()
@@ -119,7 +119,7 @@ class TestWorkerIntegration:
         # Проверяем что файл помечен как error
         with test_db.get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT status_sync FROM files WHERE file_hash = %s", (file_hash,))
+                cur.execute("SELECT status_sync FROM files WHERE hash = %s", (file_hash,))
                 status = cur.fetchone()
                 if status:
                     assert status[0] == "error"

@@ -123,8 +123,8 @@ def process_file(file_info: Dict[str, Any]) -> bool:
     Returns:
         bool: True если успешно обработан
     """
-    file_path = file_info['file_path']
-    file_hash = file_info['file_hash']
+    file_path = file_info['path']
+    file_hash = file_info['hash']
     status = file_info['status_sync']
     
     logger.info(f"Processing file: {file_path} (status={status})")

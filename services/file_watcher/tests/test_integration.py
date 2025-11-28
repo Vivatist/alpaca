@@ -37,7 +37,7 @@ class TestFileWatcher:
         # Очищаем таблицу files перед тестом
         with self.db.get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("DELETE FROM files WHERE file_path LIKE 'test_%'")
+                cur.execute("DELETE FROM files WHERE path LIKE 'test_%'")
         
         # Инициализируем компоненты
         from file_filter import FileFilter
@@ -104,15 +104,15 @@ class TestFileWatcher:
                 # Удаляем записи с тестовыми именами файлов
                 cur.execute("""
                     DELETE FROM files 
-                    WHERE file_path LIKE 'test_%' 
-                       OR file_path LIKE '%test%.txt'
-                       OR file_path LIKE '%test%.pdf'
-                       OR file_path LIKE '%test%.docx'
-                       OR file_path LIKE 'file%.txt'
-                       OR file_path LIKE 'file%.pdf'
-                       OR file_path LIKE 'allowed%'
-                       OR file_path LIKE 'ignored%'
-                       OR file_path LIKE 'rapid_%'
+                    WHERE path LIKE 'test_%' 
+                       OR path LIKE '%test%.txt'
+                       OR path LIKE '%test%.pdf'
+                       OR path LIKE '%test%.docx'
+                       OR path LIKE 'file%.txt'
+                       OR path LIKE 'file%.pdf'
+                       OR path LIKE 'allowed%'
+                       OR path LIKE 'ignored%'
+                       OR path LIKE 'rapid_%'
                 """)
     
     def run_cycle(self):
@@ -127,7 +127,7 @@ class TestFileWatcher:
         with self.db.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT status_sync FROM files WHERE file_path = %s",
+                    "SELECT status_sync FROM files WHERE path = %s",
                     (filename,)
                 )
                 row = cur.fetchone()

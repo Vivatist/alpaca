@@ -82,10 +82,10 @@ class PostgreDataBase(Database):
         with self.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT file_path, file_hash, file_size, status_sync
+                    SELECT path, hash, size, status_sync
                     FROM files
                     WHERE status_sync IN ('added', 'updated', 'deleted')
-                    ORDER BY file_mtime DESC
+                    ORDER BY mtime DESC
                 """)
                 
                 rows = cur.fetchall()
@@ -121,7 +121,7 @@ class PostgreDataBase(Database):
                         UPDATE files
                         SET status_sync = 'processed',
                             last_checked = CURRENT_TIMESTAMP
-                        WHERE file_hash = %s
+                        WHERE hash = %s
                     """, (file_hash,))
                     return cur.rowcount > 0
         except Exception as e:
@@ -146,7 +146,7 @@ class PostgreDataBase(Database):
                         UPDATE files
                         SET status_sync = 'ok',
                             last_checked = CURRENT_TIMESTAMP
-                        WHERE file_hash = %s
+                        WHERE hash = %s
                     """, (file_hash,))
                     return cur.rowcount > 0
         except Exception as e:
@@ -169,7 +169,7 @@ class PostgreDataBase(Database):
                         UPDATE files
                         SET status_sync = 'error',
                             last_checked = CURRENT_TIMESTAMP
-                        WHERE file_hash = %s
+                        WHERE hash = %s
                     """, (file_hash,))
                     return cur.rowcount > 0
         except Exception as e:
@@ -190,7 +190,7 @@ class PostgreDataBase(Database):
                 with conn.cursor() as cur:
                     cur.execute("""
                         DELETE FROM files
-                        WHERE file_hash = %s
+                        WHERE hash = %s
                     """, (file_hash,))
                     return cur.rowcount > 0
         except Exception as e:
@@ -259,7 +259,7 @@ class PostgreDataBase(Database):
                         UPDATE files
                         SET raw_text = %s,
                             last_checked = CURRENT_TIMESTAMP
-                        WHERE file_hash = %s
+                        WHERE hash = %s
                     """, (raw_text, file_hash))
                     return cur.rowcount > 0
         except Exception as e:

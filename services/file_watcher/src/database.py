@@ -38,27 +38,27 @@ class Database:
                 cur.execute(f"""
                     CREATE TABLE IF NOT EXISTS {self.table_name} (
                         id SERIAL PRIMARY KEY,
-                        file_path TEXT NOT NULL UNIQUE,
-                        file_size BIGINT NOT NULL,
-                        file_hash TEXT,
-                        file_mtime DOUBLE PRECISION,
+                        path TEXT NOT NULL UNIQUE,
+                        size BIGINT NOT NULL,
+                        hash TEXT,
+                        mtime DOUBLE PRECISION,
                         status_sync TEXT DEFAULT 'ok',
                         last_checked TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
-                cur.execute(f"CREATE INDEX IF NOT EXISTS idx_file_path ON {self.table_name}(file_path)")
+                cur.execute(f"CREATE INDEX IF NOT EXISTS idx_path ON {self.table_name}(path)")
                 
                 # Миграция: добавляем новые колонки если их нет
                 cur.execute(f"""
                     DO $$ 
                     BEGIN 
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                                      WHERE table_name='{self.table_name}' AND column_name='file_hash') THEN
-                            ALTER TABLE {self.table_name} ADD COLUMN file_hash TEXT;
+                                      WHERE table_name='{self.table_name}' AND column_name='hash') THEN
+                            ALTER TABLE {self.table_name} ADD COLUMN hash TEXT;
                         END IF;
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                                      WHERE table_name='{self.table_name}' AND column_name='file_mtime') THEN
-                            ALTER TABLE {self.table_name} ADD COLUMN file_mtime DOUBLE PRECISION;
+                                      WHERE table_name='{self.table_name}' AND column_name='mtime') THEN
+                            ALTER TABLE {self.table_name} ADD COLUMN mtime DOUBLE PRECISION;
                         END IF;
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                                       WHERE table_name='{self.table_name}' AND column_name='status_sync') THEN
@@ -67,7 +67,7 @@ class Database:
                     END $$;
                 """)
                 
-                cur.execute(f"CREATE INDEX IF NOT EXISTS idx_file_hash ON {self.table_name}(file_hash)")
+                cur.execute(f"CREATE INDEX IF NOT EXISTS idx_hash ON {self.table_name}(hash)")
                 cur.execute(f"CREATE INDEX IF NOT EXISTS idx_status_sync ON {self.table_name}(status_sync)")
     
     def reset_processed_to_ok(self) -> int:
@@ -145,7 +145,7 @@ class Database:
         with self.get_connection() as conn:
             with conn.cursor() as cur:
                 # Загружаем все записи из БД
-                cur.execute(f"SELECT file_path, file_hash, status_sync FROM {self.table_name}")
+                cur.execute(f"SELECT path, hash, status_sync FROM {self.table_name}")
                 db_records = {row[0]: {'hash': row[1], 'status': row[2]} for row in cur.fetchall()}
                 
                 # Создаём словарь файлов с диска для быстрого поиска
@@ -205,7 +205,7 @@ class Database:
                 if inserts:
                     execute_values(cur, f"""
                         INSERT INTO {self.table_name} 
-                        (file_path, file_size, file_hash, file_mtime, last_checked, status_sync)
+                        (path, size, hash, mtime, last_checked, status_sync)
                         VALUES %s
                     """, inserts, template="(%s, %s, %s, %s, CURRENT_TIMESTAMP, 'added')", page_size=500)
                 
@@ -214,16 +214,16 @@ class Database:
                     cur.executemany(f"""
                         UPDATE {self.table_name} 
                         SET status_sync = %s, last_checked = CURRENT_TIMESTAMP 
-                        WHERE file_path = %s
+                        WHERE path = %s
                     """, status_updates)
                 
                 # Полное обновление (хэш + метаданные + статус)
                 if full_updates:
                     cur.executemany(f"""
                         UPDATE {self.table_name} 
-                        SET file_hash = %s, file_size = %s, file_mtime = %s, 
+                        SET hash = %s, size = %s, mtime = %s, 
                             status_sync = %s, last_checked = CURRENT_TIMESTAMP
-                        WHERE file_path = %s
+                        WHERE path = %s
                     """, full_updates)
                 
                 # === ОБРАБОТКА УДАЛЁННЫХ ФАЙЛОВ ===
@@ -239,7 +239,7 @@ class Database:
                         cur.execute(f"""
                             UPDATE {self.table_name} 
                             SET status_sync = 'deleted', last_checked = CURRENT_TIMESTAMP
-                            WHERE file_path = ANY(%s)
+                            WHERE path = ANY(%s)
                         """, (paths_to_delete,))
                         stats['deleted'] = cur.rowcount
         
@@ -249,12 +249,12 @@ class Database:
         """Получает все записи из files
         
         Returns:
-            list: [(file_path, file_hash, status_sync), ...]
+            list: [(path, hash, status_sync), ...]
         """
         with self.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(f"""
-                    SELECT file_path, file_hash, status_sync
+                    SELECT path, hash, status_sync
                     FROM {self.table_name}
                 """)
                 return cur.fetchall()
@@ -263,14 +263,14 @@ class Database:
         """Получает все уникальные файлы из chunks (группируя чанки)
         
         Returns:
-            list: [(file_hash, file_path, num_chunks), ...]
+            list: [(hash, path, num_chunks), ...]
         """
         with self.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT 
-                        metadata->>'file_hash' as file_hash,
-                        metadata->>'file_path' as file_path,
+                        metadata->>'file_hash' as hash,
+                        metadata->>'file_path' as path,
                         COUNT(*) as num_chunks
                     FROM chunks 
                     WHERE metadata->>'file_hash' IS NOT NULL
@@ -294,7 +294,7 @@ class Database:
         with self.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.executemany(
-                    f"UPDATE {self.table_name} SET status_sync = %s WHERE file_path = %s",
+                    f"UPDATE {self.table_name} SET status_sync = %s WHERE path = %s",
                     updates
                 )
                 return cur.rowcount
@@ -314,9 +314,9 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute(f"""
                     SELECT 
-                        file_path,
-                        file_hash,
-                        file_size,
+                        path,
+                        hash,
+                        size,
                         status_sync,
                         last_checked
                     FROM {self.table_name}
@@ -336,9 +336,9 @@ class Database:
                     return None
                 
                 return {
-                    'file_path': row[0],
-                    'file_hash': row[1],
-                    'file_size': row[2],
+                    'path': row[0],
+                    'hash': row[1],
+                    'size': row[2],
                     'status_sync': row[3],
                     'last_checked': row[4].isoformat() if row[4] else None
                 }
