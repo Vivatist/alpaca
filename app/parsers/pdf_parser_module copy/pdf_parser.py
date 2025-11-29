@@ -30,9 +30,8 @@ if TYPE_CHECKING:
 from .metadata_extractor import extract_pdf_metadata
 from .scan_detector import is_scanned_pdf
 from .ocr_processor import parse_pdf_with_ocr
-from .text_parser import parse_pdf_with_unstructured, parse_pdf_with_pymupdf, parse_pdf_with_markitdown
+from .text_parser import parse_pdf_with_markitdown
 from .fallback_parser import fallback_parse_pdf
-from .table_parser import parse_pdf_tables, CAMELOT_AVAILABLE, TABULA_AVAILABLE
 
 
 class PDFParser(BaseParser):
@@ -46,19 +45,17 @@ class PDFParser(BaseParser):
     4. Автоопределение типа PDF (текстовый vs отсканированный)
     """
     
-    def __init__(self, enable_ocr: bool = True, ocr_strategy: str = "auto", enable_table_parser: bool = True):
+    def __init__(self, enable_ocr: bool = True, ocr_strategy: str = "auto"):
         """
         Инициализация парсера
         
         Args:
             enable_ocr: Включить OCR для отсканированных страниц
             ocr_strategy: Стратегия OCR ('auto', 'hi_res', 'fast', 'ocr_only')
-            enable_table_parser: Включить специализированный парсер для таблиц (camelot/tabula)
         """
         super().__init__("pdf-parser")
         self.enable_ocr = enable_ocr
         self.ocr_strategy = ocr_strategy
-        self.enable_table_parser = enable_table_parser and (CAMELOT_AVAILABLE or TABULA_AVAILABLE)
     
     def parse(self, file: 'File') -> str:
         """
@@ -103,28 +100,13 @@ class PDFParser(BaseParser):
                     self.logger.warning("OCR produced little content, trying fallback")
                     markdown_content = fallback_parse_pdf(file_path)
             else:
-                # Текстовый PDF - приоритет Unstructured API (лучший результат)
-                self.logger.info("Processing as text-based PDF with Unstructured API")
-                markdown_content = parse_pdf_with_unstructured(file_path)
+                # Текстовый PDF - используем Markitdown
+                self.logger.info("Processing as text-based PDF with Markitdown")
+                markdown_content = parse_pdf_with_markitdown(file_path)
                 
-                # Если Unstructured не дал результата, пробуем специализированный парсер таблиц
-                if not markdown_content and self.enable_table_parser:
-                    self.logger.info("Unstructured failed, trying table parser")
-                    markdown_content = parse_pdf_tables(file_path, auto_rotate=True)
-                
-                # Fallback на MarkItDown (дефолтные настройки работают хорошо)
+                # Fallback если Markitdown не сработал
                 if not markdown_content:
-                    self.logger.info("Table parser failed, trying MarkItDown")
-                    markdown_content = parse_pdf_with_markitdown(file_path)
-                
-                # Fallback на PyMuPDF
-                if not markdown_content:
-                    self.logger.info("MarkItDown failed, trying PyMuPDF")
-                    markdown_content = parse_pdf_with_pymupdf(file_path)
-                
-                # Последний fallback на pypdf
-                if not markdown_content:
-                    self.logger.warning("All parsers failed, using pypdf fallback")
+                    self.logger.warning("Markitdown failed, using fallback parser")
                     markdown_content = fallback_parse_pdf(file_path)
                 
                 # Если текста мало и OCR включен - дополнительно запустим OCR
