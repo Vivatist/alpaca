@@ -4,6 +4,7 @@
 import pytest
 import os
 from app.parsers.word_parser_module.word_parser import WordParser
+from app.parsers.pptx_parser_module.pptx_parser import PowerPointParser
 from utils.file_manager import File
 
 
@@ -53,6 +54,28 @@ class TestParserWord:
         finally:
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
+
+
+class TestPowerPointParser:
+    """Тесты парсинга PPTX файлов"""
+
+    def test_parse_pptx_file(self, temp_pptx_file):
+        file = File(hash='pptx_hash_123', path=temp_pptx_file, status_sync='added')
+        parser = PowerPointParser()
+
+        result = parser.parse(file)
+
+        assert isinstance(result, str)
+        assert "Тестовая презентация" in result
+        assert "Колонка A" in result
+
+    def test_parse_nonexistent_pptx(self):
+        file = File(hash='pptx_missing', path='/nonexistent/file.pptx', status_sync='added')
+        parser = PowerPointParser()
+
+        result = parser.parse(file)
+
+        assert result == ""
     
     def test_parse_docx_with_multiple_paragraphs(self):
         """Тест парсинга DOCX с несколькими параграфами"""

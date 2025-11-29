@@ -20,11 +20,12 @@
 word_parser_module/
 ├── __init__.py                  # Публичный API модуля (21 строка)
 ├── word_parser.py               # Главный класс WordParser (203 строки) ⭐
-├── document_converter.py        # Конвертация .doc → .docx (68 строк)
 ├── image_converter.py           # Конвертация WMF/EMF → PNG (157 строк)
 ├── ocr_processor.py             # OCR обработка изображений (185 строк)
 ├── metadata_extractor.py        # Извлечение метаданных (65 строк)
 └── fallback_parser.py           # Альтернативный парсер (116 строк)
+
+Дополнительно общий для всех парсеров `document_converter.py` вынесен в `app/parsers/`.
 ```
 
 ## 📦 Модули
@@ -47,20 +48,21 @@ result = parser.parse(file_object)
 - `_parse_with_markitdown()` - парсинг через Markitdown
 - `_fallback_parse_internal()` - внутренний вызов fallback парсера
 
-### `document_converter.py` - Конвертация форматов
+### `document_converter.py` (общий модуль) - Конвертация форматов
 
 **68 строк**
 
-Конвертирует старые форматы Word в DOCX через LibreOffice.
+Расположен в `app/parsers/document_converter.py`. Используется и Word, и PowerPoint парсерами.
 
 ```python
-from app.parsers.word_parser_module.document_converter import convert_doc_to_docx
+from app.parsers.document_converter import convert_doc_to_docx
 
 docx_path = convert_doc_to_docx("/path/to/file.doc")
 ```
 
 **Функции:**
 - `convert_doc_to_docx(doc_path)` → `Optional[str]`
+- `convert_ppt_to_pptx(ppt_path)` → `Optional[str]`
 
 ### `image_converter.py` - Конвертация изображений
 
@@ -225,7 +227,7 @@ result = parser.parse(file_object)
 
 ```python
 # Конвертация .doc → .docx
-from app.parsers.word_parser_module.document_converter import convert_doc_to_docx
+from app.parsers.document_converter import convert_doc_to_docx
 docx_path = convert_doc_to_docx("/path/to/file.doc")
 
 # Извлечение изображений и OCR

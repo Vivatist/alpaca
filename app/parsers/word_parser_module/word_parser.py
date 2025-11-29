@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 from markitdown import MarkItDown  # type: ignore
 
 # Импорты из модулей
-from .document_converter import convert_doc_to_docx
+from ..document_converter import convert_doc_to_docx
 from .metadata_extractor import extract_word_metadata
 from .ocr_processor import extract_images_from_docx, process_images_with_ocr
 from .fallback_parser import fallback_parse

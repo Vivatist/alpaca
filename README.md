@@ -66,6 +66,13 @@ python -c "from app.settings import settings; print(settings.DATABASE_URL)"
 - **Admin Backend** - REST API для управления (Docker)
 - **Worker** - обработка очереди файлов (Python процесс)
 
+## Поддерживаемые форматы документов
+
+- **DOC/DOCX** — MarkItDown + python-docx + OCR изображений
+- **PDF** — PyMuPDF + локальный/Unstructured OCR
+- **PPT/PPTX** — python-pptx с конвертацией `.ppt -> .pptx` + Unstructured fallback
+- **TXT** — автоопределение кодировки и нормализация Markdown
+
 ## Запуск Worker
 
 ```bash

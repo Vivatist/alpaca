@@ -8,6 +8,7 @@ from threading import Semaphore
 
 from app.parsers.word_parser_module.word_parser import WordParser
 from app.parsers.pdf_parser_module.pdf_parser import PDFParser
+from app.parsers.pptx_parser_module.pptx_parser import PowerPointParser
 from app.chunkers.custom_chunker import chunking
 from app.embedders.custom_embedder import embedding
 from utils.logging import setup_logging, get_logger
@@ -24,6 +25,7 @@ db = PostgreDataBase(settings.DATABASE_URL)
 fm = FileManager(db)
 word_parser = WordParser(enable_ocr=True)  # Создаём экземпляр парсера
 pdf_parser = PDFParser()
+powerpoint_parser = PowerPointParser()
 FILEWATCHER_API = os.getenv("FILEWATCHER_API_URL", "http://localhost:8081")
 
 # Семафоры для ограничения конкурентности разных операций (из settings)
@@ -45,7 +47,7 @@ def ingest_pipeline(file: File) -> bool:
     
     try:
         # 1. Парсинг (с ограничением конкурентности)
-        if file.path.lower().endswith('.docx') or file.path.lower().endswith('.doc'):
+        if file.path.lower().endswith(('.docx', '.doc')):
             logger.info(f"📖 Parsing file: {file.path}")
             
             with PARSE_SEMAPHORE:
@@ -56,6 +58,12 @@ def ingest_pipeline(file: File) -> bool:
             
             with PARSE_SEMAPHORE:
                 file.raw_text = pdf_parser.parse(file)
+            logger.info(f"✅ Parsed: {len(file.raw_text) if file.raw_text else 0} chars")
+        elif file.path.lower().endswith(('.pptx', '.ppt')):
+            logger.info(f"📖 Parsing file: {file.path}")
+            
+            with PARSE_SEMAPHORE:
+                file.raw_text = powerpoint_parser.parse(file)
             logger.info(f"✅ Parsed: {len(file.raw_text) if file.raw_text else 0} chars")
         elif file.path.lower().endswith('.txt'):
             from app.parsers.txt_parser_module.txt_parser import TXTParser

@@ -1,9 +1,5 @@
-"""
-PPTX Parser для RAG системы ALPACA
+"""PowerPoint parser exports for ALPACA."""
 
-Парсер PowerPoint презентаций (.pptx) без OCR.
-"""
+from .pptx_parser import PowerPointParser, PptxParser
 
-from .pptx_parser import PptxParser
-
-__all__ = ['PptxParser']
+__all__ = ["PowerPointParser", "PptxParser"]

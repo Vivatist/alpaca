@@ -87,6 +87,44 @@ def temp_docx_file() -> Generator[str, None, None]:
 
 
 @pytest.fixture
+def temp_pptx_file() -> Generator[str, None, None]:
+    """Создание временного PPTX файла для тестов парсера презентаций"""
+    from pptx import Presentation
+    from pptx.util import Inches
+
+    with tempfile.NamedTemporaryFile(mode='wb', suffix='.pptx', prefix='test_', delete=False) as f:
+        prs = Presentation()
+
+        # Первый слайд с заголовком и списком
+        slide_layout = prs.slide_layouts[1]
+        slide = prs.slides.add_slide(slide_layout)
+        slide.shapes.title.text = "Тестовая презентация"
+        body_shape = slide.shapes.placeholders[1]
+        text_frame = body_shape.text_frame
+        text_frame.text = "Первый пункт"
+        paragraph = text_frame.add_paragraph()
+        paragraph.text = "Вложенный пункт"
+        paragraph.level = 1
+
+        # Второй слайд с таблицей
+        slide2 = prs.slides.add_slide(prs.slide_layouts[5])
+        slide2.shapes.title.text = "Таблица"
+        table = slide2.shapes.add_table(2, 2, Inches(0.5), Inches(1.5), Inches(9), Inches(2.5)).table
+        table.cell(0, 0).text = "Колонка A"
+        table.cell(0, 1).text = "Колонка B"
+        table.cell(1, 0).text = "Значение 1"
+        table.cell(1, 1).text = "Значение 2"
+
+        prs.save(f.name)
+        temp_path = f.name
+
+    yield temp_path
+
+    if os.path.exists(temp_path):
+        os.unlink(temp_path)
+
+
+@pytest.fixture
 def mock_file_info():
     """Создание мока информации о файле"""
     def _create_mock(file_path: str, file_hash: str, status: str = 'added'):
