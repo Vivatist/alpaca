@@ -161,3 +161,26 @@ class TestExcelParser:
 
         assert called["value"] is True
         assert isinstance(result, str)
+
+    def test_parse_xls_without_conversion(self, temp_xls_file, monkeypatch):
+        convert_calls = {"value": 0}
+
+        def fail_convert(path):
+            convert_calls["value"] += 1
+            return None
+
+        monkeypatch.setattr(
+            "app.parsers.excel_parser_module.excel_parser.convert_xls_to_xlsx",
+            fail_convert,
+        )
+
+        file = File(hash='xls_fallback_hash', path=str(temp_xls_file), status_sync='added')
+        parser = ExcelParser()
+
+        result = parser.parse(file)
+
+        assert convert_calls["value"] == 1
+        assert "Лист: План" in result
+        assert "Старт" in result
+        assert "2025-01-05" in result
+        assert "750000" in result

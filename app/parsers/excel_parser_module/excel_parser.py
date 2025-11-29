@@ -7,10 +7,15 @@ import os
 import shutil
 from datetime import date, datetime, time
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterable, List, Optional
+from typing import TYPE_CHECKING, Iterable, List, Optional, Any
 
 from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
+
+try:  # xlrd нужен только для наследия .xls, поэтому импортируем лениво
+    import xlrd  # type: ignore
+except Exception:  # pragma: no cover
+    xlrd = None  # type: ignore
 
 from ..base_parser import BaseParser
 from ..document_converter import convert_xls_to_xlsx
@@ -40,8 +45,10 @@ class ExcelParser(BaseParser):
             if suffix == ".xls":
                 converted = convert_xls_to_xlsx(file_path)
                 if not converted:
-                    self.logger.error("Failed to convert legacy .xls file")
-                    return ""
+                    self.logger.warning(
+                        "LibreOffice conversion failed, falling back to xlrd for .xls parsing"
+                    )
+                    return self._parse_xls_with_xlrd(file_path)
                 working_path = converted
                 cleanup_dir = Path(converted).parent
                 self.logger.info("Converted legacy .xls to .xlsx for parsing")
@@ -76,7 +83,9 @@ class ExcelParser(BaseParser):
             [self._format_cell(value) for value in row]
             for row in sheet.iter_rows(values_only=True)
         ]
+        return self._rows_to_markdown(rows)
 
+    def _rows_to_markdown(self, rows: List[List[str]]) -> str:
         rows = [row for row in rows if any(cell for cell in row)]
         if not rows:
             return ""
@@ -168,3 +177,65 @@ class ExcelParser(BaseParser):
         if isinstance(value, float):
             return ("%.6f" % value).rstrip("0").rstrip(".")
         return str(value).strip()
+
+    def _parse_xls_with_xlrd(self, file_path: str) -> str:
+        if xlrd is None:  # pragma: no cover
+            self.logger.error("xlrd is not installed, cannot parse legacy .xls file")
+            return ""
+
+        try:
+            workbook = xlrd.open_workbook(file_path, formatting_info=False)
+        except Exception as exc:
+            self.logger.error(f"Failed to open .xls with xlrd | file={file_path} error={exc}")
+            return ""
+
+        try:
+            sheet_blocks: List[str] = []
+            for sheet in workbook.sheets():
+                rows: List[List[str]] = []
+                for row_idx in range(sheet.nrows):
+                    row_values: List[str] = []
+                    for col_idx in range(sheet.ncols):
+                        cell_value = sheet.cell_value(row_idx, col_idx)
+                        cell_type = sheet.cell_type(row_idx, col_idx)
+                        row_values.append(
+                            self._format_xlrd_cell(cell_value, cell_type, workbook)
+                        )
+                    rows.append(row_values)
+
+                sheet_md = self._rows_to_markdown(rows)
+                if sheet_md:
+                    sheet_blocks.append(f"## Лист: {sheet.name or 'Sheet'}\n\n{sheet_md}")
+
+            result = "\n\n---\n\n".join(sheet_blocks).strip()
+            self.logger.info(
+                f"Excel parsing via xlrd complete | sheets={len(sheet_blocks)} length={len(result)}"
+            )
+            return result
+        finally:
+            try:
+                workbook.release_resources()
+            except Exception:  # pragma: no cover
+                pass
+
+    def _format_xlrd_cell(self, value: object, cell_type: int, workbook: Any) -> str:
+        if xlrd is None:
+            return self._format_cell(value)
+
+        if cell_type == xlrd.XL_CELL_EMPTY:
+            return ""
+        if cell_type == xlrd.XL_CELL_BOOLEAN:
+            return "TRUE" if bool(value) else "FALSE"
+        if cell_type == xlrd.XL_CELL_ERROR:
+            return "#ERROR"
+        if cell_type == xlrd.XL_CELL_DATE:
+            try:
+                y, m, d, hh, mm, ss = xlrd.xldate_as_tuple(value, workbook.datemode)
+                if (y, m, d) == (0, 0, 0):
+                    return self._format_cell(time(hh, mm, ss))
+                if (hh, mm, ss) == (0, 0, 0):
+                    return self._format_cell(date(y, m, d))
+                return self._format_cell(datetime(y, m, d, hh, mm, ss))
+            except Exception:
+                return self._format_cell(value)
+        return self._format_cell(value)

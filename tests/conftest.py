@@ -157,6 +157,44 @@ def temp_xlsx_file() -> Generator[str, None, None]:
 
 
 @pytest.fixture
+def temp_xls_file() -> Generator[str, None, None]:
+    """Создание временного XLS файла для тестов наследия"""
+    import xlwt
+
+    fd, temp_path = tempfile.mkstemp(suffix='.xls', prefix='test_legacy_')
+    os.close(fd)
+
+    try:
+        wb = xlwt.Workbook()
+        sheet = wb.add_sheet("План")
+
+        date_style = xlwt.easyxf(num_format_str='YYYY-MM-DD')
+        datetime_style = xlwt.easyxf(num_format_str='YYYY-MM-DD HH:MM:SS')
+
+        sheet.write(0, 0, "Этап")
+        sheet.write(0, 1, "Дата")
+        sheet.write(0, 2, "Сумма")
+        sheet.write(1, 0, "Старт")
+        sheet.write(1, 1, datetime(2025, 1, 5), date_style)
+        sheet.write(1, 2, 750000.0)
+        sheet.write(2, 0, "Подготовка")
+        sheet.write(2, 1, datetime(2025, 1, 7, 14, 30), datetime_style)
+        sheet.write(2, 2, 125000.5)
+
+        sheet2 = wb.add_sheet("Раскладка")
+        sheet2.write(0, 0, "Категория")
+        sheet2.write(0, 1, "Количество")
+        sheet2.write(1, 0, "Блюда")
+        sheet2.write(1, 1, 12)
+
+        wb.save(temp_path)
+        yield temp_path
+    finally:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+
+@pytest.fixture
 def mock_file_info():
     """Создание мока информации о файле"""
     def _create_mock(file_path: str, file_hash: str, status: str = 'added'):
