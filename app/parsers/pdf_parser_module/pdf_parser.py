@@ -7,6 +7,7 @@
 """
 
 import os
+import re
 from typing import TYPE_CHECKING
 
 from ..base_parser import BaseParser
@@ -108,29 +109,42 @@ class PDFParser(BaseParser):
     def _parse_text(self, file_path: str) -> str:
         self.logger.debug("Using text parsing strategy")
 
+        best_candidate = ""
+
         text = self._parse_with_unstructured(file_path)
-        if text and len(text) > 100:
-            return text
+        if text:
+            if self._is_text_quality_ok(text):
+                return text
+            best_candidate = text
 
         text = self._parse_with_markitdown(file_path)
-        if text and len(text) > 100:
-            return text
+        if text:
+            if self._is_text_quality_ok(text):
+                return text
+            if not best_candidate:
+                best_candidate = text
 
         text = self._parse_with_pymupdf(file_path)
         if text:
-            return text
+            if self._is_text_quality_ok(text):
+                return text
+            if not best_candidate:
+                best_candidate = text
 
-        return ""
+        return best_candidate
 
     def _parse_scanned(self, file_path: str) -> str:
         self.logger.debug("Using OCR strategy")
 
-        text = self._parse_with_tesseract(file_path)
-        if text:
-            return text
+        ocr_text = self._parse_with_tesseract(file_path)
+        if ocr_text and self._is_text_quality_ok(ocr_text):
+            return ocr_text
 
         text = self._parse_with_unstructured(file_path, strategy='hi_res')
-        return text if text else ""
+        if text and self._is_text_quality_ok(text):
+            return text
+
+        return text or ocr_text or ""
 
     def _parse_hybrid(self, file_path: str) -> str:
         self.logger.debug("Using hybrid parsing strategy")
@@ -232,7 +246,11 @@ class PDFParser(BaseParser):
 
         for idx, img in enumerate(images, start=1):
             try:
-                page_text = pytesseract.image_to_string(img, lang='rus', config='--psm 3').strip()
+                page_text = pytesseract.image_to_string(
+                    img,
+                    lang='rus+eng',
+                    config='--psm 6'
+                ).strip()
             except Exception as e:
                 self.logger.debug(f"Tesseract failed on page {idx} | error={e}")
                 continue
@@ -247,6 +265,25 @@ class PDFParser(BaseParser):
             text_parts.append(page_text)
 
         return '\n\n'.join(text_parts)
+
+    @staticmethod
+    def _is_text_quality_ok(text: str) -> bool:
+        if not text:
+            return False
+
+        cleaned = text.strip()
+        if len(cleaned) < 400:
+            return False
+
+        tokens = [token for token in re.split(r"\s+", cleaned) if token]
+        if len(tokens) < 40:
+            return False
+
+        short_tokens = sum(1 for token in tokens if len(token) == 1)
+        if short_tokens / len(tokens) > 0.35:
+            return False
+
+        return True
 
     @staticmethod
     def _calc_russian_ratio(text: str) -> float:
