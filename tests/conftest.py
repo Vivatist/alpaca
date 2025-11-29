@@ -6,6 +6,7 @@ import tempfile
 import pytest
 import psycopg2
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Generator
 
@@ -116,6 +117,37 @@ def temp_pptx_file() -> Generator[str, None, None]:
         table.cell(1, 1).text = "Значение 2"
 
         prs.save(f.name)
+        temp_path = f.name
+
+    yield temp_path
+
+    if os.path.exists(temp_path):
+        os.unlink(temp_path)
+
+
+@pytest.fixture
+def temp_xlsx_file() -> Generator[str, None, None]:
+    """Создание временного XLSX файла для тестов парсера Excel"""
+    from openpyxl import Workbook
+
+    with tempfile.NamedTemporaryFile(mode='wb', suffix='.xlsx', prefix='test_', delete=False) as f:
+        wb = Workbook()
+
+        sheet = wb.active
+        sheet.title = "Сводка"
+        sheet.append(["Раздел", "Значение", "Комментарий"])
+        sheet.append(["Доход", 1250000.75, "рост 12%"])
+        sheet.append(["Расход", 842300.10, "снижение 3%"])
+        sheet.append(["План", None, "утвержден 2025-11-01"])
+
+        sheet2 = wb.create_sheet("Детализация")
+        sheet2['A1'] = "Код"
+        sheet2['B1'] = "Описание"
+        sheet2['C1'] = "Дата"
+        sheet2.append([101, "Бурение", datetime(2025, 11, 1)])
+        sheet2.append([205, "Логистика", datetime(2025, 11, 5)])
+
+        wb.save(f.name)
         temp_path = f.name
 
     yield temp_path

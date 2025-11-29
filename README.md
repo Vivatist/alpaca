@@ -71,6 +71,7 @@ python -c "from app.settings import settings; print(settings.DATABASE_URL)"
 - **DOC/DOCX** — MarkItDown + python-docx + OCR изображений
 - **PDF** — PyMuPDF + локальный/Unstructured OCR
 - **PPT/PPTX** — python-pptx с конвертацией `.ppt -> .pptx` + Unstructured fallback
+- **XLS/XLSX** — openpyxl с автораспознаванием шапок, `.xls -> .xlsx` через LibreOffice
 - **TXT** — автоопределение кодировки и нормализация Markdown
 
 ## Запуск Worker

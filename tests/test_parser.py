@@ -1,10 +1,14 @@
 """
-Тесты для модуля парсинга (parser_word)
+Тесты для модулей парсинга документов
 """
-import pytest
 import os
+import shutil
+
+import pytest
+
 from app.parsers.word_parser_module.word_parser import WordParser
 from app.parsers.pptx_parser_module.pptx_parser import PowerPointParser
+from app.parsers.excel_parser_module.excel_parser import ExcelParser
 from utils.file_manager import File
 
 
@@ -108,3 +112,52 @@ class TestPowerPointParser:
         finally:
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
+
+
+class TestExcelParser:
+    """Тесты парсинга Excel файлов"""
+
+    def test_parse_xlsx_file(self, temp_xlsx_file):
+        file = File(hash='xlsx_hash', path=temp_xlsx_file, status_sync='added')
+        parser = ExcelParser(max_rows_per_table=50)
+
+        result = parser.parse(file)
+
+        assert isinstance(result, str)
+        assert "Лист: Сводка" in result
+        assert "Доход" in result
+        assert "1250000.75" in result or "1250000.75".rstrip("0") in result
+        assert "Лист: Детализация" in result
+        assert "Бурение" in result
+
+    def test_parse_nonexistent_xlsx(self):
+        file = File(hash='missing_xlsx', path='/tmp/absent.xlsx', status_sync='added')
+        parser = ExcelParser()
+
+        result = parser.parse(file)
+
+        assert result == ""
+
+    def test_parse_xls_triggers_conversion(self, temp_xlsx_file, tmp_path, monkeypatch):
+        legacy_path = tmp_path / "legacy.xls"
+        shutil.copy(temp_xlsx_file, legacy_path)
+
+        called = {"value": False}
+
+        def fake_convert(path):
+            assert str(path) == str(legacy_path)
+            called["value"] = True
+            return temp_xlsx_file
+
+        monkeypatch.setattr(
+            "app.parsers.excel_parser_module.excel_parser.convert_xls_to_xlsx",
+            fake_convert,
+        )
+
+        file = File(hash='xls_hash', path=str(legacy_path), status_sync='added')
+        parser = ExcelParser()
+
+        result = parser.parse(file)
+
+        assert called["value"] is True
+        assert isinstance(result, str)

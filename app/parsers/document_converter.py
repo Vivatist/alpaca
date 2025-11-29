@@ -31,6 +31,16 @@ def convert_ppt_to_pptx(ppt_path: str) -> Optional[str]:
     )
 
 
+def convert_xls_to_xlsx(xls_path: str) -> Optional[str]:
+    """Конвертация .xls в .xlsx через LibreOffice headless"""
+    return _convert_with_libreoffice(
+        source_path=xls_path,
+        target_ext="xlsx",
+        temp_prefix="alpaca_xls_convert_",
+        log_label=".xls -> .xlsx",
+    )
+
+
 def _convert_with_libreoffice(
     source_path: str,
     target_ext: str,
