@@ -6,15 +6,22 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 MONITORED_DIR=$(cd "$PROJECT_DIR" && source venv/bin/activate && python -c "from settings import settings; print(settings.MONITORED_PATH)")
+TMP_MD_DIR=$(cd "$PROJECT_DIR" && source venv/bin/activate && python - <<'PY'
+from settings import settings
+
+# tmp_md путь пока не вынесен в настройки, поэтому читаем атрибут с запасным значением
+print(getattr(settings, 'TMP_MD_PATH', '/home/alpaca/tmp_md'))
+PY
+)
 
 # Проверка существования директории
 if [ ! -d "$MONITORED_DIR" ]; then
     echo "⚠️  Директория не найдена:"
     echo "$MONITORED_DIR"
     echo ""
-    read -p "Создать директорию? (yes/no): " create_dir
+    read -p "Создать директорию? (y/n): " create_dir
     
-    if [ "$create_dir" = "yes" ]; then
+    if [ "$create_dir" = "y" ]; then
         mkdir -p "$MONITORED_DIR"
         if [ $? -eq 0 ]; then
             echo "✓ Директория создана: $MONITORED_DIR"
@@ -43,9 +50,9 @@ echo "Найдено поддиректорий: $DIR_COUNT"
 echo ""
 
 # Запрос подтверждения
-read -p "Удалить все содержимое? (yes/no): " confirm
+read -p "Удалить все содержимое? (y/n): " confirm
 
-if [ "$confirm" != "yes" ]; then
+if [ "$confirm" != "y" ]; then
     echo "Отменено."
     exit 0
 fi
@@ -63,6 +70,21 @@ if [ $? -eq 0 ]; then
     echo ""
     echo "Текущее содержимое:"
     ls -la "$MONITORED_DIR" | tail -5
+
+    if [ -d "$TMP_MD_DIR" ]; then
+        echo ""
+        echo "Дополнительно очищаем tmp_md: $TMP_MD_DIR"
+        rm -rf "$TMP_MD_DIR"/*
+        if [ $? -eq 0 ]; then
+            echo "✓ tmp_md очищена"
+        else
+            echo "✗ Ошибка при очистке tmp_md"
+            exit 1
+        fi
+    else
+        echo ""
+        echo "⚠️  Директория tmp_md не найдена: $TMP_MD_DIR"
+    fi
 else
     echo ""
     echo "✗ Ошибка при удалении"
