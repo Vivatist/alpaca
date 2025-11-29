@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 from datetime import date, datetime, time
 from pathlib import Path
@@ -176,7 +177,14 @@ class ExcelParser(BaseParser):
             return value.strftime("%H:%M:%S")
         if isinstance(value, float):
             return ("%.6f" % value).rstrip("0").rstrip(".")
-        return str(value).strip()
+        return self._normalize_cell_text(str(value))
+
+    def _normalize_cell_text(self, text: str) -> str:
+        if not text:
+            return ""
+        collapsed = re.sub(r"[\r\n]+", " ", text)
+        collapsed = re.sub(r"\s+", " ", collapsed)
+        return collapsed.strip()
 
     def _parse_xls_with_xlrd(self, file_path: str) -> str:
         if xlrd is None:  # pragma: no cover

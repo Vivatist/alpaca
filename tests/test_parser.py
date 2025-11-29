@@ -162,6 +162,33 @@ class TestExcelParser:
         assert called["value"] is True
         assert isinstance(result, str)
 
+    def test_multiline_cells_render_single_line(self):
+        from openpyxl import Workbook
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp:
+            workbook_path = Path(tmp.name)
+
+        try:
+            wb = Workbook()
+            sheet = wb.active
+            sheet.append(["Колонка A", "Колонка B"])
+            sheet.append(["Строка\n1", "Text\nwith\nlinebreaks"])
+            wb.save(workbook_path)
+
+            file = File(hash='multi_hash', path=str(workbook_path), status_sync='added')
+            parser = ExcelParser()
+
+            result = parser.parse(file)
+
+            assert "Строка 1" in result
+            assert "Text with linebreaks" in result
+            assert "Строка\n1" not in result
+        finally:
+            if workbook_path.exists():
+                workbook_path.unlink()
+
     def test_parse_xls_without_conversion(self, temp_xls_file, monkeypatch):
         convert_calls = {"value": 0}
 
