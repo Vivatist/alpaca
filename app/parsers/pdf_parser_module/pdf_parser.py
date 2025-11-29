@@ -19,29 +19,10 @@ if TYPE_CHECKING:  # pragma: no cover - только для type checkers
     from utils.file_manager import File
 
 
-try:
-    import fitz  # PyMuPDF
-    PYMUPDF_AVAILABLE = True
-except ImportError:  # pragma: no cover - зависит от окружения
-    PYMUPDF_AVAILABLE = False
-
-try:
-    from markitdown import MarkItDown
-    MARKITDOWN_AVAILABLE = True
-except ImportError:  # pragma: no cover
-    MARKITDOWN_AVAILABLE = False
-
-try:
-    import pytesseract
-    PYTESSERACT_AVAILABLE = True
-except ImportError:  # pragma: no cover
-    PYTESSERACT_AVAILABLE = False
-
-try:
-    from pdf2image import convert_from_path
-    PDF2IMAGE_AVAILABLE = True
-except ImportError:  # pragma: no cover
-    PDF2IMAGE_AVAILABLE = False
+import fitz  # PyMuPDF
+from markitdown import MarkItDown
+import pytesseract
+from pdf2image import convert_from_path
 
 import requests
 
@@ -103,9 +84,6 @@ class PDFParser(BaseParser):
             return ""
 
     def _detect_document_type(self, file_path: str) -> tuple[str, int]:
-        if not PYMUPDF_AVAILABLE:
-            return 'hybrid', 50
-
         try:
             doc = fitz.open(file_path)
             page = doc[0]
@@ -134,30 +112,22 @@ class PDFParser(BaseParser):
         if text and len(text) > 100:
             return text
 
-        if MARKITDOWN_AVAILABLE:
-            text = self._parse_with_markitdown(file_path)
-            if text and len(text) > 100:
-                return text
+        text = self._parse_with_markitdown(file_path)
+        if text and len(text) > 100:
+            return text
 
-        if PYMUPDF_AVAILABLE:
-            text = self._parse_with_pymupdf(file_path)
-            if text:
-                return text
+        text = self._parse_with_pymupdf(file_path)
+        if text:
+            return text
 
         return ""
 
     def _parse_scanned(self, file_path: str) -> str:
         self.logger.debug("Using OCR strategy")
 
-        if PYTESSERACT_AVAILABLE and PDF2IMAGE_AVAILABLE:
-            text = self._parse_with_tesseract(file_path)
-            if text:
-                return text
-        else:
-            if not PYTESSERACT_AVAILABLE:
-                self.logger.debug("pytesseract not available, skipping local OCR")
-            if not PDF2IMAGE_AVAILABLE:
-                self.logger.debug("pdf2image not available, skipping local OCR")
+        text = self._parse_with_tesseract(file_path)
+        if text:
+            return text
 
         text = self._parse_with_unstructured(file_path, strategy='hi_res')
         return text if text else ""
@@ -247,9 +217,6 @@ class PDFParser(BaseParser):
             return ""
 
     def _parse_with_tesseract(self, file_path: str) -> str:
-        if not (PYTESSERACT_AVAILABLE and PDF2IMAGE_AVAILABLE):
-            return ""
-
         try:
             images = convert_from_path(file_path, dpi=220)
         except Exception as e:
