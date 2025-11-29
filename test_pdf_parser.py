@@ -8,7 +8,7 @@ from pathlib import Path
 # Добавляем путь к проекту
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app.parsers.pdf_parser_optimized import OptimizedPDFParser
+from app.parsers.pdf_parser_module.pdf_parser import PDFParser
 from utils.file_manager import File
 from utils.logging import setup_logging
 
@@ -21,7 +21,7 @@ test_file = File(
     status_sync="added"
 )
 
-parser = OptimizedPDFParser()
+parser = PDFParser()
 result = parser.parse(test_file)
 
 print("="*60)

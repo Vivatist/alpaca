@@ -7,7 +7,7 @@ from typing import Dict, Any
 from threading import Semaphore
 
 from app.parsers.word_parser_module.word_parser import WordParser
-from app.parsers.pdf_parser_optimized import OptimizedPDFParser
+from app.parsers.pdf_parser_module.pdf_parser import PDFParser
 from app.chunkers.custom_chunker import chunking
 from app.embedders.custom_embedder import embedding
 from utils.logging import setup_logging, get_logger
@@ -23,7 +23,7 @@ logger = get_logger("alpaca.worker")
 db = PostgreDataBase(settings.DATABASE_URL)
 fm = FileManager(db)
 word_parser = WordParser(enable_ocr=True)  # Создаём экземпляр парсера
-pdf_parser = OptimizedPDFParser()
+pdf_parser = PDFParser()
 FILEWATCHER_API = os.getenv("FILEWATCHER_API_URL", "http://localhost:8081")
 
 # Семафоры для ограничения конкурентности разных операций (из settings)
