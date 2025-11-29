@@ -3,13 +3,15 @@ Worker - бизнес-логика обработки файлов
 Содержит функции парсинга, чанкинга, эмбеддинга и обработки файлов
 """
 import os
-from typing import Dict, Any
+from typing import Any, Callable, Dict, Optional, Tuple
 from threading import Semaphore
 
+from app.parsers.base_parser import BaseParser
 from app.parsers.word_parser_module.word_parser import WordParser
 from app.parsers.pdf_parser_module.pdf_parser import PDFParser
 from app.parsers.pptx_parser_module.pptx_parser import PowerPointParser
 from app.parsers.excel_parser_module.excel_parser import ExcelParser
+from app.parsers.txt_parser_module.txt_parser import TXTParser
 from app.chunkers.custom_chunker import chunking
 from app.embedders.custom_embedder import embedding
 from utils.logging import setup_logging, get_logger
@@ -28,12 +30,35 @@ word_parser = WordParser(enable_ocr=True)  # Создаём экземпляр �
 pdf_parser = PDFParser()
 powerpoint_parser = PowerPointParser()
 excel_parser = ExcelParser()
+txt_parser = TXTParser()
 FILEWATCHER_API = os.getenv("FILEWATCHER_API_URL", "http://localhost:8081")
 
 # Семафоры для ограничения конкурентности разных операций (из settings)
 PARSE_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_PARSING)
 EMBED_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_EMBEDDING)
 LLM_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_LLM)
+
+
+def _reuse(parser: BaseParser) -> Callable[[], BaseParser]:
+    return lambda parser=parser: parser
+
+
+PARSER_REGISTRY: Tuple[Tuple[Tuple[str, ...], Callable[[], BaseParser]], ...] = (
+    ((".docx", ".doc"), _reuse(word_parser)),
+    ((".pdf",), _reuse(pdf_parser)),
+    ((".pptx", ".ppt"), _reuse(powerpoint_parser)),
+    ((".xlsx", ".xls"), _reuse(excel_parser)),
+    ((".txt",), _reuse(txt_parser)),
+)
+
+
+def get_parser_for_file(file_path: str) -> Optional[BaseParser]:
+    """Simple Factory: вернуть подходящий парсер по расширению."""
+    lower_path = file_path.lower()
+    for extensions, factory in PARSER_REGISTRY:
+        if lower_path.endswith(extensions):
+            return factory()
+    return None
 
 
 def ingest_pipeline(file: File) -> bool:
@@ -48,43 +73,16 @@ def ingest_pipeline(file: File) -> bool:
     logger.info(f"🍎 Start ingest pipeline: {file.path} (hash: {file.hash[:8]}...)")
     
     try:
-        # 1. Парсинг (с ограничением конкурентности)
-        if file.path.lower().endswith(('.docx', '.doc')):
-            logger.info(f"📖 Parsing file: {file.path}")
-            
-            with PARSE_SEMAPHORE:
-                file.raw_text = word_parser.parse(file)
-            logger.info(f"✅ Parsed: {len(file.raw_text) if file.raw_text else 0} chars")
-        elif file.path.lower().endswith('.pdf'):
-            logger.info(f"📖 Parsing file: {file.path}")
-            
-            with PARSE_SEMAPHORE:
-                file.raw_text = pdf_parser.parse(file)
-            logger.info(f"✅ Parsed: {len(file.raw_text) if file.raw_text else 0} chars")
-        elif file.path.lower().endswith(('.pptx', '.ppt')):
-            logger.info(f"📖 Parsing file: {file.path}")
-            
-            with PARSE_SEMAPHORE:
-                file.raw_text = powerpoint_parser.parse(file)
-            logger.info(f"✅ Parsed: {len(file.raw_text) if file.raw_text else 0} chars")
-        elif file.path.lower().endswith(('.xlsx', '.xls')):
-            logger.info(f"📖 Parsing file: {file.path}")
-            
-            with PARSE_SEMAPHORE:
-                file.raw_text = excel_parser.parse(file)
-            logger.info(f"✅ Parsed: {len(file.raw_text) if file.raw_text else 0} chars")
-        elif file.path.lower().endswith('.txt'):
-            from app.parsers.txt_parser_module.txt_parser import TXTParser
-            txt_parser = TXTParser()
-            logger.info(f"📖 Parsing file: {file.path}")
-            
-            with PARSE_SEMAPHORE:
-                file.raw_text = txt_parser.parse(file)
-            logger.info(f"✅ Parsed: {len(file.raw_text) if file.raw_text else 0} chars")
-        else:
+        parser = get_parser_for_file(file.path)
+        if parser is None:
             logger.error(f"Unsupported file type: {file.path}")
             fm.mark_as_error(file)
             return False
+
+        with PARSE_SEMAPHORE:
+            file.raw_text = parser.parse(file)
+
+        logger.info(f"✅ Parsed: {len(file.raw_text) if file.raw_text else 0} chars")
 
         if not file.raw_text or not file.raw_text.strip():
             logger.error(f"Empty parsed text for {file.path}")
