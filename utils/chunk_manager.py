@@ -42,9 +42,28 @@ class ChunkManager:
         Returns:
             Количество удалённых чанков
         """
-        deleted_count = self.db.delete_chunks_by_hash(file.hash)
-        logger.debug(f"Чанки удалены | path={file.path} count={deleted_count}")
-        return deleted_count
+        deleted_by_hash = self.db.delete_chunks_by_hash(file.hash)
+        deleted_total = deleted_by_hash
+
+        # Дополнительная гарантия: удаляем все чанки по пути (важно для updated файлов с новым хэшем)
+        deleted_by_path = self.db.delete_chunks_by_path(file.path)
+        if deleted_by_path:
+            deleted_total += deleted_by_path
+            logger.debug(
+                "Удалены остаточные чанки по пути | path=%s hash=%s fallback=%s",
+                file.path,
+                file.hash,
+                deleted_by_path,
+            )
+        else:
+            logger.debug(
+                "Чанки удалены по хэшу | path=%s hash=%s count=%s",
+                file.path,
+                file.hash,
+                deleted_by_hash,
+            )
+
+        return deleted_total
     
     def get_chunks_count(self, file: 'File') -> int:
         """

@@ -95,7 +95,7 @@ class Worker:
                         time.sleep(poll_interval)
                     else:
                         # Есть активные задачи, проверяем чаще
-                        time.sleep(0.5)
+                        time.sleep(0.2)
                         
                 except KeyboardInterrupt:
                     logger.info("Shutting down worker...")
