@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
@@ -18,6 +18,7 @@ COPY services/admin_backend/src /app
 # Копирование доменной библиотеки
 COPY alpaca /opt/alpaca/alpaca
 COPY utils /opt/alpaca/utils
+COPY settings.py /opt/alpaca/settings.py
 ENV PYTHONPATH="/opt/alpaca:${PYTHONPATH}"
 
 # Запуск FastAPI с uvicorn
