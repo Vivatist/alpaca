@@ -1,4 +1,17 @@
-"""Database module - читает статистику через общий Postgres-репозиторий."""
+"""Database module для Admin Backend - мониторинг и статистика.
+
+Этот модуль предоставляет специфичные для мониторинга методы, которые не входят
+в domain/repository контракт. Admin Backend - это отдельный микросервис с собственными
+нуждами (дашборды, статистика, health checks), поэтому здесь допустима обёртка
+над PostgresFileRepository.
+
+Почему не используем PostgresFileRepository напрямую:
+1. FileRepository (domain) - контракт для Worker'а (CRUD операций)
+2. Admin Backend нужна статистика, агрегации, health checks
+3. Не стоит засорять domain-контракт методами мониторинга
+
+Этот слой абстракции оправдан, т.к. Admin Backend - независимый микросервис.
+"""
 
 from contextlib import contextmanager
 from typing import Dict, List, Optional, Any
@@ -8,7 +21,11 @@ from core.infrastructure.database.postgres import PostgresFileRepository
 
 
 class Database:
-    """Тонкая обёртка над PostgresFileRepository для нужд Admin Backend."""
+    """Фасад для мониторинговых запросов Admin Backend.
+    
+    Использует PostgresFileRepository для подключения к БД,
+    но предоставляет специфичные для dashboard/monitoring методы.
+    """
 
     def __init__(self):
         self.repo = PostgresFileRepository(database_url=os.getenv("DATABASE_URL"))

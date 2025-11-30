@@ -1,10 +1,29 @@
 # Подробное описание архитектуры ALPACA
 
-Этот документ — полное руководство по архитектуре системы ALPACA для разработчиков. Мы объясним каждый слой, каждый компонент, покажем примеры кода, расскажем про принятые решения и альтернативы. К концу вы поймёте как работает приложение, как его расширять и поддерживать.
+> **⚠️ УСТАРЕЛО**: Этот документ описывает старую архитектуру с domain facades и FileService.  
+> **Актуальное описание:** См. `ARCHITECTURE_SIMPLE.md` (упрощённая архитектура после рефакторинга января 2025)
+
+Этот документ сохранён для исторической справки и понимания эволюции проекта. Если вам нужно понять **текущую** архитектуру — читайте `ARCHITECTURE_SIMPLE.md`.
 
 ---
 
-## Содержание
+## ⚠️ Что изменилось (январь 2025)
+
+После реализации Clean Architecture выполнено **радикальное упрощение**:
+
+- ❌ **Удалены domain facades:** `set_chunker()`, `get_embedder()`, `configure_parser_registry()`
+- ❌ **Удалён FileService:** логика перенесена в IngestDocument и repository
+- ❌ **Упрощён bootstrap:** 8 функций → 1 функция (230 строк → 60 строк)
+- ❌ **Упрощён WorkerApplication:** 10 полей → 2 поля (worker, repository)
+
+**См. документацию:**
+- `ARCHITECTURE_SIMPLE.md` — актуальная архитектура
+- `REFACTORING_REPORT.md` — детальный отчёт об упрощении
+- `architecture_roadmap.md` — история развития (этапы 1-6)
+
+---
+
+## Содержание (старая архитектура)
 
 1. [Общая картина](#1-общая-картина)
 2. [Внешние сервисы](#2-внешние-сервисы)
@@ -12,7 +31,7 @@
 4. [Слой Application (Приложение)](#4-слой-application-приложение)
 5. [Слой Infrastructure (Инфраструктура)](#5-слой-infrastructure-инфраструктура)
 6. [Utils (Утилиты)](#6-utils-утилиты)
-7. [Bootstrap и Dependency Injection](#7-bootstrap-и-dependency-injection)
+7. [Bootstrap и Dependency Injection](#7-bootstrap-и-dependency-injection) ⚠️ УСТАРЕЛО
 8. [Процесс обработки файла](#8-процесс-обработки-файла)
 9. [Как добавить новую фичу](#9-как-добавить-новую-фичу)
 10. [Почему именно так](#10-почему-именно-так)
@@ -241,46 +260,52 @@ class Database(Protocol):
 - Легко подменить в тестах
 - Соответствует принципу Dependency Inversion
 
-### 3.3 Фасады обработки документов
+### 3.3 Фасады обработки документов ⚠️ УСТАРЕЛО
 
-**Местоположение:** `core/domain/document_processing/`
+> **В текущей версии:** Domain facades удалены. Теперь используются только type aliases.
 
-Домен предоставляет точки расширения:
+**Местоположение (старая версия):** `core/domain/document_processing/`
+
+~~Домен предоставлял точки расширения через глобальные функции~~:
 
 ```python
-# Парсеры
+# ❌ УДАЛЕНО в январе 2025
 configure_parser_registry(registry: ParserRegistry) -> None
 get_parser_for_path(file_path: str) -> Optional[ParserProtocol]
-
-# Чанкер
 set_chunker(chunker: Chunker) -> None
-chunk_document(file: FileSnapshot) -> List[str]
-
-# Эмбеддер
 set_embedder(embedder: Embedder) -> None
-embed_chunks(db, file, chunks) -> int
 ```
 
-**Важно:** Домен только **объявляет** эти функции. Реализации приходят снаружи через bootstrap.
+**Текущая версия (упрощённая):**
 
-**Пример использования:**
+Domain экспортирует только **type aliases**:
 
 ```python
-# В коде домена/application
-from core.domain.document_processing import get_parser_for_path
+# core/domain/document_processing/chunkers/__init__.py
+Chunker = Callable[[FileSnapshot], List[str]]
 
-parser = get_parser_for_path("document.docx")  # Вернёт WordParser
-text = parser.parse(file)
+# core/domain/document_processing/embedders/__init__.py
+Embedder = Callable[[FileRepository, FileSnapshot, List[str]], int]
 ```
 
-**Почему такой подход?**
-- Домен остаётся чистым (без импортов реализаций)
-- Легко менять реализации (через bootstrap)
-- Тестируемость (можно подменить фейковыми)
+Зависимости теперь передаются через **конструкторы** (Dependency Injection):
 
-**Альтернативы:**
-- Прямой импорт классов (жёсткая связанность)
-- Service Locator (антипаттерн, скрытые зависимости)
+```python
+@dataclass
+class IngestDocument:
+    parser_registry: ParserRegistry  # ← явная зависимость
+    chunker: Chunker                 # ← явная зависимость
+    embedder: Embedder               # ← явная зависимость
+```
+
+**Почему изменили:**
+- Глобальное состояние усложняло понимание кода
+- Неявные зависимости через `set_*()` / `get_*()`
+- Сложно отследить, где и когда настраиваются компоненты
+
+**Альтернативы (которые рассматривались):**
+- ~~Service Locator~~ — ещё хуже, скрывает зависимости
+- ✅ **Explicit DI** — выбрано, явные зависимости через конструкторы
 
 ---
 
@@ -375,49 +400,52 @@ class ProcessFileEvent:
 - Легко тестировать каждую ветку отдельно
 - Можно добавить новые статусы без изменения пайплайна
 
-### 4.2 Сервисы (`core/application/files/services.py`)
+### 4.2 Сервисы ~~(`core/application/files/services.py`)~~ ⚠️ УДАЛЕНО
 
-**FileService** — операции с файлами и БД:
+> **В текущей версии:** FileService удалён. Логика распределена между IngestDocument и прямыми вызовами repository.
+
+**FileService (старая версия)** — тонкая обёртка над repository:
 
 ```python
+# ❌ УДАЛЕНО в январе 2025
 class FileService:
     def __init__(self, repository: Database):
         self.db = repository
     
     def mark_as_ok(self, file: FileSnapshot) -> None:
-        """Пометить файл как успешно обработанный."""
-        self.db.mark_as_ok(file)
-    
-    def mark_as_error(self, file: FileSnapshot) -> None:
-        """Пометить файл как ошибочный."""
-        self.db.mark_as_error(file)
+        self.db.mark_as_ok(file)  # Просто делегирование
     
     def delete_chunks_only(self, file: FileSnapshot) -> None:
-        """Удалить чанки, оставить файл."""
-        self.db.delete_chunks_by_hash(file.hash)
-    
-    def delete_file_and_chunks(self, file: FileSnapshot) -> None:
-        """Удалить файл и все его чанки."""
-        self.db.delete_chunks_by_hash(file.hash)
-        self.db.delete_file(file.hash)
-    
-    def save_file_to_disk(self, file: FileSnapshot) -> None:
-        """Сохранить raw_text в /home/alpaca/tmp_md для отладки."""
-        if not file.raw_text:
-            return
-        
-        temp_dir = "/home/alpaca/tmp_md"
-        os.makedirs(temp_dir, exist_ok=True)
-        
-        temp_file = os.path.join(temp_dir, f"{file.path}.md")
-        with open(temp_file, 'w', encoding='utf-8') as f:
-            f.write(file.raw_text)
+        self.db.delete_chunks_by_hash(file.hash)  # Просто делегирование
 ```
 
-**Почему отдельный сервис?**
-- Инкапсулирует операции с файлами
-- Повторно используется в разных use-case'ах
-- Легко мокировать в тестах
+**Проблема:** FileService был тонкой обёрткой без бизнес-логики. Все методы просто делегировали вызовы в repository.
+
+**Текущая версия (упрощённая):**
+
+Логика распределена:
+
+1. **Сохранение на диск** → перенесено в `IngestDocument._save_to_disk()`
+2. **Операции с БД** → прямые вызовы `repository.mark_as_ok()`, `repository.delete_chunks_by_hash()`
+
+```python
+@dataclass
+class IngestDocument:
+    repository: FileRepository  # ← напрямую, без FileService
+    
+    def _save_to_disk(self, file: FileSnapshot) -> None:
+        """Сохранить raw_text для отладки."""
+        if not file.raw_text:
+            return
+        temp_dir = Path(settings.TMP_MD_PATH)
+        temp_dir.mkdir(exist_ok=True)
+        (temp_dir / f"{file.path}.md").write_text(file.raw_text)
+```
+
+**Почему удалили:**
+- Лишний слой абстракции без выгоды
+- Нарушал Single Responsibility (смешивал БД и ФС операции)
+- Усложнял понимание потока данных
 
 ### 4.3 Парсеры (`core/application/document_processing/parsers/`)
 
@@ -797,30 +825,46 @@ class Worker:
 
 ---
 
-## 7. Bootstrap и Dependency Injection
+## 7. Bootstrap и Dependency Injection ⚠️ ИЗМЕНЕНО
+
+> **В текущей версии:** Bootstrap упрощён с 230 строк (8 функций) до 60 строк (1 функция).
 
 **Местоположение:** `core/application/bootstrap.py`
 
 **Задача:** Собрать все зависимости в одном месте.
 
-### 7.1 Структура WorkerApplication
+### 7.1 Структура WorkerApplication (текущая — упрощённая)
 
 ```python
 @dataclass
 class WorkerApplication:
-    """Контейнер всех зависимостей worker'а."""
-    
+    """Контейнер зависимостей worker'а."""
+    worker: Worker           # Единственный публичный API
+    repository: FileRepository  # Для тестов и сброса статусов
+```
+
+**Старая версия (10 полей):**
+
+```python
+# ❌ УСТАРЕЛО — было слишком много экспозиции
+@dataclass
+class WorkerApplication:
     settings: Settings
     repository: PostgresFileRepository
-    file_service: FileService
-    parser_resolver: ParserResolver
-    ingest_document: IngestDocument
-    process_file_event: ProcessFileEvent
+    file_service: FileService         # ← удалён
+    parser_resolver: ParserResolver   # ← скрыт внутри
+    ingest_document: IngestDocument   # ← скрыт внутри
+    process_file_event: ProcessFileEvent  # ← скрыт внутри
     worker: Worker
-    word_parser: WordParser
-    chunker: Chunker
-    embedder: Embedder
+    word_parser: WordParser           # ← скрыт внутри
+    chunker: Chunker                  # ← скрыт внутри
+    embedder: Embedder                # ← скрыт внутри
 ```
+
+**Почему упростили:**
+- Большинство полей не использовались извне
+- Тесты обращались к внутренним компонентам (нарушение инкапсуляции)
+- Worker — единственный нужный публичный API
 
 ### 7.2 Фабричные функции
 
@@ -852,92 +896,122 @@ def _resolve_embedder(app_settings: Settings) -> Embedder:
         raise ValueError(f"Unknown EMBEDDER_BACKEND: {backend}")
 ```
 
-### 7.3 Главная фабрика
+### 7.3 Главная фабрика (текущая — упрощённая)
 
 ```python
 def build_worker_application(app_settings: Settings = settings) -> WorkerApplication:
-    """Собирает все зависимости."""
+    """Собирает все зависимости (упрощённая версия)."""
     
     # 1. Infrastructure
-    repository = build_repository(app_settings)
-    file_service = FileService(repository)
-    
-    # 2. Document processing
-    word_parser = build_word_parser()
-    chunker = build_chunker()
-    embedder = _resolve_embedder(app_settings)
-    
-    # 3. Настроить домен
-    _configure_document_processing_facade(word_parser, chunker, embedder)
-    
-    # 4. Application
-    parser_resolver = build_parser_resolver(word_parser)
-    ingest_document = build_ingest_document(
-        app_settings, repository, file_service, parser_resolver,
-        chunker=chunker, embedder=embedder
+    repository = PostgresFileRepository(
+        database_url=app_settings.DATABASE_URL,
+        files_table=getattr(app_settings, "FILES_TABLE_NAME", "files"),
     )
-    process_file_use_case = build_process_file_use_case(ingest_document, file_service)
     
-    # 5. Worker
-    worker = build_worker(repository, process_file_use_case)
+    # 2. Parsers (создаём экземпляры напрямую)
+    word_parser = WordParser(...)
+    pdf_parser = PDFParser(...)
+    ppt_parser = PowerPointParser(...)
+    excel_parser = ExcelParser(...)
+    txt_parser = TXTParser()
     
-    # 6. Вернуть контейнер
-    return WorkerApplication(
-        settings=app_settings,
-        repository=repository,
-        file_service=file_service,
-        parser_resolver=parser_resolver,
-        ingest_document=ingest_document,
-        process_file_event=process_file_use_case,
-        worker=worker,
-        word_parser=word_parser,
+    # 3. ParserRegistry (прямые экземпляры, не фабрики)
+    parser_registry = ParserRegistry(parsers={
+        (".doc", ".docx"): word_parser,
+        (".pdf",): pdf_parser,
+        (".ppt", ".pptx"): ppt_parser,
+        (".xls", ".xlsx"): excel_parser,
+        (".txt",): txt_parser,
+    })
+    
+    # 4. Chunker и Embedder
+    chunker = chunk_document  # Функция напрямую
+    embedder = custom_embedding if not app_settings.EMBEDDER_BACKEND 
+               else langchain_embedding
+    
+    # 5. Use-cases
+    ingest_document = IngestDocument(
+        repository=repository,        # ← напрямую, без FileService
+        parser_registry=parser_registry,
         chunker=chunker,
         embedder=embedder,
+        parse_semaphore=Semaphore(app_settings.WORKER_MAX_CONCURRENT_PARSING),
+        embed_semaphore=Semaphore(app_settings.WORKER_MAX_CONCURRENT_EMBEDDING),
     )
+    
+    process_file_event = ProcessFileEvent(
+        ingest_document=ingest_document,
+        repository=repository  # ← напрямую
+    )
+    
+    # 6. Worker
+    worker = Worker(
+        db=repository,
+        filewatcher_api_url=f"http://{app_settings.FILEWATCHER_HOST}:{app_settings.FILEWATCHER_PORT}",
+        process_file_func=process_file_event,
+    )
+    
+    # 7. Вернуть упрощённый контейнер (только 2 поля)
+    return WorkerApplication(worker=worker, repository=repository)
 ```
 
-### 7.4 Настройка доменного фасада
+**Изменения:**
+- ❌ Удалено 8 отдельных `build_*` функций
+- ❌ Удалена настройка domain facades (`configure_parser_registry`, `set_chunker`)
+- ✅ Всё создаётся inline в одной функции
+- ✅ Явные зависимости через конструкторы
+- ✅ 60 строк вместо 230
+
+### 7.4 ~~Настройка доменного фасада~~ ⚠️ УДАЛЕНО
 
 ```python
-def _configure_document_processing_facade(
-    word_parser: WordParser,
-    chunker: Chunker,
-    embedder: Embedder,
-) -> None:
-    """Регистрирует реализации в домене."""
-    
-    # Парсеры
-    registry = _build_parser_registry(word_parser)
-    configure_parser_registry(registry)
-    
-    # Чанкер
-    set_chunker(chunker)
-    
-    # Эмбеддер
-    set_embedder(embedder)
+# ❌ УДАЛЕНО в январе 2025
+def _configure_document_processing_facade(...) -> None:
+    configure_parser_registry(registry)  # ← глобальное состояние
+    set_chunker(chunker)                 # ← глобальное состояние
+    set_embedder(embedder)               # ← глобальное состояние
 ```
 
-**Важно:** Это единственное место, где Application-слой "касается" Domain.
+**Проблема:** Глобальное состояние скрывало зависимости и усложняло тестирование.
 
-### 7.5 Использование в main.py
+**Текущая версия:** Зависимости передаются через конструкторы, никакой глобальной настройки не требуется.
 
 ```python
-from core.application.bootstrap import build_worker_application
-
-# Собрать все зависимости
-bootstrap_app = build_worker_application(settings)
-
-# Использовать
-bootstrap_app.worker.start(
-    poll_interval=settings.WORKER_POLL_INTERVAL,
-    max_workers=settings.WORKER_MAX_CONCURRENT_FILES,
+# ✅ Текущий подход
+ingest_document = IngestDocument(
+    parser_registry=parser_registry,  # ← явная зависимость
+    chunker=chunker,                  # ← явная зависимость
+    embedder=embedder                 # ← явная зависимость
 )
 ```
 
-**Преимущества:**
-- Все зависимости в одном месте
-- Легко тестировать (передать моки)
-- Легко менять реализации (через settings)
+### 7.5 Использование в main.py (актуально)
+
+```python
+from core.application.bootstrap import build_worker_application
+from utils.logging import setup_logging
+
+if __name__ == "__main__":
+    setup_logging()
+    
+    # Собрать все зависимости
+    app = build_worker_application(settings)
+    
+    # Сбросить зависшие файлы
+    app.repository.reset_processed_statuses()
+    
+    # Запустить worker
+    app.worker.start(
+        poll_interval=settings.WORKER_POLL_INTERVAL,
+        max_workers=settings.WORKER_MAX_CONCURRENT_FILES,
+    )
+```
+
+**Преимущества упрощённой версии:**
+- ✅ Одна функция вместо восьми
+- ✅ Явные зависимости (нет глобального состояния)
+- ✅ Простота понимания (60 строк кода)
+- ✅ Легко тестировать (передать моки в конструкторы)
 
 ---
 
@@ -1433,3 +1507,87 @@ python tests/runner.py --suite all
 ```
 
 Удачи в разработке! 🚀
+
+---
+
+## Приложение: Миграция на упрощённую архитектуру
+
+### Что изменилось (краткая сводка)
+
+| Компонент | Старая версия | Новая версия | Причина |
+|-----------|---------------|--------------|---------|
+| **Domain facades** | `set_chunker()`, `get_embedder()` | Удалены | Глобальное состояние |
+| **FileService** | Отдельный класс | Удалён | Тонкая обёртка |
+| **WorkerApplication** | 10 полей | 2 поля | Избыточная экспозиция |
+| **Bootstrap** | 8 функций, 230 строк | 1 функция, 60 строк | Упрощение |
+| **ParserRegistry** | Фабрики `Callable[[], Parser]` | Экземпляры `Parser` | Ненужная индирекция |
+
+### Как читать код после миграции
+
+**1. Найти зависимости:**
+
+```python
+# Старый код: неясно, откуда берётся chunker
+from core.domain.document_processing import chunk_document
+chunks = chunk_document(file)  # Магия! Откуда chunker?
+
+# Новый код: явная зависимость
+@dataclass
+class IngestDocument:
+    chunker: Chunker  # ← видно в сигнатуре
+    
+    def __call__(self, file):
+        chunks = self.chunker(file)  # ← понятно, откуда
+```
+
+**2. Создать use-case для тестов:**
+
+```python
+# Старый код: нужно настроить глобальное состояние
+from core.domain.document_processing import set_chunker
+set_chunker(mock_chunker)
+ingest = IngestDocument(...)
+
+# Новый код: передать в конструктор
+ingest = IngestDocument(
+    chunker=mock_chunker,  # ← просто передать
+    ...
+)
+```
+
+**3. Добавить новый парсер:**
+
+```python
+# Старый код: создать build-функцию
+def build_my_parser(): return MyParser()
+# Добавить в registry через tuple с фабрикой
+
+# Новый код: создать экземпляр в bootstrap
+my_parser = MyParser()
+parser_registry = ParserRegistry(parsers={
+    (".my",): my_parser,  # ← добавить одну строку
+})
+```
+
+### Дополнительные ресурсы
+
+- **ARCHITECTURE_SIMPLE.md** — актуальное описание архитектуры (370 строк)
+- **REFACTORING_REPORT.md** — детальный отчёт об упрощении с метриками
+- **architecture_roadmap.md** — история развития (этапы 1-6)
+- **tests/** — примеры использования API в тестах
+
+### FAQ по миграции
+
+**Q: Почему старая архитектура была сложной?**  
+A: Clean Architecture отлично подходит для больших проектов (5+ разработчиков, множество интерфейсов). Для ALPACA (1-2 разработчика, один Worker) она добавляла complexity без benefits.
+
+**Q: Можно ли вернуться к старой версии?**  
+A: Да, git истории сохранены. Но текущая версия проще и все тесты проходят.
+
+**Q: Как обновить свои форки/расширения?**  
+A: Следуйте паттерну из `bootstrap.py` — создавайте экземпляры напрямую, передавайте через конструкторы.
+
+---
+
+**Версия документа:** Январь 2025 (после упрощения)  
+**Для актуальной архитектуры:** См. `ARCHITECTURE_SIMPLE.md`
