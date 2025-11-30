@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class FileID(BaseModel):
@@ -8,5 +8,4 @@ class FileID(BaseModel):
     hash: Optional[str]
     path: str
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)

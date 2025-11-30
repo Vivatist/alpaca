@@ -27,6 +27,8 @@ from scanner import Scanner
 
 class TestSyncLogic:
     """Тесты синхронизации согласно таблице сценариев"""
+
+    __test__ = False  # pytest: do not auto-collect (requires manual wiring)
     
     def __init__(self, database_url: str):
         self.db = PostgreDataBase(database_url, table_name='test_files')
