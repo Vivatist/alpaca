@@ -39,13 +39,13 @@ class PDFParser(BaseParser):
         # Свойство использовалось в старой версии — сохраняем для совместимости
         self.enable_ocr = True
 
-    def parse(self, file: 'File') -> str:
+    def _parse(self, file: 'File') -> str:
         file_path = file.full_path
 
         try:
             if not os.path.exists(file_path):
                 self.logger.error(f"File not found | file={file.path}")
-                return ""
+                raise FileNotFoundError(f"File not found | file={file.path}")
 
             self.logger.info(f"🍎 Starting PDF parsing | file={file.path}")
 
@@ -82,7 +82,7 @@ class PDFParser(BaseParser):
 
         except Exception as e:  # pragma: no cover - защитный блок
             self.logger.error(f"❌ Parsing failed | file={file.path} error={e}")
-            return ""
+            raise
 
     def _detect_document_type(self, file_path: str) -> tuple[str, int]:
         try:

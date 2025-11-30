@@ -32,7 +32,7 @@ class ExcelParser(BaseParser):
         super().__init__("excel-parser")
         self.max_rows_per_table = max_rows_per_table
 
-    def parse(self, file: "File") -> str:
+    def _parse(self, file: "File") -> str:
         file_path = file.full_path
         suffix = Path(file_path).suffix.lower()
         working_path = file_path
@@ -41,7 +41,7 @@ class ExcelParser(BaseParser):
         try:
             if not os.path.exists(file_path):
                 self.logger.error(f"File not found | file={file.path}")
-                return ""
+                raise FileNotFoundError(f"File not found | file={file.path}")
 
             if suffix == ".xls":
                 converted = convert_xls_to_xlsx(file_path)
@@ -49,19 +49,22 @@ class ExcelParser(BaseParser):
                     self.logger.warning(
                         "LibreOffice conversion failed, falling back to xlrd for .xls parsing"
                     )
-                    return self._parse_xls_with_xlrd(file_path)
+                    xlrd_text = self._parse_xls_with_xlrd(file_path)
+                    return xlrd_text
                 working_path = converted
                 cleanup_dir = Path(converted).parent
                 self.logger.info("Converted legacy .xls to .xlsx for parsing")
             elif suffix != ".xlsx":
                 self.logger.error(f"Unsupported Excel extension | ext={suffix}")
-                return ""
+                raise ValueError(f"Unsupported Excel extension | ext={suffix}")
 
             try:
                 workbook = load_workbook(working_path, data_only=True, read_only=True)
             except Exception as exc:
                 self.logger.error(f"Failed to load workbook | file={file.path} error={exc}")
-                return ""
+                raise RuntimeError(
+                    f"Failed to load Excel workbook | file={file.path}"
+                ) from exc
 
             sheet_blocks: List[str] = []
             for sheet in workbook.worksheets:

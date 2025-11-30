@@ -96,11 +96,6 @@ def main():
         
         logger.info("✅ File Watcher Service initialized successfully")
         
-        # Сбрасываем статусы processed на ok при старте
-        reset_count = file_watcher.reset_processed_statuses()
-        if reset_count > 0:
-            logger.info(f"🔄 Reset {reset_count} 'processed' statuses to 'ok' on startup")
-        
     except Exception as e:
         logger.error(f"❌ Failed to initialize File Watcher Service: {e}")
         sys.exit(1)

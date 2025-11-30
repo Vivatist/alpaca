@@ -118,13 +118,3 @@ class FileWatcherService:
             dict: Статистика (ok, added, updated)
         """
         return self.vector_sync.sync_status()
-    
-    def reset_processed_statuses(self) -> int:
-        """
-        Сбрасывает все статусы 'processed' на 'ok'.
-        
-        Returns:
-            int: Количество сброшенных записей
-        """
-        count = self.db.reset_processed_to_ok()
-        return count

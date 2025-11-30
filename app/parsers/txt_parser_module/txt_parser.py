@@ -45,7 +45,7 @@ class TXTParser(BaseParser):
         """Инициализация парсера"""
         super().__init__("txt-parser")
     
-    def parse(self, file: 'File') -> str:
+    def _parse(self, file: 'File') -> str:
         """
         Парсинг TXT файла в текст
         
@@ -61,7 +61,7 @@ class TXTParser(BaseParser):
         try:
             if not os.path.exists(file_path):
                 self.logger.error(f"File not found | file={file.path}")
-                return ""
+                raise FileNotFoundError(f"File not found | file={file.path}")
             
             self.logger.info(f"Parsing TXT document | file={file.path}")
             
@@ -84,7 +84,7 @@ class TXTParser(BaseParser):
             
             if not content or not content.strip():
                 self.logger.warning(f"Empty content | file={file_path}")
-                return ""
+                raise ValueError(f"TXT file is empty | file={file_path}")
             
             # 4. Извлечение СПЕЦИФИЧНЫХ метаданных для TXT
             specific_metadata = extract_txt_metadata(encoding, content)
@@ -95,9 +95,9 @@ class TXTParser(BaseParser):
             markdown_content = format_as_markdown(content, Path(file_path).name)
             
             self.logger.info(f"TXT parsed successfully | file={file_path} content_length={len(markdown_content)}")
-            
+
             return markdown_content
-            
+
         except Exception as e:
             self.logger.error(f"TXT parsing failed | file={file_path} error={type(e).__name__}: {e}")
-            return ""
+            raise

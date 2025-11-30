@@ -81,13 +81,10 @@ def ingest_pipeline(file: File) -> bool:
 
         with PARSE_SEMAPHORE:
             file.raw_text = parser.parse(file)
+            fm.set_raw_text(file, file.raw_text)
 
         logger.info(f"✅ Parsed: {len(file.raw_text) if file.raw_text else 0} chars")
 
-        if not file.raw_text or not file.raw_text.strip():
-            logger.error(f"Empty parsed text for {file.path}")
-            fm.mark_as_error(file)
-            return False
     
         
         # 2. Сохранение в temp_parsed
@@ -170,6 +167,17 @@ if __name__ == "__main__":
     # Переинициализируем logging после тестов (pytest может закрыть handlers)
     setup_logging()
     logger.info("🚀 Запуск worker после успешного прохождения тестов")
+
+    # Сбрасываем зависшие 'processed' статусы на 'added' при старте
+    try:
+        with db.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE files SET status_sync = 'added' WHERE status_sync = 'processed'")
+                reset_count = cur.rowcount
+                if reset_count > 0:
+                    logger.info(f"🔄 Reset {reset_count} stuck 'processed' files to 'added' on startup")
+    except Exception as e:
+        logger.error(f"Failed to reset processed statuses: {e}")
 
     # Создаём worker и запускаем
     worker = Worker(

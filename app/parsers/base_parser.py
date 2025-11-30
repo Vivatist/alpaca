@@ -21,32 +21,20 @@ if TYPE_CHECKING:
 
 
 class BaseParser(ABC):
-    """
-    Абстрактный базовый класс для всех парсеров документов
-    
-    Определяет общий интерфейс и переиспользуемые методы.
-    Управляет добавлением ОБЩИХ метаданных (включая file_hash от file-watcher).
-    """
-    
+    """Базовый класс. Реализует шаблон Template Method для парсинга."""
+
     def __init__(self, parser_name: str):
-        """
-        Args:
-            parser_name: Имя парсера для логирования
-        """
         self.logger = get_logger(f"alpaca.parser.{parser_name}")
-    
-    @abstractmethod
+
     def parse(self, file: 'File') -> str:
-        """
-        Парсинг документа в текст
-        
-        Args:
-            file: Объект File с информацией о файле
-            
-        Returns:
-            str: Распарсенный текст документа
-        """
-        pass
+        """Финальный метод: вызывает реализацию `_parse` и гарантирует непустой текст."""
+        text = self._parse(file)
+        return self._ensure_text(text, file)
+
+    @abstractmethod
+    def _parse(self, file: 'File') -> str:
+        """Реализация парсинга в наследнике."""
+        raise NotImplementedError
     
     def _add_common_metadata(self, file_path: str, file_hash: Optional[str] = None) -> Dict:
         """
@@ -127,6 +115,18 @@ class BaseParser(ABC):
         except Exception as e:
             self.logger.error(f"Error saving markdown | path={output_path} error={type(e).__name__}: {e}")
             return False
+
+    def _ensure_text(self, text: Optional[str], file: 'File') -> str:
+        """Валидация результата парсинга — запрещены пустые строки."""
+        if text is None:
+            raise ValueError(
+                f"Parser {self.__class__.__name__} returned None | file={getattr(file, 'path', 'unknown')}"
+            )
+        if not text.strip():
+            raise ValueError(
+                f"Parser {self.__class__.__name__} returned empty text | file={getattr(file, 'path', 'unknown')}"
+            )
+        return text
     
     def _generate_yaml_header(
         self,

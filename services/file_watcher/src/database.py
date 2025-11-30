@@ -70,17 +70,6 @@ class Database:
                 cur.execute(f"CREATE INDEX IF NOT EXISTS idx_hash ON {self.table_name}(hash)")
                 cur.execute(f"CREATE INDEX IF NOT EXISTS idx_status_sync ON {self.table_name}(status_sync)")
     
-    def reset_processed_to_ok(self) -> int:
-        """Сбрасывает все статусы 'processed' на 'ok'
-        
-        Returns:
-            int: Количество обновлённых записей
-        """
-        with self.get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"UPDATE {self.table_name} SET status_sync = 'ok' WHERE status_sync = 'processed'")
-                return cur.rowcount
-    
     def _decide_action_for_existing_file(self, current_status: str, hash_matches: bool) -> tuple:
         """Определяет действие для файла существующего в БД согласно таблице сценариев
         

@@ -64,7 +64,7 @@ class WordParser(BaseParser):
         # Инициализация Markitdown
         self.markitdown = MarkItDown()
     
-    def parse(self, file: 'File') -> str:
+    def _parse(self, file: 'File') -> str:
         """
         Парсинг Word документа в текст
         
@@ -81,7 +81,7 @@ class WordParser(BaseParser):
         try:
             if not os.path.exists(file_path):
                 self.logger.error(f"File not found | file={file_path}")
-                return ""
+                raise FileNotFoundError(f"File not found | file={file_path}")
             
             self.logger.info(f"Parsing Word document | file={file.path}")
             
@@ -153,12 +153,12 @@ class WordParser(BaseParser):
                 self.logger.debug("OCR disabled, skipping image processing")
             
             self.logger.info(f"Word document parsed successfully | file={original_file_path} length={len(markdown_content)}")
-            
+
             return markdown_content
-            
+
         except Exception as e:
             self.logger.error(f"Error parsing Word document | file={file_path} error={type(e).__name__}: {e}")
-            return ""
+            raise
         
         finally:
             # Очистка временных файлов после конвертации

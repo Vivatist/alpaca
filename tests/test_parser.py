@@ -31,11 +31,9 @@ class TestParserWord:
     def test_parse_nonexistent_file(self):
         """Тест парсинга несуществующего файла"""
         file = File(hash='test_hash_456', path='/nonexistent/file.docx', status_sync='added')
-        
-        result = WordParser(enable_ocr=False).parse(file)
-        
-        # Должен вернуть пустую строку или None при ошибке
-        assert result is None or result == ""
+
+        with pytest.raises(FileNotFoundError):
+            WordParser(enable_ocr=False).parse(file)
     
     def test_parse_empty_docx(self):
         """Тест парсинга пустого DOCX файла"""
@@ -50,11 +48,8 @@ class TestParserWord:
         try:
             file = File(hash='test_hash_empty', path=temp_path, status_sync='added')
             
-            result = WordParser(enable_ocr=False).parse(file)
-            
-            # Пустой документ должен вернуть пустую строку
-            assert result is not None
-            assert isinstance(result, str)
+            with pytest.raises(ValueError):
+                WordParser(enable_ocr=False).parse(file)
         finally:
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
@@ -77,9 +72,8 @@ class TestPowerPointParser:
         file = File(hash='pptx_missing', path='/nonexistent/file.pptx', status_sync='added')
         parser = PowerPointParser()
 
-        result = parser.parse(file)
-
-        assert result == ""
+        with pytest.raises(FileNotFoundError):
+            parser.parse(file)
     
     def test_parse_docx_with_multiple_paragraphs(self):
         """Тест парсинга DOCX с несколькими параграфами"""
@@ -134,9 +128,8 @@ class TestExcelParser:
         file = File(hash='missing_xlsx', path='/tmp/absent.xlsx', status_sync='added')
         parser = ExcelParser()
 
-        result = parser.parse(file)
-
-        assert result == ""
+        with pytest.raises(FileNotFoundError):
+            parser.parse(file)
 
     def test_parse_xls_triggers_conversion(self, temp_xlsx_file, tmp_path, monkeypatch):
         legacy_path = tmp_path / "legacy.xls"

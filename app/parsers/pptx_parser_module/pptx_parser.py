@@ -31,7 +31,7 @@ class PowerPointParser(BaseParser):
     def __init__(self) -> None:
         super().__init__("powerpoint-parser")
 
-    def parse(self, file: "File") -> str:
+    def _parse(self, file: "File") -> str:
         file_path = file.full_path
         working_path = file_path
         cleanup_dir: Optional[Path] = None
@@ -39,7 +39,7 @@ class PowerPointParser(BaseParser):
         try:
             if not os.path.exists(file_path):
                 self.logger.error(f"File not found | file={file.path}")
-                return ""
+                raise FileNotFoundError(f"File not found | file={file.path}")
 
             self.logger.info(f"Parsing PowerPoint document | file={file.path}")
 
@@ -63,7 +63,7 @@ class PowerPointParser(BaseParser):
 
         except Exception as e:  # pragma: no cover - защитный блок
             self.logger.error(f"PowerPoint parsing failed | file={file.path} error={type(e).__name__}: {e}")
-            return ""
+            raise
         finally:
             if cleanup_dir and cleanup_dir.exists():
                 shutil.rmtree(cleanup_dir, ignore_errors=True)
