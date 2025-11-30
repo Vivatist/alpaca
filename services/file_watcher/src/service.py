@@ -3,8 +3,8 @@ File Watcher Service - изолированный сервис для монит
 """
 from typing import Dict, Any, Optional
 from scanner import Scanner
-from alpaca.infrastructure.database.postgres import PostgresFileRepository
-from alpaca.application.files import SyncFilesystemSnapshot
+from core.infrastructure.database.postgres import PostgresFileRepository
+from core.application.files import SyncFilesystemSnapshot
 from vector_sync import VectorSync
 from file_filter import FileFilter
 

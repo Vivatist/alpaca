@@ -17,7 +17,7 @@ COPY services/file_watcher /app
 RUN chmod +x /app/entrypoint.sh
 
 # Копируем монолит (доменные и инфраструктурные пакеты)
-COPY alpaca /opt/alpaca/alpaca
+COPY core /opt/alpaca/core
 COPY utils /opt/alpaca/utils
 ENV PYTHONPATH="/opt/alpaca:${PYTHONPATH}"
 

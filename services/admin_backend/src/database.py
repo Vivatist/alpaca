@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from typing import Dict, List, Optional, Any
 import os
 
-from alpaca.infrastructure.database.postgres import PostgresFileRepository
+from core.infrastructure.database.postgres import PostgresFileRepository
 
 
 class Database:

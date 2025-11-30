@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 COPY services/admin_backend/src /app
 
 # Копирование доменной библиотеки
-COPY alpaca /opt/alpaca/alpaca
+COPY core /opt/alpaca/core
 COPY utils /opt/alpaca/utils
 COPY settings.py /opt/alpaca/settings.py
 ENV PYTHONPATH="/opt/alpaca:${PYTHONPATH}"

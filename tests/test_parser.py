@@ -6,12 +6,12 @@ import shutil
 
 import pytest
 
-from alpaca.application.document_processing.parsers import (
+from core.application.document_processing.parsers import (
     WordParser,
     PowerPointParser,
     ExcelParser,
 )
-from alpaca.domain.files.models import FileSnapshot
+from core.domain.files.models import FileSnapshot
 
 
 class TestParserWord:
@@ -145,7 +145,7 @@ class TestExcelParser:
             return temp_xlsx_file
 
         monkeypatch.setattr(
-            "alpaca.application.document_processing.parsers.excel.excel_parser.convert_xls_to_xlsx",
+            "core.application.document_processing.parsers.excel.excel_parser.convert_xls_to_xlsx",
             fake_convert,
         )
 
@@ -192,7 +192,7 @@ class TestExcelParser:
             return None
 
         monkeypatch.setattr(
-            "alpaca.application.document_processing.parsers.excel.excel_parser.convert_xls_to_xlsx",
+            "core.application.document_processing.parsers.excel.excel_parser.convert_xls_to_xlsx",
             fail_convert,
         )
 

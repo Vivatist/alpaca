@@ -9,7 +9,7 @@ import responses
 
 from main import ingest_pipeline, process_file
 from settings import settings
-from alpaca.domain.files.models import FileSnapshot
+from core.domain.files.models import FileSnapshot
 
 
 class TestWorkerIntegration:

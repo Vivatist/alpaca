@@ -7,20 +7,20 @@ from threading import Semaphore
 from utils.logging import setup_logging, get_logger
 from utils.worker import Worker
 from settings import settings
-from alpaca.infrastructure.database.postgres import PostgresFileRepository
-from alpaca.application.files import FileService
-from alpaca.domain.files.models import FileSnapshot
+from core.infrastructure.database.postgres import PostgresFileRepository
+from core.application.files import FileService
+from core.domain.files.models import FileSnapshot
 from tests.runner import run_tests_on_startup
-from alpaca.application.files import ResetStuckFiles
-from alpaca.application.processing import IngestDocument, ProcessFileEvent
-from alpaca.domain.document_processing import (
+from core.application.files import ResetStuckFiles
+from core.application.processing import IngestDocument, ProcessFileEvent
+from core.domain.document_processing import (
     get_parser_for_path,
     embed_chunks,
     chunk_document,
 )
-from alpaca.application.document_processing.parsers import WordParser
+from core.application.document_processing.parsers import WordParser
 
-logger = get_logger("alpaca.worker")
+logger = get_logger("core.worker")
 
 DOC_EXTENSIONS = (".doc", ".docx")
 word_parser = WordParser(enable_ocr=True)

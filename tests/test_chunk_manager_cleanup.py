@@ -1,7 +1,7 @@
 import psycopg2.extras
 
-from alpaca.application.files.services import FileService
-from alpaca.domain.files.models import FileSnapshot
+from core.application.files.services import FileService
+from core.domain.files.models import FileSnapshot
 
 
 def test_delete_chunks_fallback_by_path(test_db):

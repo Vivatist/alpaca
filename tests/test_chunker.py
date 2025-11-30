@@ -2,8 +2,8 @@
 Тесты для модуля чанкования (custom_chunker)
 """
 import pytest
-from alpaca.application.document_processing.chunking import chunking
-from alpaca.domain.files.models import FileSnapshot
+from core.application.document_processing.chunking import chunking
+from core.domain.files.models import FileSnapshot
 
 
 class TestChunking:

@@ -18,8 +18,8 @@ try:
 except IndexError:
     pass
 
-from alpaca.infrastructure.database.postgres import PostgresFileRepository
-from alpaca.application.files import DequeueNextFile, GetQueueStats
+from core.infrastructure.database.postgres import PostgresFileRepository
+from core.application.files import DequeueNextFile, GetQueueStats
 
 # Инициализация FastAPI
 app = FastAPI(

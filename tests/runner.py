@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.logging import get_logger
 
-logger = get_logger("alpaca.tests")
+logger = get_logger("core.tests")
 
 
 def run_tests(

@@ -7,10 +7,10 @@ import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, Optional, Dict, Any
 
-from alpaca.domain.files.repository import Database
+from core.domain.files.repository import Database
 from utils.logging import get_logger
 
-logger = get_logger("alpaca.worker.manager")
+logger = get_logger("core.worker.manager")
 
 
 

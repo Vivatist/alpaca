@@ -22,7 +22,7 @@ for extra_path in (src_path, repo_root):
     if str(extra_path) not in sys.path:
         sys.path.insert(0, str(extra_path))
 
-from alpaca.infrastructure.database.postgres import PostgresFileRepository
+from core.infrastructure.database.postgres import PostgresFileRepository
 from scanner import Scanner
 from vector_sync import VectorSync
 

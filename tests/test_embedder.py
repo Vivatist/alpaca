@@ -4,9 +4,9 @@
 import pytest
 import responses
 from unittest.mock import Mock, patch, MagicMock
-from alpaca.application.document_processing.embedding import embedding
+from core.application.document_processing.embedding import embedding
 from settings import settings
-from alpaca.domain.files.models import FileSnapshot
+from core.domain.files.models import FileSnapshot
 
 
 class TestEmbedding:
