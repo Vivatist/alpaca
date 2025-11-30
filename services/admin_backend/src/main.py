@@ -13,8 +13,18 @@ from fastapi.responses import JSONResponse
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 import os
+import sys
+from pathlib import Path
 import docker
 import httpx
+
+# Добавляем корень репозитория при локальном запуске
+try:
+    repo_root = Path(__file__).resolve().parents[3]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+except IndexError:
+    pass
 
 from database import Database
 

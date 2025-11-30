@@ -7,8 +7,18 @@ from fastapi import FastAPI, HTTPException
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 import os
+import sys
+from pathlib import Path
 
-from database import Database
+# Добавляем корень репозитория если запускаем локально вне Docker
+try:
+    repo_root = Path(__file__).resolve().parents[3]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+except IndexError:
+    pass
+
+from alpaca.infrastructure.database.postgres import PostgresFileRepository
 
 # Инициализация FastAPI
 app = FastAPI(
@@ -18,7 +28,7 @@ app = FastAPI(
 )
 
 # Инициализация БД
-db = Database()
+db = PostgresFileRepository(database_url=os.getenv("DATABASE_URL"))
 
 
 class FileResponse(BaseModel):
@@ -59,7 +69,7 @@ async def get_next_file():
             from fastapi.responses import Response
             return Response(status_code=204)
         
-        return next_file
+        return next_file.as_dict()
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")

@@ -1,55 +1,22 @@
-"""Database module - работа с PostgreSQL
+"""Database module - читает статистику через общий Postgres-репозиторий."""
 
-Предоставляет методы для получения статистики и данных из БД
-"""
-
-import psycopg # type: ignore
 from contextlib import contextmanager
 from typing import Dict, List, Optional, Any
 import os
 
+from alpaca.infrastructure.database.postgres import PostgresFileRepository
+
 
 class Database:
-    """Класс для работы с базой данных"""
-    
+    """Тонкая обёртка над PostgresFileRepository для нужд Admin Backend."""
+
     def __init__(self):
-        # Приоритет DATABASE_URL, иначе отдельные переменные
-        database_url = os.getenv('DATABASE_URL')
-        
-        if database_url:
-            # Парсим DATABASE_URL
-            from urllib.parse import urlparse
-            parsed = urlparse(database_url)
-            
-            self.config = {
-                'host': parsed.hostname,
-                'port': parsed.port or 5432,
-                'dbname': parsed.path.lstrip('/'),
-                'user': parsed.username,
-                'password': parsed.password
-            }
-        else:
-            # Fallback на отдельные переменные
-            self.config = {
-                'host': os.getenv('POSTGRES_HOST', 'localhost'),
-                'port': os.getenv('POSTGRES_PORT', '5432'),
-                'dbname': os.getenv('POSTGRES_DB', 'postgres'),
-                'user': os.getenv('POSTGRES_USER', 'postgres'),
-                'password': os.getenv('POSTGRES_PASSWORD', 'postgres')
-            }
-    
+        self.repo = PostgresFileRepository(database_url=os.getenv("DATABASE_URL"))
+
     @contextmanager
     def get_connection(self):
-        """Context manager для подключения к БД"""
-        conn = psycopg.connect(**self.config)
-        try:
+        with self.repo.get_connection() as conn:
             yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
     
     def get_file_state_stats(self) -> Dict[str, int]:
         """Получает статистику по файлам в таблице files

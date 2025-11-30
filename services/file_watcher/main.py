@@ -8,8 +8,17 @@ import time
 import signal
 from pathlib import Path
 
-# Добавляем src/ в PYTHONPATH
-sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
+# Добавляем src/ и (если доступен) корень репозитория в PYTHONPATH
+current_dir = Path(__file__).resolve()
+src_path = current_dir.parent / "src"
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
+parents = current_dir.parents
+if len(parents) >= 3:
+    repo_root = parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
 
 from settings import settings
 from service import FileWatcherService
