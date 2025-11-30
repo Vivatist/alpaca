@@ -6,11 +6,25 @@ from threading import Semaphore
 from typing import Optional
 
 from settings import Settings, settings
-from core.application.document_processing.parsers import WordParser
+from core.application.document_processing.parsers import (
+    WordParser,
+    PDFParser,
+    PowerPointParser,
+    ExcelParser,
+    TXTParser,
+)
+from core.application.document_processing.chunking import chunk_document as default_chunker_impl
+from core.application.document_processing.embedding import custom_embedding, langchain_embedding
 from core.application.files.services import FileService
 from core.application.processing import IngestDocument, ProcessFileEvent
 from core.application.processing.use_cases import ParserResolver, Chunker, Embedder
-from core.domain.document_processing import get_parser_for_path, chunk_document, embed_chunks
+from core.domain.document_processing import (
+    ParserRegistry,
+    configure_parser_registry,
+    get_parser_for_path,
+    set_chunker,
+    set_embedder,
+)
 from core.infrastructure.database.postgres import PostgresFileRepository
 from utils.worker import Worker
 
@@ -50,6 +64,12 @@ def build_word_parser() -> WordParser:
     return WordParser(enable_ocr=True)
 
 
+def build_chunker() -> Chunker:
+    """Фабрика chunker'а (можно расширить через настройки позже)."""
+
+    return default_chunker_impl
+
+
 def build_parser_resolver(word_parser: Optional[WordParser] = None) -> ParserResolver:
     """Создаёт resolver, который для doc/docx использует общий WordParser."""
 
@@ -69,10 +89,8 @@ def _resolve_embedder(app_settings: Settings) -> Embedder:
 
     backend = getattr(app_settings, "EMBEDDER_BACKEND", None)
     if backend == "custom" or backend is None:
-        return embed_chunks
+        return custom_embedding
     if backend == "langchain":  # pragma: no cover - optional dependency
-        from core.application.document_processing.embedding import langchain_embedding
-
         return langchain_embedding
     raise ValueError(f"Unsupported EMBEDDER_BACKEND: {backend}")
 
@@ -83,7 +101,7 @@ def build_ingest_document(
     file_service: FileService,
     parser_resolver: ParserResolver,
     *,
-    chunker: Chunker = chunk_document,
+    chunker: Chunker,
     embedder: Optional[Embedder] = None,
 ) -> IngestDocument:
     """Собирает пайплайн IngestDocument с семафорами."""
@@ -136,12 +154,17 @@ def build_worker_application(
     repository = build_repository(app_settings)
     file_service = FileService(repository)
     word_parser = build_word_parser()
+    chunker = build_chunker()
+    embedder = _resolve_embedder(app_settings)
+    _configure_document_processing_facade(word_parser, chunker, embedder)
     parser_resolver = build_parser_resolver(word_parser)
     ingest_document = build_ingest_document(
         app_settings,
         repository,
         file_service,
         parser_resolver,
+        chunker=chunker,
+        embedder=embedder,
     )
     process_file_use_case = build_process_file_use_case(ingest_document, file_service)
     worker = build_worker(
@@ -159,8 +182,37 @@ def build_worker_application(
         process_file_event=process_file_use_case,
         worker=worker,
         word_parser=word_parser,
-        chunker=chunk_document,
+        chunker=chunker,
         embedder=ingest_document.embedder,
+    )
+
+
+def _configure_document_processing_facade(
+    word_parser: WordParser,
+    chunker: Chunker,
+    embedder: Embedder,
+) -> None:
+    """Готовит доменный фасад (registry + chunker/embedder aliases)."""
+
+    configure_parser_registry(_build_parser_registry(word_parser))
+    set_chunker(chunker)
+    set_embedder(embedder)
+
+
+def _build_parser_registry(word_parser: WordParser) -> ParserRegistry:
+    """Создаёт registry с маппингами расширений на парсеры."""
+
+    def _reuse(parser: WordParser):
+        return lambda parser=parser: parser
+
+    return ParserRegistry(
+        registry=(
+            (DOC_EXTENSIONS, _reuse(word_parser)),
+            ((".pdf",), PDFParser),
+            ((".pptx", ".ppt"), PowerPointParser),
+            ((".xlsx", ".xls"), ExcelParser),
+            ((".txt",), TXTParser),
+        ),
     )
 
 
@@ -168,6 +220,7 @@ __all__ = [
     "WorkerApplication",
     "build_repository",
     "build_word_parser",
+    "build_chunker",
     "build_parser_resolver",
     "build_ingest_document",
     "build_process_file_use_case",

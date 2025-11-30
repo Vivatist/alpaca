@@ -8,6 +8,8 @@
 ## Этап 1. Bootstrap зависимостей
 **Задача:** вынести создание всех сервисов и use-case'ов из `main.py` в отдельный модуль (например, `core/application/bootstrap.py`).
 
+**Статус:** ✅ Выполнено — `main.py` теперь только запускает worker через `build_worker_application`, а фабрики вынесены в `core/application/bootstrap.py`.
+
 - **Действия**
   - Создать фабрики: `build_repository(settings)`, `build_ingest_pipeline(settings)`, `build_worker(settings)`.
   - `main.py` превращается в тонкий слой, который вызывает bootstrap и запускает worker.
@@ -16,6 +18,8 @@
 
 ## Этап 2. Чёткие границы domain/application
 **Задача:** domain объявляет интерфейсы и фасады, application предоставляет реализации.
+
+**Статус:** ✅ Выполнено — фасады `core/domain/document_processing/*` теперь содержат только Protocol/registry и настраиваются через bootstrap (`set_chunker`, `set_embedder`, `configure_parser_registry`).
 
 - **Действия**
   - В `core/domain/document_processing/embedders` оставить Protocol/интерфейс и контракты.
@@ -26,6 +30,8 @@
 
 ## Этап 3. Конфигурируемый embedder
 **Задача:** переключение между Ollama/LangChain/иными реализациями без правок кода.
+
+**Статус:** ✅ Выполнено — добавлен флаг `EMBEDDER_BACKEND` в `settings.py`, а bootstrap выбирает и регистрирует нужный embedder (`custom`/`langchain`).
 
 - **Действия**
   - Добавить в `settings.py` параметр `EMBEDDER_BACKEND` (например, `"custom"`, `"langchain"`).
@@ -58,9 +64,9 @@
 ## Контроль прогресса
 | Этап | Статус | Ключевые метрики |
 |------|--------|------------------|
-| Bootstrap зависимостей | ☐ | `main.py` < 100 строк, все сервисы строятся в bootstrap |
-| Domain vs Application | ☐ | Нет прямых импортов `core/application/...` вне bootstrap |
-| Конфигурируемый embedder | ☐ | Переключение по `EMBEDDER_BACKEND` без правок кода |
+| Bootstrap зависимостей | ☑ | `main.py` < 100 строк, все сервисы строятся в bootstrap |
+| Domain vs Application | ☑ | Нет прямых импортов `core/application/...` вне bootstrap |
+| Конфигурируемый embedder | ☑ | Переключение по `EMBEDDER_BACKEND` без правок кода |
 | Совместимость и тесты | ☐ | Удалён устаревший API, тесты через новые фасады |
 | Документация | ☐ | README/SETTINGS обновлены |
 
