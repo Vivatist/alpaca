@@ -8,7 +8,8 @@ from utils.logging import setup_logging, get_logger
 from utils.worker import Worker
 from settings import settings
 from utils.database import PostgreDataBase
-from utils.file_manager import FileManager, File
+from alpaca.application.files import FileService
+from alpaca.domain.files.models import FileSnapshot
 from tests.runner import run_tests_on_startup
 from alpaca.application.files import ResetStuckFiles
 from alpaca.application.processing import IngestDocument, ProcessFileEvent
@@ -31,7 +32,7 @@ def legacy_parser_resolver(file_path: str):
 
 # Инициализация
 db = PostgreDataBase(settings.DATABASE_URL)
-fm = FileManager(db)
+file_service = FileService(db)
 FILEWATCHER_API = os.getenv("FILEWATCHER_API_URL", "http://localhost:8081")
 
 # Семафоры для ограничения конкурентности разных операций (из settings)
@@ -40,7 +41,7 @@ EMBED_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_EMBEDDING)
 LLM_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_LLM)
 
 ingest_document = IngestDocument(
-    file_manager=fm,
+    file_service=file_service,
     database=db,
     parser_resolver=legacy_parser_resolver,
     chunker=chunking,
@@ -51,26 +52,26 @@ ingest_document = IngestDocument(
 
 process_file_use_case = ProcessFileEvent(
     ingest_document=ingest_document,
-    file_manager=fm,
+    file_service=file_service,
 )
 
 
-def ingest_pipeline(file: File) -> bool:
+def ingest_pipeline(file: FileSnapshot) -> bool:
     """Backward-compatible entry point для тестов и скриптов."""
     return ingest_document(file)
 
 
 def process_file(file_info: Dict[str, Any]) -> bool:
     """Backward-compatible entry point для тестов (имитирует старую логику)."""
-    file = File(**file_info)
+    file = FileSnapshot(**file_info)
     logger.info(f"Processing file (compat layer): {file.path} status={file.status_sync}")
 
     try:
         if file.status_sync == "deleted":
-            fm.delete_file_and_chunks(file)
+            file_service.delete_file_and_chunks(file)
             return True
         if file.status_sync == "updated":
-            fm.delete_chunks_only(file)
+            file_service.delete_chunks_only(file)
             return ingest_pipeline(file)
         if file.status_sync == "added":
             return ingest_pipeline(file)
@@ -79,7 +80,7 @@ def process_file(file_info: Dict[str, Any]) -> bool:
         return False
     except Exception as exc:
         logger.error(f"✗ Compat process_file failed | file={file.path} error={exc}")
-        fm.mark_as_error(file)
+        file_service.mark_as_error(file)
         return False
 
 if __name__ == "__main__":

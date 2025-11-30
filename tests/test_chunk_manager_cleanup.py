@@ -1,7 +1,7 @@
 import psycopg2.extras
 
 from utils.chunk_manager import ChunkManager
-from utils.file_manager import File
+from alpaca.domain.files.models import FileSnapshot
 
 
 def test_delete_chunks_fallback_by_path(test_db):
@@ -10,7 +10,7 @@ def test_delete_chunks_fallback_by_path(test_db):
     legacy_hash = "legacy_hash_123"
     current_hash = "current_hash_456"
 
-    file = File(
+    file = FileSnapshot(
         path=test_path,
         hash=current_hash,
         status_sync="updated",

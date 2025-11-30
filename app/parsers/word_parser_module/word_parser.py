@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from base_parser import BaseParser
 
 if TYPE_CHECKING:
-    from utils.file_manager import File
+    from alpaca.domain.files.models import FileSnapshot
 
 from markitdown import MarkItDown  # type: ignore
 
@@ -64,7 +64,7 @@ class WordParser(BaseParser):
         # Инициализация Markitdown
         self.markitdown = MarkItDown()
     
-    def _parse(self, file: 'File') -> str:
+    def _parse(self, file: 'FileSnapshot') -> str:
         """
         Парсинг Word документа в текст
         

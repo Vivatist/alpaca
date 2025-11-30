@@ -22,7 +22,7 @@ from ..base_parser import BaseParser
 from ..document_converter import convert_xls_to_xlsx
 
 if TYPE_CHECKING:  # pragma: no cover
-    from utils.file_manager import File
+    from alpaca.domain.files.models import FileSnapshot
 
 
 class ExcelParser(BaseParser):
@@ -32,7 +32,7 @@ class ExcelParser(BaseParser):
         super().__init__("excel-parser")
         self.max_rows_per_table = max_rows_per_table
 
-    def _parse(self, file: "File") -> str:
+    def _parse(self, file: "FileSnapshot") -> str:
         file_path = file.full_path
         suffix = Path(file_path).suffix.lower()
         working_path = file_path

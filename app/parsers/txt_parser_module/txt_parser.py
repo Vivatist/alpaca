@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from base_parser import BaseParser
 
 if TYPE_CHECKING:
-    from utils.file_manager import File
+    from alpaca.domain.files.models import FileSnapshot
 
 # Импорты из модулей
 from .encoding_detector import detect_encoding
@@ -45,7 +45,7 @@ class TXTParser(BaseParser):
         """Инициализация парсера"""
         super().__init__("txt-parser")
     
-    def _parse(self, file: 'File') -> str:
+    def _parse(self, file: 'FileSnapshot') -> str:
         """
         Парсинг TXT файла в текст
         

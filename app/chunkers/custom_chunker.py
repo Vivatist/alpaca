@@ -1,12 +1,12 @@
 """Custom chunker для разбивки текста на чанки"""
 from typing import List
 from utils.logging import get_logger
-from utils.file_manager import File
+from alpaca.domain.files.models import FileSnapshot
 
 logger = get_logger("alpaca.chunker")
 
 
-def chunking(file: File) -> List[str]:
+def chunking(file: FileSnapshot) -> List[str]:
     """Разбивка текста на чанки
     
     Args:
@@ -21,7 +21,7 @@ def chunking(file: File) -> List[str]:
         
         chunks = []
         max_chunk_size = 1000  # символов
-        paragraphs = file.raw_text.split('\n\n')
+        paragraphs = (file.raw_text or "").split('\n\n')
         
         current_chunk = ""
         for para in paragraphs:

@@ -17,7 +17,7 @@ from abc import ABC, abstractmethod
 from utils.logging import get_logger
 
 if TYPE_CHECKING:
-    from utils.file_manager import File
+    from alpaca.domain.files.models import FileSnapshot
 
 
 class BaseParser(ABC):
@@ -26,13 +26,13 @@ class BaseParser(ABC):
     def __init__(self, parser_name: str):
         self.logger = get_logger(f"alpaca.parser.{parser_name}")
 
-    def parse(self, file: 'File') -> str:
+    def parse(self, file: 'FileSnapshot') -> str:
         """Финальный метод: вызывает реализацию `_parse` и гарантирует непустой текст."""
         text = self._parse(file)
         return self._ensure_text(text, file)
 
     @abstractmethod
-    def _parse(self, file: 'File') -> str:
+    def _parse(self, file: 'FileSnapshot') -> str:
         """Реализация парсинга в наследнике."""
         raise NotImplementedError
     
@@ -116,7 +116,7 @@ class BaseParser(ABC):
             self.logger.error(f"Error saving markdown | path={output_path} error={type(e).__name__}: {e}")
             return False
 
-    def _ensure_text(self, text: Optional[str], file: 'File') -> str:
+    def _ensure_text(self, text: Optional[str], file: 'FileSnapshot') -> str:
         """Валидация результата парсинга — запрещены пустые строки."""
         if text is None:
             raise ValueError(

@@ -9,6 +9,7 @@ import responses
 
 from main import ingest_pipeline
 from settings import settings
+from alpaca.domain.files.models import FileSnapshot
 
 
 class TestWorkerPipeline:
@@ -37,8 +38,7 @@ class TestWorkerPipeline:
                 )
             conn.commit()
         
-        from utils.file_manager import File
-        file = File(hash=file_hash, path=file_path, status_sync="added")
+        file = FileSnapshot(hash=file_hash, path=file_path, status_sync="added")
         result = ingest_pipeline(file)
         
         assert result is True
@@ -73,8 +73,7 @@ class TestWorkerPipeline:
                 )
             conn.commit()
         
-        from utils.file_manager import File
-        file = File(hash=file_hash, path=file_path, status_sync="added")
+        file = FileSnapshot(hash=file_hash, path=file_path, status_sync="added")
         result = ingest_pipeline(file)
         
         assert result is False
@@ -105,8 +104,7 @@ class TestWorkerPipeline:
                 )
             conn.commit()
         
-        from utils.file_manager import File
-        file = File(hash=file_hash, path=file_path, status_sync="added")
+        file = FileSnapshot(hash=file_hash, path=file_path, status_sync="added")
         result = ingest_pipeline(file)
         
         assert result is False
@@ -139,8 +137,7 @@ class TestWorkerPipeline:
                 )
             conn.commit()
         
-        from utils.file_manager import File
-        file = File(hash=file_hash, path=file_path, status_sync="added")
+        file = FileSnapshot(hash=file_hash, path=file_path, status_sync="added")
         result = ingest_pipeline(file)
         
         assert result is False
@@ -172,8 +169,7 @@ class TestWorkerPipeline:
                 )
             conn.commit()
         
-        from utils.file_manager import File
-        file = File(hash=file_hash, path=file_path, status_sync="added")
+        file = FileSnapshot(hash=file_hash, path=file_path, status_sync="added")
         result = ingest_pipeline(file)
         
         assert result is True

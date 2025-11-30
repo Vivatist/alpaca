@@ -3,39 +3,17 @@ FileManager - класс для управления файловыми опер
 Предоставляет утилиты для работы с файлами в контексте обработки документов
 """
 import os
-import hashlib
-from pathlib import Path
-from typing import Optional, List, TYPE_CHECKING
-from datetime import datetime
-from pydantic import BaseModel, computed_field
+from typing import TYPE_CHECKING
 
-from settings import settings
 from utils.chunk_manager import ChunkManager
 from utils.logging import get_logger
+from alpaca.domain.files.models import FileSnapshot
 
 if TYPE_CHECKING:
     from utils.database import Database
     from utils.chunk_manager import Chunk
 
 logger = get_logger(__name__)
-
-
-class File(BaseModel):
-    """Модель файла для работы с БД"""
-    path: str  # Относительный путь от MONITORED_PATH
-    hash: str
-    raw_text: Optional[str] = None
-    status_sync: str
-    size: Optional[int] = None
-    last_checked: Optional[datetime] = None
-    mtime: Optional[float] = None
-    
-    @computed_field
-    @property
-    def full_path(self) -> str:
-        """Полный абсолютный путь к файлу"""
-        return os.path.join(settings.MONITORED_PATH, self.path)
-
 
 
 class FileManager:
@@ -49,7 +27,7 @@ class FileManager:
         self.db = database
         self.chunk_manager = ChunkManager(database)
     
-    def mark_as_processed(self, file: File) -> None:
+    def mark_as_processed(self, file: FileSnapshot) -> None:
         """
         Пометить файл как обрабатываемый (status_sync='processed')
         
@@ -59,7 +37,7 @@ class FileManager:
         self.db.mark_as_processed(file.hash)
         logger.debug(f"Файл помечен как processed | hash={file.hash} path={file.path}")
     
-    def mark_as_ok(self, file: File) -> None:
+    def mark_as_ok(self, file: FileSnapshot) -> None:
         """
         Пометить файл как успешно обработанный (status_sync='ok')
         
@@ -69,7 +47,7 @@ class FileManager:
         self.db.mark_as_ok(file.hash)
         logger.info(f"✅ Файл успешно обработан | hash={file.hash} path={file.path}")
     
-    def mark_as_error(self, file: File) -> None:
+    def mark_as_error(self, file: FileSnapshot) -> None:
         """
         Пометить файл с ошибкой обработки (status_sync='error')
         
@@ -79,7 +57,7 @@ class FileManager:
         self.db.mark_as_error(file.hash)
         logger.error(f"❌ Файл помечен как error | hash={file.hash} path={file.path}")
     
-    def set_raw_text(self, file: File, raw_text: str) -> None:
+    def set_raw_text(self, file: FileSnapshot, raw_text: str) -> None:
         """
         Сохранить распарсенный текст файла в БД
         
@@ -90,7 +68,7 @@ class FileManager:
         self.db.set_raw_text(file.hash, raw_text)
         logger.debug(f"Сохранён raw_text | hash={file.hash} path={file.path} length={len(raw_text)}")
     
-    def delete(self, file: File) -> None:
+    def delete(self, file: FileSnapshot) -> None:
         """
         Удалить файл и все его чанки из БД
         
@@ -103,7 +81,7 @@ class FileManager:
         self.db.delete_file_by_hash(file.hash)
         logger.info(f"🗑️ Файл удалён | path={file.path} deleted_chunks={deleted_chunks_count}")
     
-    def delete_chunks_only(self, file: File) -> int:
+    def delete_chunks_only(self, file: FileSnapshot) -> int:
         """
         Удалить только чанки файла, не трогая запись о файле в БД
         Используется для updated файлов перед повторной обработкой
@@ -118,7 +96,7 @@ class FileManager:
         logger.info(f"🪓 Удалены только чанки | path={file.path} count={deleted_count}")
         return deleted_count
     
-    def delete_file_and_chunks(self, file: File) -> None:
+    def delete_file_and_chunks(self, file: FileSnapshot) -> None:
         """
         Удалить файл и все его чанки из БД
         Используется для deleted файлов
@@ -132,7 +110,7 @@ class FileManager:
         self.db.delete_file_by_hash(file.hash)
         logger.info(f"🗑️ Файл и чанки удалены | path={file.path} deleted_chunks={deleted_chunks_count}")
     
-    def save_file_to_disk(self, file: File, temp_dir: str = "/home/alpaca/tmp_md") -> str:
+    def save_file_to_disk(self, file: FileSnapshot, temp_dir: str = "/home/alpaca/tmp_md") -> str:
         """
         Сохранить распарсенный текст на диск в формате Markdown
         

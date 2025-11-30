@@ -22,7 +22,7 @@ from ..base_parser import BaseParser
 from ..document_converter import convert_ppt_to_pptx
 
 if TYPE_CHECKING:  # pragma: no cover
-    from utils.file_manager import File
+    from alpaca.domain.files.models import FileSnapshot
 
 
 class PowerPointParser(BaseParser):
@@ -31,7 +31,7 @@ class PowerPointParser(BaseParser):
     def __init__(self) -> None:
         super().__init__("powerpoint-parser")
 
-    def _parse(self, file: "File") -> str:
+    def _parse(self, file: "FileSnapshot") -> str:
         file_path = file.full_path
         working_path = file_path
         cleanup_dir: Optional[Path] = None

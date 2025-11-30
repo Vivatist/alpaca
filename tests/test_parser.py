@@ -9,7 +9,7 @@ import pytest
 from app.parsers.word_parser_module.word_parser import WordParser
 from app.parsers.pptx_parser_module.pptx_parser import PowerPointParser
 from app.parsers.excel_parser_module.excel_parser import ExcelParser
-from utils.file_manager import File
+from alpaca.domain.files.models import FileSnapshot
 
 
 class TestParserWord:
@@ -17,7 +17,7 @@ class TestParserWord:
     
     def test_parse_docx_file(self, temp_docx_file):
         """Тест парсинга реального DOCX файла"""
-        file = File(hash='test_hash_123', path=temp_docx_file, status_sync='added')
+        file = FileSnapshot(hash='test_hash_123', path=temp_docx_file, status_sync='added')
         parser = WordParser(enable_ocr=False)
         
         result = parser.parse(file)
@@ -30,7 +30,7 @@ class TestParserWord:
     
     def test_parse_nonexistent_file(self):
         """Тест парсинга несуществующего файла"""
-        file = File(hash='test_hash_456', path='/nonexistent/file.docx', status_sync='added')
+        file = FileSnapshot(hash='test_hash_456', path='/nonexistent/file.docx', status_sync='added')
 
         with pytest.raises(FileNotFoundError):
             WordParser(enable_ocr=False).parse(file)
@@ -46,7 +46,7 @@ class TestParserWord:
             temp_path = f.name
         
         try:
-            file = File(hash='test_hash_empty', path=temp_path, status_sync='added')
+            file = FileSnapshot(hash='test_hash_empty', path=temp_path, status_sync='added')
             
             with pytest.raises(ValueError):
                 WordParser(enable_ocr=False).parse(file)
@@ -59,7 +59,7 @@ class TestPowerPointParser:
     """Тесты парсинга PPTX файлов"""
 
     def test_parse_pptx_file(self, temp_pptx_file):
-        file = File(hash='pptx_hash_123', path=temp_pptx_file, status_sync='added')
+        file = FileSnapshot(hash='pptx_hash_123', path=temp_pptx_file, status_sync='added')
         parser = PowerPointParser()
 
         result = parser.parse(file)
@@ -69,7 +69,7 @@ class TestPowerPointParser:
         assert "Колонка A" in result
 
     def test_parse_nonexistent_pptx(self):
-        file = File(hash='pptx_missing', path='/nonexistent/file.pptx', status_sync='added')
+        file = FileSnapshot(hash='pptx_missing', path='/nonexistent/file.pptx', status_sync='added')
         parser = PowerPointParser()
 
         with pytest.raises(FileNotFoundError):
@@ -94,7 +94,7 @@ class TestPowerPointParser:
             temp_path = f.name
         
         try:
-            file = File(hash='test_hash_multi', path=temp_path, status_sync='added')
+            file = FileSnapshot(hash='test_hash_multi', path=temp_path, status_sync='added')
             
             result = WordParser(enable_ocr=False).parse(file)
             
@@ -112,7 +112,7 @@ class TestExcelParser:
     """Тесты парсинга Excel файлов"""
 
     def test_parse_xlsx_file(self, temp_xlsx_file):
-        file = File(hash='xlsx_hash', path=temp_xlsx_file, status_sync='added')
+        file = FileSnapshot(hash='xlsx_hash', path=temp_xlsx_file, status_sync='added')
         parser = ExcelParser(max_rows_per_table=50)
 
         result = parser.parse(file)
@@ -125,7 +125,7 @@ class TestExcelParser:
         assert "Бурение" in result
 
     def test_parse_nonexistent_xlsx(self):
-        file = File(hash='missing_xlsx', path='/tmp/absent.xlsx', status_sync='added')
+        file = FileSnapshot(hash='missing_xlsx', path='/tmp/absent.xlsx', status_sync='added')
         parser = ExcelParser()
 
         with pytest.raises(FileNotFoundError):
@@ -147,7 +147,7 @@ class TestExcelParser:
             fake_convert,
         )
 
-        file = File(hash='xls_hash', path=str(legacy_path), status_sync='added')
+        file = FileSnapshot(hash='xls_hash', path=str(legacy_path), status_sync='added')
         parser = ExcelParser()
 
         result = parser.parse(file)
@@ -170,7 +170,7 @@ class TestExcelParser:
             sheet.append(["Строка\n1", "Text\nwith\nlinebreaks"])
             wb.save(workbook_path)
 
-            file = File(hash='multi_hash', path=str(workbook_path), status_sync='added')
+            file = FileSnapshot(hash='multi_hash', path=str(workbook_path), status_sync='added')
             parser = ExcelParser()
 
             result = parser.parse(file)
@@ -194,7 +194,7 @@ class TestExcelParser:
             fail_convert,
         )
 
-        file = File(hash='xls_fallback_hash', path=str(temp_xls_file), status_sync='added')
+        file = FileSnapshot(hash='xls_fallback_hash', path=str(temp_xls_file), status_sync='added')
         parser = ExcelParser()
 
         result = parser.parse(file)

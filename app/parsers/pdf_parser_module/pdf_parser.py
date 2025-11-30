@@ -17,7 +17,7 @@ from utils.logging import get_logger
 from settings import settings
 
 if TYPE_CHECKING:  # pragma: no cover - только для type checkers
-    from utils.file_manager import File
+    from alpaca.domain.files.models import FileSnapshot
 
 
 import fitz  # PyMuPDF
@@ -39,7 +39,7 @@ class PDFParser(BaseParser):
         # Свойство использовалось в старой версии — сохраняем для совместимости
         self.enable_ocr = True
 
-    def _parse(self, file: 'File') -> str:
+    def _parse(self, file: 'FileSnapshot') -> str:
         file_path = file.full_path
 
         try:

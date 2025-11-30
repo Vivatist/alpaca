@@ -9,7 +9,7 @@ from utils.logging import get_logger
 
 if TYPE_CHECKING:
     from utils.database import Database
-    from utils.file_manager import File
+    from alpaca.domain.files.models import FileSnapshot
 
 logger = get_logger(__name__)
 
@@ -32,7 +32,7 @@ class ChunkManager:
         """
         self.db = database
     
-    def delete_chunks(self, file: 'File') -> int:
+    def delete_chunks(self, file: 'FileSnapshot') -> int:
         """
         Удалить все чанки файла из БД
         
@@ -65,7 +65,7 @@ class ChunkManager:
 
         return deleted_total
     
-    def get_chunks_count(self, file: 'File') -> int:
+    def get_chunks_count(self, file: 'FileSnapshot') -> int:
         """
         Получить количество чанков файла
         
@@ -90,7 +90,7 @@ class ChunkManager:
         file_hash = chunk.metadata.get('file_hash', 'unknown')
         logger.debug(f"Чанк сохранён | hash={file_hash} content_length={len(chunk.content)}")
     
-    def get_chunks(self, file: 'File') -> List[Chunk]:
+    def get_chunks(self, file: 'FileSnapshot') -> List[Chunk]:
         """
         Получить все чанки файла из БД
         

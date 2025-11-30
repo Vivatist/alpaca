@@ -9,6 +9,7 @@ import responses
 
 from main import ingest_pipeline, process_file
 from settings import settings
+from alpaca.domain.files.models import FileSnapshot
 
 
 class TestWorkerIntegration:
@@ -38,7 +39,6 @@ class TestWorkerIntegration:
             conn.commit()
         
         # Удаляем через process_file
-        from utils.file_manager import File
         file_info = {"hash": file_hash, "path": file_path, "status_sync": "deleted"}
         result = process_file(file_info)
         
@@ -84,8 +84,7 @@ class TestWorkerIntegration:
                 )
             conn.commit()
         
-        from utils.file_manager import File
-        file = File(hash=file_hash, path=file_path, status_sync="added")
+        file = FileSnapshot(hash=file_hash, path=file_path, status_sync="added")
         result = ingest_pipeline(file)
         
         assert result is True
@@ -116,8 +115,7 @@ class TestWorkerIntegration:
                 )
             conn.commit()
         
-        from utils.file_manager import File
-        file = File(hash=file_hash, path=file_path, status_sync="added")
+        file = FileSnapshot(hash=file_hash, path=file_path, status_sync="added")
         result = ingest_pipeline(file)
         
         assert result is False
