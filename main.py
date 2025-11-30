@@ -1,65 +1,22 @@
 """Основной модуль worker с совместимостью старого API."""
 
-import os
-from typing import Dict, Any
-from threading import Semaphore
-
 from utils.logging import setup_logging, get_logger
-from utils.worker import Worker
 from settings import settings
-from core.infrastructure.database.postgres import PostgresFileRepository
-from core.application.files import FileService
 from core.domain.files.models import FileSnapshot
 from tests.runner import run_tests_on_startup
 from core.application.files import ResetStuckFiles
-from core.application.processing import IngestDocument, ProcessFileEvent
-from core.domain.document_processing import (
-    get_parser_for_path,
-    embed_chunks,
-    chunk_document,
-)
-from core.application.document_processing.parsers import WordParser
+from core.application.bootstrap import build_worker_application
 
 logger = get_logger("core.worker")
 
-DOC_EXTENSIONS = (".doc", ".docx")
-word_parser = WordParser(enable_ocr=True)
+bootstrap_app = build_worker_application(settings)
 
-
-def legacy_parser_resolver(file_path: str):
-    """Возвращаем общий парсер, но doc/docx мапим на экспонированный word_parser."""
-    lower = file_path.lower()
-    if lower.endswith(DOC_EXTENSIONS):
-        return word_parser
-    return get_parser_for_path(file_path)
-
-# Инициализация
-db = PostgresFileRepository(settings.DATABASE_URL)
-file_service = FileService(db)
-FILEWATCHER_API = os.getenv("FILEWATCHER_API_URL", "http://localhost:8081")
-
-# Семафоры для ограничения конкурентности разных операций (из settings)
-PARSE_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_PARSING)
-EMBED_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_EMBEDDING)
-LLM_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_LLM)
-
-ingest_document = IngestDocument(
-    file_service=file_service,
-    database=db,
-    parser_resolver=legacy_parser_resolver,
-    chunker=chunk_document,
-    embedder=embed_chunks,
-    parse_semaphore=PARSE_SEMAPHORE,
-    embed_semaphore=EMBED_SEMAPHORE,
-)
-
-process_file_use_case = ProcessFileEvent(
-    ingest_document=ingest_document,
-    file_service=file_service,
-)
-
-# Backward-compatible attribute for legacy tests/imports
-chunking = chunk_document
+word_parser = bootstrap_app.word_parser
+ingest_document = bootstrap_app.ingest_document
+process_file_use_case = bootstrap_app.process_file_event
+chunking = bootstrap_app.chunker
+worker = bootstrap_app.worker
+db = bootstrap_app.repository
 
 
 def ingest_pipeline(file: FileSnapshot) -> bool:
@@ -90,10 +47,8 @@ if __name__ == "__main__":
         logger.error(f"Failed to reset processed statuses: {e}")
 
     # Создаём worker и запускаем
-    worker = Worker(
-        db=db,
-        filewatcher_api_url=FILEWATCHER_API,
-        process_file_func=process_file_use_case,
+    worker.start(
+        poll_interval=settings.WORKER_POLL_INTERVAL,
+        max_workers=settings.WORKER_MAX_CONCURRENT_FILES,
     )
-    worker.start(poll_interval=settings.WORKER_POLL_INTERVAL, max_workers=settings.WORKER_MAX_CONCURRENT_FILES)
 
