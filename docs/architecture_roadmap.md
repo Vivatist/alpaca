@@ -43,6 +43,8 @@
 ## Этап 4. Совместимость и тесты
 **Задача:** убрать устаревшие compat-слои после миграции тестов.
 
+**Статус:** ✅ Выполнено — `main.py` больше не экспортирует `ingest_pipeline`, а pytest использует фикстуры bootstrap (`worker_app`, `ingest_pipeline`, `process_file_use_case`).
+
 - **Действия**
   - Проверить внешние потребители `main.process_file` / `ingest_pipeline`; если их нет, удалить или переместить в `compat.py`.
   - Обновить тесты, чтобы они использовали bootstrap-фабрики (или `ProcessFileEvent`) напрямую.
@@ -51,6 +53,8 @@
 
 ## Этап 5. Документация и операционные практики
 **Задача:** зафиксировать архитектурные правила и упростить поддержку.
+
+**Статус:** ✅ Выполнено — добавлены README в `core/domain/document_processing` и `core/application/document_processing`, создан `docs/SETTINGS_ARCHITECTURE.md`, обновлён `scripts/команды.md` инструкциями по embedder/fixtures.
 
 - **Действия**
   - Добавить README в пакеты `core/domain/document_processing` и `core/application/document_processing` с описанием ответственности.
@@ -67,7 +71,7 @@
 | Bootstrap зависимостей | ☑ | `main.py` < 100 строк, все сервисы строятся в bootstrap |
 | Domain vs Application | ☑ | Нет прямых импортов `core/application/...` вне bootstrap |
 | Конфигурируемый embedder | ☑ | Переключение по `EMBEDDER_BACKEND` без правок кода |
-| Совместимость и тесты | ☐ | Удалён устаревший API, тесты через новые фасады |
-| Документация | ☐ | README/SETTINGS обновлены |
+| Совместимость и тесты | ☑ | Удалён устаревший API, тесты через новые фасады |
+| Документация | ☑ | README/SETTINGS обновлены |
 
 При необходимости добавляйте подпункты и статусы прямо в этом файле по мере выполнения.

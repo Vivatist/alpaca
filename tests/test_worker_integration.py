@@ -4,10 +4,9 @@
 import pytest
 import os
 import hashlib
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock
 import responses
 
-from main import ingest_pipeline, process_file_use_case
 from settings import settings
 from core.domain.files.models import FileSnapshot
 
@@ -15,7 +14,7 @@ from core.domain.files.models import FileSnapshot
 class TestWorkerIntegration:
     """Интеграционные тесты worker"""
     
-    def test_process_deleted_file(self, test_db):
+    def test_process_deleted_file(self, test_db, process_file_use_case):
         """Тест удаления файла и его чанков"""
         file_hash = "test_delete_hash_123"
         file_path = "/tmp/test_delete.txt"
@@ -57,12 +56,11 @@ class TestWorkerIntegration:
                 assert cur.fetchone()[0] == 0
     
     @responses.activate
-    @patch('main.word_parser.parse')
-    def test_ingest_pipeline_success(self, mock_parser, test_db, temp_docx_file, cleanup_temp_parsed):
+    def test_ingest_pipeline_success(self, test_db, temp_docx_file, cleanup_temp_parsed, worker_app, ingest_pipeline, monkeypatch):
         """Тест успешного прохождения полного пайплайна"""
         # Mock парсера
         test_text = "Это тестовый текст для проверки пайплайна. " * 50
-        mock_parser.return_value = test_text
+        monkeypatch.setattr(worker_app.word_parser, "parse", MagicMock(return_value=test_text))
         
         # Mock Ollama API
         responses.add(
@@ -97,11 +95,10 @@ class TestWorkerIntegration:
                 if status:
                     assert status[0] == "ok"
     
-    @patch('main.word_parser.parse')
-    def test_ingest_pipeline_parse_error(self, mock_parser, test_db, temp_docx_file):
+    def test_ingest_pipeline_parse_error(self, test_db, temp_docx_file, worker_app, ingest_pipeline, monkeypatch):
         """Тест обработки ошибки парсинга"""
         # Mock парсера с ошибкой
-        mock_parser.return_value = None
+        monkeypatch.setattr(worker_app.word_parser, "parse", MagicMock(return_value=None))
         
         file_hash = "test_error_hash_123"
         file_path = temp_docx_file
@@ -129,21 +126,20 @@ class TestWorkerIntegration:
                     assert status[0] == "error"
     
     @responses.activate
-    @patch.object(process_file_use_case, 'ingest_document')
-    def test_process_file_added(self, mock_ingest, test_db, temp_docx_file, mock_file_info):
+    def test_process_file_added(self, test_db, temp_docx_file, mock_file_info, process_file_use_case, monkeypatch):
         """Тест обработки добавленного файла"""
-        mock_ingest.return_value = True
+        mock_ingest = MagicMock(return_value=True)
+        monkeypatch.setattr(process_file_use_case, "ingest_document", mock_ingest)
         
         file_info = mock_file_info("/tmp/test_added.docx", "hash_added_123", "added")
         
         result = process_file_use_case(file_info)
         
         assert result is True
-        assert mock_ingest.called
-        assert mock_ingest.call_count == 1
+        mock_ingest.assert_called_once()
     
     @responses.activate
-    def test_process_file_deleted(self, test_db, mock_file_info):
+    def test_process_file_deleted(self, test_db, mock_file_info, process_file_use_case):
         """Тест обработки удалённого файла"""
         file_info = mock_file_info("/tmp/test_deleted.docx", "hash_deleted_123", "deleted")
         
@@ -167,7 +163,7 @@ class TestWorkerIntegration:
                 assert cur.fetchone()[0] == 0
     
     @responses.activate
-    def test_process_file_updated(self, test_db, temp_docx_file, mock_file_info):
+    def test_process_file_updated(self, test_db, temp_docx_file, mock_file_info, process_file_use_case):
         """Тест обработки обновлённого файла"""
         # Мокаем Ollama API для эмбеддингов
         responses.add(
@@ -199,7 +195,7 @@ class TestWorkerIntegration:
                 status = cur.fetchone()
                 assert status[0] == "ok"
     
-    def test_process_file_unknown_status(self, test_db, mock_file_info):
+    def test_process_file_unknown_status(self, test_db, mock_file_info, process_file_use_case):
         """Тест обработки файла с неизвестным статусом"""
         file_info = mock_file_info("/tmp/test_unknown.docx", "hash_unknown_123", "unknown_status")
         

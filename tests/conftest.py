@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Generator
 
+from core.application.bootstrap import build_worker_application, WorkerApplication
 from core.infrastructure.database.postgres import PostgresFileRepository
 from settings import settings
 
@@ -49,6 +50,30 @@ def test_db() -> Generator[PostgresFileRepository, None, None]:
             cur.execute("DELETE FROM chunks WHERE metadata->>'file_path' LIKE '/tmp/test_%'")
             cur.execute("DELETE FROM files WHERE path LIKE '/tmp/test_%'")
         conn.commit()
+
+
+@pytest.fixture(scope="session")
+def worker_app() -> WorkerApplication:
+    """Готовый bootstrap worker приложения для тестов."""
+
+    return build_worker_application(settings)
+
+
+@pytest.fixture
+def ingest_pipeline(worker_app: WorkerApplication):
+    """Возвращает пайплайн IngestDocument и откатывает изменения зависимостей после теста."""
+
+    ingest = worker_app.ingest_document
+    original_chunker = ingest.chunker
+    yield ingest
+    ingest.chunker = original_chunker
+
+
+@pytest.fixture
+def process_file_use_case(worker_app: WorkerApplication):
+    """Возвращает use-case ProcessFileEvent для тестов."""
+
+    return worker_app.process_file_event
 
 
 @pytest.fixture

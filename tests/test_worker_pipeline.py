@@ -4,10 +4,9 @@
 import pytest
 import os
 import tempfile
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 import responses
 
-from main import ingest_pipeline
 from settings import settings
 from core.domain.files.models import FileSnapshot
 
@@ -16,7 +15,7 @@ class TestWorkerPipeline:
     """Тесты полного пайплайна обработки"""
     
     @responses.activate
-    def test_pipeline_docx_to_chunks(self, test_db, temp_docx_file, cleanup_temp_parsed):
+    def test_pipeline_docx_to_chunks(self, test_db, temp_docx_file, cleanup_temp_parsed, ingest_pipeline):
         """Тест полного пайплайна: DOCX → парсинг → чанки → эмбеддинги"""
         # Mock Ollama API
         responses.add(
@@ -59,7 +58,7 @@ class TestWorkerPipeline:
                 chunks_count = cur.fetchone()[0]
                 assert chunks_count > 0
     
-    def test_pipeline_unsupported_file_type(self, test_db):
+    def test_pipeline_unsupported_file_type(self, test_db, ingest_pipeline):
         """Тест обработки неподдерживаемого типа файла"""
         file_hash = "test_unsupported_123"
         file_path = "/tmp/test_file.pdf"  # PDF не поддерживается
@@ -87,10 +86,9 @@ class TestWorkerPipeline:
                     assert row[0] == "error"
     
     @responses.activate
-    @patch('main.word_parser.parse')
-    def test_pipeline_empty_parsed_text(self, mock_parser, test_db, temp_docx_file):
+    def test_pipeline_empty_parsed_text(self, test_db, temp_docx_file, worker_app, ingest_pipeline, monkeypatch):
         """Тест обработки файла с пустым результатом парсинга"""
-        mock_parser.return_value = ""  # Пустой текст
+        monkeypatch.setattr(worker_app.word_parser, "parse", MagicMock(return_value=""))
         
         file_hash = "test_empty_parsed_123"
         file_path = temp_docx_file
@@ -118,12 +116,10 @@ class TestWorkerPipeline:
                     assert row[0] == "error"
     
     @responses.activate
-    @patch('main.word_parser.parse')
-    @patch('main.chunking')
-    def test_pipeline_no_chunks_created(self, mock_chunking, mock_parser, test_db, temp_docx_file):
+    def test_pipeline_no_chunks_created(self, test_db, temp_docx_file, worker_app, ingest_pipeline, monkeypatch):
         """Тест когда чанкование не создаёт чанков"""
-        mock_parser.return_value = "Текст был распарсен"
-        mock_chunking.return_value = []  # Пустой список чанков
+        monkeypatch.setattr(worker_app.word_parser, "parse", MagicMock(return_value="Текст был распарсен"))
+        ingest_pipeline.chunker = lambda _file: []
         
         file_hash = "test_no_chunks_123"
         file_path = temp_docx_file
@@ -143,11 +139,10 @@ class TestWorkerPipeline:
         assert result is False
     
     @responses.activate
-    @patch('main.word_parser.parse')
-    def test_pipeline_creates_temp_file(self, mock_parser, test_db, temp_docx_file, cleanup_temp_parsed):
+    def test_pipeline_creates_temp_file(self, test_db, temp_docx_file, cleanup_temp_parsed, worker_app, ingest_pipeline, monkeypatch):
         """Тест что пайплайн создаёт временный .md файл"""
         test_text = "Тестовый текст для сохранения"
-        mock_parser.return_value = test_text
+        monkeypatch.setattr(worker_app.word_parser, "parse", MagicMock(return_value=test_text))
         
         # Mock Ollama
         responses.add(
