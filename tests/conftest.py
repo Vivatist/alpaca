@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Generator
 
-from utils.database import PostgreDataBase
+from alpaca.infrastructure.database.postgres import PostgresFileRepository
 from settings import settings
 
 
@@ -38,9 +38,9 @@ def setup_test_logging():
 
 
 @pytest.fixture
-def test_db() -> Generator[PostgreDataBase, None, None]:
+def test_db() -> Generator[PostgresFileRepository, None, None]:
     """Создание тестовой БД"""
-    db = PostgreDataBase(settings.DATABASE_URL)
+    db = PostgresFileRepository(settings.DATABASE_URL)
     yield db
     # Cleanup после тестов
     with db.get_connection() as conn:

@@ -7,7 +7,7 @@ from threading import Semaphore
 from utils.logging import setup_logging, get_logger
 from utils.worker import Worker
 from settings import settings
-from utils.database import PostgreDataBase
+from alpaca.infrastructure.database.postgres import PostgresFileRepository
 from alpaca.application.files import FileService
 from alpaca.domain.files.models import FileSnapshot
 from tests.runner import run_tests_on_startup
@@ -34,7 +34,7 @@ def legacy_parser_resolver(file_path: str):
     return get_parser_for_path(file_path)
 
 # Инициализация
-db = PostgreDataBase(settings.DATABASE_URL)
+db = PostgresFileRepository(settings.DATABASE_URL)
 file_service = FileService(db)
 FILEWATCHER_API = os.getenv("FILEWATCHER_API_URL", "http://localhost:8081")
 

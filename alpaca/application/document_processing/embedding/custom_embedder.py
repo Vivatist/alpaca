@@ -3,7 +3,7 @@ import requests
 import psycopg2
 import psycopg2.extras
 
-from utils.database.database import Database
+from alpaca.domain.files.repository import Database
 from utils.logging import get_logger
 from settings import settings
 from alpaca.domain.files.models import FileSnapshot

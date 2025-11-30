@@ -22,7 +22,7 @@ for extra_path in (src_path, repo_root):
     if str(extra_path) not in sys.path:
         sys.path.insert(0, str(extra_path))
 
-from utils.database import PostgreDataBase
+from alpaca.infrastructure.database.postgres import PostgresFileRepository
 from scanner import Scanner
 from vector_sync import VectorSync
 
@@ -37,7 +37,7 @@ class TestFileWatcher:
         
         # Загружаем DATABASE_URL из settings
         from settings import settings
-        self.db = PostgreDataBase(database_url=settings.DATABASE_URL)
+        self.db = PostgresFileRepository(database_url=settings.DATABASE_URL)
         
         # Очищаем таблицу files перед тестом
         with self.db.get_connection() as conn:

@@ -5,7 +5,7 @@ from threading import Semaphore
 from typing import Callable, Dict, Any, List, Optional
 
 from utils.logging import get_logger
-from utils.database import Database
+from alpaca.domain.files.repository import Database
 from alpaca.domain.files.models import FileSnapshot
 from alpaca.application.files.services import FileService
 from alpaca.application.document_processing.parsers import BaseParser
