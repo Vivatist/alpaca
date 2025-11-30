@@ -3,15 +3,15 @@ import requests
 import psycopg2
 import psycopg2.extras
 
-from core.domain.files.repository import Database
+from alpaca.domain.files.repository import Database
 from utils.logging import get_logger
 from settings import settings
-from core.domain.files.models import FileSnapshot
+from alpaca.domain.files.models import FileSnapshot
 
-logger = get_logger("core.embedder")
+logger = get_logger("alpaca.embedder")
 
 
-def custom_embedding(db: Database, file: FileSnapshot, chunks: List[str]) -> int:
+def embedding(db: Database, file: FileSnapshot, chunks: List[str]) -> int:
     """Создание эмбеддингов через Ollama и сохранение в БД
     
     Args:

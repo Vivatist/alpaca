@@ -1,7 +1,8 @@
 """Embedding implementations used by the worker."""
 
-from .custom_embedder import embedding
+from .custom_embedder import custom_embedding
+from .langchain_embedder import langchain_embedding
 
-embed_chunks = embedding
+embed_chunks = custom_embedding
 
-__all__ = ["embedding", "embed_chunks"]
+__all__ = ["custom_embedding", "langchain_embedding", "embed_chunks"]

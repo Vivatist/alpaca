@@ -67,27 +67,7 @@ def ingest_pipeline(file: FileSnapshot) -> bool:
     return ingest_document(file)
 
 
-def process_file(file_info: Dict[str, Any]) -> bool:
-    """Backward-compatible entry point для тестов (имитирует старую логику)."""
-    file = FileSnapshot(**file_info)
-    logger.info(f"Processing file (compat layer): {file.path} status={file.status_sync}")
 
-    try:
-        if file.status_sync == "deleted":
-            file_service.delete_file_and_chunks(file)
-            return True
-        if file.status_sync == "updated":
-            file_service.delete_chunks_only(file)
-            return ingest_pipeline(file)
-        if file.status_sync == "added":
-            return ingest_pipeline(file)
-
-        logger.warning(f"Unknown status in compat layer: {file.status_sync}")
-        return False
-    except Exception as exc:
-        logger.error(f"✗ Compat process_file failed | file={file.path} error={exc}")
-        file_service.mark_as_error(file)
-        return False
 
 if __name__ == "__main__":
     # Запуск тестов при старте (если включено в настройках)

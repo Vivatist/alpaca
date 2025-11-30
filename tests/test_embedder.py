@@ -4,7 +4,7 @@
 import pytest
 import responses
 from unittest.mock import Mock, patch, MagicMock
-from core.application.document_processing.embedding import embedding
+from core.application.document_processing.embedding import custom_embedding
 from settings import settings
 from core.domain.files.models import FileSnapshot
 
@@ -28,7 +28,7 @@ class TestEmbedding:
         file_path = "/tmp/test_embed.txt"
         
         file = FileSnapshot(hash=file_hash, path=file_path, status_sync="added")
-        result = embedding(test_db, file, chunks)
+        result = custom_embedding(test_db, file, chunks)
         
         assert result == 2
         assert len(responses.calls) == 2
@@ -40,7 +40,7 @@ class TestEmbedding:
         file_path = "/tmp/test_empty.txt"
         
         file = FileSnapshot(hash=file_hash, path=file_path, status_sync="added")
-        result = embedding(test_db, file, chunks)
+        result = custom_embedding(test_db, file, chunks)
         
         assert result == 0
     
@@ -60,7 +60,7 @@ class TestEmbedding:
         file_path = "/tmp/test_error.txt"
         
         file = FileSnapshot(hash=file_hash, path=file_path, status_sync="added")
-        result = embedding(test_db, file, chunks)
+        result = custom_embedding(test_db, file, chunks)
         
         assert result == 0
     
@@ -92,7 +92,7 @@ class TestEmbedding:
         file_path = "/tmp/test_partial.txt"
         
         file = FileSnapshot(hash=file_hash, path=file_path, status_sync="added")
-        result = embedding(test_db, file, chunks)
+        result = custom_embedding(test_db, file, chunks)
         
         # Должны быть сохранены 2 из 3 чанков
         assert result == 2
@@ -112,7 +112,7 @@ class TestEmbedding:
         file_path = "/tmp/test_no_embed.txt"
         
         file = FileSnapshot(hash=file_hash, path=file_path, status_sync="added")
-        result = embedding(test_db, file, chunks)
+        result = custom_embedding(test_db, file, chunks)
         
         assert result == 0
     
@@ -131,7 +131,7 @@ class TestEmbedding:
         file_path = "/tmp/test_db.txt"
         
         file = FileSnapshot(hash=file_hash, path=file_path, status_sync="added")
-        result = embedding(test_db, file, chunks)
+        result = custom_embedding(test_db, file, chunks)
         
         assert result == 1
         

@@ -7,7 +7,7 @@ import hashlib
 from unittest.mock import Mock, patch, MagicMock
 import responses
 
-from main import ingest_pipeline, process_file
+from main import ingest_pipeline, process_file_use_case
 from settings import settings
 from core.domain.files.models import FileSnapshot
 
@@ -40,7 +40,7 @@ class TestWorkerIntegration:
         
         # Удаляем через process_file
         file_info = {"hash": file_hash, "path": file_path, "status_sync": "deleted"}
-        result = process_file(file_info)
+        result = process_file_use_case(file_info)
         
         assert result is True
         
@@ -129,14 +129,14 @@ class TestWorkerIntegration:
                     assert status[0] == "error"
     
     @responses.activate
-    @patch('main.ingest_pipeline')
+    @patch.object(process_file_use_case, 'ingest_document')
     def test_process_file_added(self, mock_ingest, test_db, temp_docx_file, mock_file_info):
         """Тест обработки добавленного файла"""
         mock_ingest.return_value = True
         
         file_info = mock_file_info("/tmp/test_added.docx", "hash_added_123", "added")
         
-        result = process_file(file_info)
+        result = process_file_use_case(file_info)
         
         assert result is True
         assert mock_ingest.called
@@ -156,7 +156,7 @@ class TestWorkerIntegration:
                 )
             conn.commit()
         
-        result = process_file(file_info)
+        result = process_file_use_case(file_info)
         
         assert result is True
         
@@ -188,7 +188,7 @@ class TestWorkerIntegration:
                 )
             conn.commit()
         
-        result = process_file(file_info)
+        result = process_file_use_case(file_info)
         
         assert result is True
         
@@ -203,6 +203,6 @@ class TestWorkerIntegration:
         """Тест обработки файла с неизвестным статусом"""
         file_info = mock_file_info("/tmp/test_unknown.docx", "hash_unknown_123", "unknown_status")
         
-        result = process_file(file_info)
+        result = process_file_use_case(file_info)
         
         assert result is False
