@@ -56,11 +56,12 @@ class TestWorkerIntegration:
                 assert cur.fetchone()[0] == 0
     
     @responses.activate
-    def test_ingest_pipeline_success(self, test_db, temp_docx_file, cleanup_temp_parsed, worker_app, ingest_pipeline, monkeypatch):
+    def test_ingest_pipeline_success(self, test_db, temp_docx_file, cleanup_temp_parsed, ingest_pipeline, monkeypatch):
         """Тест успешного прохождения полного пайплайна"""
         # Mock парсера
         test_text = "Это тестовый текст для проверки пайплайна. " * 50
-        monkeypatch.setattr(worker_app.word_parser, "parse", MagicMock(return_value=test_text))
+        from core.application.document_processing.parsers import WordParser
+        monkeypatch.setattr(WordParser, "_parse", MagicMock(return_value=test_text))
         
         # Mock Ollama API
         responses.add(
@@ -95,10 +96,11 @@ class TestWorkerIntegration:
                 if status:
                     assert status[0] == "ok"
     
-    def test_ingest_pipeline_parse_error(self, test_db, temp_docx_file, worker_app, ingest_pipeline, monkeypatch):
+    def test_ingest_pipeline_parse_error(self, test_db, temp_docx_file, ingest_pipeline, monkeypatch):
         """Тест обработки ошибки парсинга"""
         # Mock парсера с ошибкой
-        monkeypatch.setattr(worker_app.word_parser, "parse", MagicMock(return_value=None))
+        from core.application.document_processing.parsers import WordParser
+        monkeypatch.setattr(WordParser, "_parse", MagicMock(return_value=None))
         
         file_hash = "test_error_hash_123"
         file_path = temp_docx_file

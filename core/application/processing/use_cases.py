@@ -2,30 +2,26 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from threading import Semaphore
-from typing import Callable, Dict, Any, List, Optional
+from typing import Dict, Any, List
+import os
 
 from utils.logging import get_logger
-from core.domain.files.repository import Database
+from core.domain.files.repository import FileRepository
 from core.domain.files.models import FileSnapshot
-from core.application.files.services import FileService
-from core.application.document_processing.parsers import BaseParser
-
-ParserResolver = Callable[[str], Optional[BaseParser]]
-Chunker = Callable[[FileSnapshot], List[str]]
-Embedder = Callable[[Database, FileSnapshot, List[str]], int]
+from core.domain.document_processing import ParserRegistry, Chunker, Embedder
 
 
 @dataclass
 class IngestDocument:
     """Полный пайплайн обработки документа (parse → chunk → embed)."""
 
-    file_service: FileService
-    database: Database
-    parser_resolver: ParserResolver
+    repository: FileRepository
+    parser_registry: ParserRegistry
     chunker: Chunker
     embedder: Embedder
     parse_semaphore: Semaphore
     embed_semaphore: Semaphore
+    temp_dir: str = "/home/alpaca/tmp_md"
     logger_name: str = field(default="core.ingest")
 
     def __post_init__(self):
@@ -34,46 +30,60 @@ class IngestDocument:
     def __call__(self, file: FileSnapshot) -> bool:
         self.logger.info(f"🍎 Start ingest pipeline: {file.path} (hash: {file.hash[:8]}...)")
         try:
-            parser = self.parser_resolver(file.path)
+            # 1. Parse
+            parser = self.parser_registry.get_parser(file.path)
             if parser is None:
                 self.logger.error(f"Unsupported file type: {file.path}")
-                self.file_service.mark_as_error(file)
+                self.repository.mark_as_error(file.hash)
                 return False
 
             with self.parse_semaphore:
                 file.raw_text = parser.parse(file)
-                self.file_service.set_raw_text(file, file.raw_text)
+                self.repository.set_raw_text(file.hash, file.raw_text)
 
             self.logger.info(f"✅ Parsed: {len(file.raw_text) if file.raw_text else 0} chars")
 
-            self.file_service.save_file_to_disk(file)
+            # 2. Save to disk for debugging
+            self._save_to_disk(file)
 
+            # 3. Chunk
             chunks = self.chunker(file)
             if not chunks:
                 self.logger.warning(f"No chunks created for {file.path}")
-                self.file_service.mark_as_error(file)
+                self.repository.mark_as_error(file.hash)
                 return False
 
+            # 4. Embed
             with self.embed_semaphore:
-                chunks_count = self.embedder(self.database, file, chunks)
+                chunks_count = self.embedder(self.repository, file, chunks)
 
             if chunks_count == 0:
                 self.logger.warning(f"No embeddings created for {file.path}")
-                self.file_service.mark_as_error(file)
+                self.repository.mark_as_error(file.hash)
                 return False
 
-            self.file_service.mark_as_ok(file)
-            self.logger.info(
-                f"✅ File processed successfully: {file.path} | chunks={chunks_count}"
-            )
+            # 5. Mark success
+            self.repository.mark_as_ok(file.hash)
+            self.logger.info(f"✅ File processed successfully: {file.path} | chunks={chunks_count}")
             return True
-        except Exception as exc:  # pragma: no cover - defensive logging
+            
+        except Exception as exc:
             import traceback
-
             self.logger.error(f"Pipeline failed for {file.path}: {exc}")
             self.logger.error(f"Traceback:\n{traceback.format_exc()}")
-            self.file_service.mark_as_error(file)
+            self.repository.mark_as_error(file.hash)
             return False
+    
+    def _save_to_disk(self, file: FileSnapshot) -> None:
+        """Save parsed text to disk for debugging."""
+        if not file.raw_text:
+            return
+        
+        temp_file_path = os.path.join(self.temp_dir, f"{file.path}.md")
+        os.makedirs(os.path.dirname(temp_file_path), exist_ok=True)
+        with open(temp_file_path, "w", encoding="utf-8") as f:
+            f.write(file.raw_text)
+        self.logger.debug(f"💾 Saved to {temp_file_path}")
 
 
 @dataclass
@@ -81,7 +91,7 @@ class ProcessFileEvent:
     """Use-case для обработки событий file_watcher'a."""
 
     ingest_document: IngestDocument
-    file_service: FileService
+    repository: FileRepository
     logger_name: str = field(default="core.process_file")
 
     def __post_init__(self):
@@ -93,17 +103,23 @@ class ProcessFileEvent:
 
         try:
             if file.status_sync == "deleted":
-                self.file_service.delete_file_and_chunks(file)
+                self.repository.delete_chunks_by_hash(file.hash)
+                self.repository.delete_file_by_hash(file.hash)
+                self.logger.info(f"🗑️ Deleted file and chunks: {file.path}")
                 return True
+            
             if file.status_sync == "updated":
-                self.file_service.delete_chunks_only(file)
+                self.repository.delete_chunks_by_hash(file.hash)
+                self.logger.info(f"🪓 Deleted old chunks: {file.path}")
                 return self.ingest_document(file)
+            
             if file.status_sync == "added":
                 return self.ingest_document(file)
 
             self.logger.warning(f"Unknown status: {file.status_sync} for {file.path}")
             return False
-        except Exception as exc:  # pragma: no cover - defensive logging
+            
+        except Exception as exc:
             self.logger.error(f"✗ Error processing {file.path}: {exc}")
-            self.file_service.mark_as_error(file)
+            self.repository.mark_as_error(file.hash)
             return False

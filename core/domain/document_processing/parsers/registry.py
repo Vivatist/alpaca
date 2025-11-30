@@ -1,51 +1,30 @@
-"""Parser registry exposed at domain level."""
+"""Parser registry for mapping file extensions to parsers."""
 
 from __future__ import annotations
 
-from typing import Callable, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from . import ParserProtocol
 
-ParserFactory = Callable[[], ParserProtocol]
-RegistryConfig = Tuple[Tuple[Tuple[str, ...], ParserFactory], ...]
-
 
 class ParserRegistry:
-    """Simple factory that returns parser instances by file extension."""
+    """Maps file extensions to parser instances."""
 
-    def __init__(self, registry: RegistryConfig):
-        self._registry = registry
+    def __init__(self, parsers: Dict[Tuple[str, ...], ParserProtocol]):
+        """
+        Args:
+            parsers: Dict mapping extension tuples to parser instances
+                    Example: {('.doc', '.docx'): word_parser, ('.pdf',): pdf_parser}
+        """
+        self._parsers = parsers
 
     def get_parser(self, file_path: str) -> Optional[ParserProtocol]:
+        """Returns parser for file extension or None if unsupported."""
         lower_path = file_path.lower()
-        for extensions, factory in self._registry:
+        for extensions, parser in self._parsers.items():
             if lower_path.endswith(extensions):
-                return factory()
+                return parser
         return None
 
 
-_parser_registry: Optional[ParserRegistry] = None
-
-
-def configure_parser_registry(registry: ParserRegistry) -> None:
-    """Registers parser registry supplied by application bootstrap."""
-
-    global _parser_registry
-    _parser_registry = registry
-
-
-def get_parser_for_path(file_path: str) -> Optional[ParserProtocol]:
-    """Returns parser for provided path or raises if registry is not ready."""
-
-    if _parser_registry is None:
-        raise RuntimeError("Parser registry is not configured")
-    return _parser_registry.get_parser(file_path)
-
-
-__all__ = [
-    "ParserFactory",
-    "RegistryConfig",
-    "ParserRegistry",
-    "configure_parser_registry",
-    "get_parser_for_path",
-]
+__all__ = ["ParserRegistry"]

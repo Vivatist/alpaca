@@ -86,9 +86,10 @@ class TestWorkerPipeline:
                     assert row[0] == "error"
     
     @responses.activate
-    def test_pipeline_empty_parsed_text(self, test_db, temp_docx_file, worker_app, ingest_pipeline, monkeypatch):
+    def test_pipeline_empty_parsed_text(self, test_db, temp_docx_file, ingest_pipeline, monkeypatch):
         """Тест обработки файла с пустым результатом парсинга"""
-        monkeypatch.setattr(worker_app.word_parser, "parse", MagicMock(return_value=""))
+        from core.application.document_processing.parsers import WordParser
+        monkeypatch.setattr(WordParser, "_parse", MagicMock(return_value=""))
         
         file_hash = "test_empty_parsed_123"
         file_path = temp_docx_file
@@ -116,9 +117,10 @@ class TestWorkerPipeline:
                     assert row[0] == "error"
     
     @responses.activate
-    def test_pipeline_no_chunks_created(self, test_db, temp_docx_file, worker_app, ingest_pipeline, monkeypatch):
+    def test_pipeline_no_chunks_created(self, test_db, temp_docx_file, ingest_pipeline, monkeypatch):
         """Тест когда чанкование не создаёт чанков"""
-        monkeypatch.setattr(worker_app.word_parser, "parse", MagicMock(return_value="Текст был распарсен"))
+        from core.application.document_processing.parsers import WordParser
+        monkeypatch.setattr(WordParser, "_parse", MagicMock(return_value="Текст был распарсен"))
         ingest_pipeline.chunker = lambda _file: []
         
         file_hash = "test_no_chunks_123"
@@ -139,10 +141,11 @@ class TestWorkerPipeline:
         assert result is False
     
     @responses.activate
-    def test_pipeline_creates_temp_file(self, test_db, temp_docx_file, cleanup_temp_parsed, worker_app, ingest_pipeline, monkeypatch):
+    def test_pipeline_creates_temp_file(self, test_db, temp_docx_file, cleanup_temp_parsed, ingest_pipeline, monkeypatch):
         """Тест что пайплайн создаёт временный .md файл"""
         test_text = "Тестовый текст для сохранения"
-        monkeypatch.setattr(worker_app.word_parser, "parse", MagicMock(return_value=test_text))
+        from core.application.document_processing.parsers import WordParser
+        monkeypatch.setattr(WordParser, "_parse", MagicMock(return_value=test_text))
         
         # Mock Ollama
         responses.add(
