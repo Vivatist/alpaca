@@ -1,8 +1,8 @@
 """Тесты для модуля фильтрации файлов"""
 
 import os
-import os
 import sys
+import tempfile
 from pathlib import Path
 
 # Добавляем src/ и корень репозитория в PYTHONPATH

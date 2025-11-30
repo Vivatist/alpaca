@@ -4,6 +4,7 @@ File Watcher Service - изолированный сервис для монит
 from typing import Dict, Any, Optional
 from scanner import Scanner
 from alpaca.infrastructure.database.postgres import PostgresFileRepository
+from alpaca.application.files import SyncFilesystemSnapshot
 from vector_sync import VectorSync
 from file_filter import FileFilter
 
@@ -37,6 +38,7 @@ class FileWatcherService:
             table_name: Название таблицы файлов в БД
         """
         self.db = PostgresFileRepository(database_url=database_url, files_table=table_name)
+        self.sync_use_case = SyncFilesystemSnapshot(self.db)
         
         file_filter = FileFilter(
             min_size=file_min_size,
@@ -68,7 +70,7 @@ class FileWatcherService:
             files = self.scanner.scan()
             
             # Синхронизация с БД
-            file_sync = self.db.sync_by_hash(files)
+            file_sync = self.sync_use_case(files)
             
             duration = time.time() - start_time
             

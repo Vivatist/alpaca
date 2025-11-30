@@ -19,6 +19,7 @@ except IndexError:
     pass
 
 from alpaca.infrastructure.database.postgres import PostgresFileRepository
+from alpaca.application.files import DequeueNextFile, GetQueueStats
 
 # Инициализация FastAPI
 app = FastAPI(
@@ -27,8 +28,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Инициализация БД
+# Инициализация БД и use-case
 db = PostgresFileRepository(database_url=os.getenv("DATABASE_URL"))
+dequeue_next_file = DequeueNextFile(db)
+get_queue_stats_use_case = GetQueueStats(db)
 
 
 class FileResponse(BaseModel):
@@ -62,7 +65,7 @@ async def get_next_file():
         None: Если очередь пуста (возвращает 204 No Content)
     """
     try:
-        next_file = db.get_next_file_for_processing()
+        next_file = dequeue_next_file()
         
         if next_file is None:
             # Очередь пуста - возвращаем 204 No Content
@@ -83,7 +86,7 @@ async def get_queue_stats():
         Dict: Количество файлов по каждому статусу
     """
     try:
-        stats = db.get_queue_stats()
+        stats = get_queue_stats_use_case()
         return stats
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
