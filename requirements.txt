@@ -38,3 +38,4 @@ tabula-py==2.9.3
 opencv-python-headless==4.10.0.84
 deskew==1.5.1
 numpy>=2.1.0
+
