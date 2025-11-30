@@ -14,13 +14,10 @@ Pipeline:
 """
 
 import os
-import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-# Добавляем путь к базовому парсеру
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from base_parser import BaseParser
+from ..base_parser import BaseParser
 
 if TYPE_CHECKING:
     from alpaca.domain.files.models import FileSnapshot

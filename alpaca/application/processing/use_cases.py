@@ -8,7 +8,7 @@ from utils.logging import get_logger
 from utils.database import Database
 from alpaca.domain.files.models import FileSnapshot
 from alpaca.application.files.services import FileService
-from app.parsers.base_parser import BaseParser
+from alpaca.application.document_processing.parsers import BaseParser
 
 ParserResolver = Callable[[str], Optional[BaseParser]]
 Chunker = Callable[[FileSnapshot], List[str]]

@@ -37,7 +37,7 @@ word_parser_module/
 Координирует работу всех модулей, реализует основной pipeline:
 
 ```python
-from app.parsers.word_parser_module.word_parser import WordParser
+from alpaca.application.document_processing.parsers.word_parser_module.word_parser import WordParser
 
 parser = WordParser(enable_ocr=True, ocr_strategy="auto")
 result = parser.parse(file_object)
@@ -55,7 +55,7 @@ result = parser.parse(file_object)
 Расположен в `app/parsers/document_converter.py`. Используется и Word, и PowerPoint парсерами.
 
 ```python
-from app.parsers.document_converter import convert_doc_to_docx
+from alpaca.application.document_processing.parsers.document_converter import convert_doc_to_docx
 
 docx_path = convert_doc_to_docx("/path/to/file.doc")
 ```
@@ -71,7 +71,7 @@ docx_path = convert_doc_to_docx("/path/to/file.doc")
 Конвертирует WMF/EMF изображения в PNG для OCR.
 
 ```python
-from app.parsers.word_parser_module.image_converter import (
+from alpaca.application.document_processing.parsers.word_parser_module.image_converter import (
     convert_wmf_to_png,
     extract_images_via_pdf,
     get_image_extension
@@ -95,7 +95,7 @@ from app.parsers.word_parser_module.image_converter import (
 Извлекает изображения из DOCX и выполняет OCR через Unstructured.
 
 ```python
-from app.parsers.word_parser_module.ocr_processor import (
+from alpaca.application.document_processing.parsers.word_parser_module.ocr_processor import (
     extract_images_from_docx,
     process_images_with_ocr
 )
@@ -122,7 +122,7 @@ ocr_texts = process_images_with_ocr(images, ocr_strategy="auto")
 Извлекает специфичные для Word метаданные.
 
 ```python
-from app.parsers.word_parser_module.metadata_extractor import extract_word_metadata
+from alpaca.application.document_processing.parsers.word_parser_module.metadata_extractor import extract_word_metadata
 
 metadata = extract_word_metadata("/path/to/file.docx")
 # {'author': '...', 'subject': '...', 'pages': 5, 'paragraphs': 42, 'tables': 3, 'images': 2}
@@ -144,7 +144,7 @@ metadata = extract_word_metadata("/path/to/file.docx")
 Резервный парсер через python-docx или olefile для старых форматов.
 
 ```python
-from app.parsers.word_parser_module.fallback_parser import (
+from alpaca.application.document_processing.parsers.word_parser_module.fallback_parser import (
     fallback_parse,
     table_to_markdown
 )
@@ -214,7 +214,7 @@ python test_refactored_parser.py
 ### Базовое использование
 
 ```python
-from app.parsers.word_parser_module.word_parser import WordParser
+from alpaca.application.document_processing.parsers.word_parser_module.word_parser import WordParser
 
 # Создаем парсер
 parser = WordParser(enable_ocr=True, ocr_strategy="auto")
@@ -227,11 +227,11 @@ result = parser.parse(file_object)
 
 ```python
 # Конвертация .doc → .docx
-from app.parsers.document_converter import convert_doc_to_docx
+from alpaca.application.document_processing.parsers.document_converter import convert_doc_to_docx
 docx_path = convert_doc_to_docx("/path/to/file.doc")
 
 # Извлечение изображений и OCR
-from app.parsers.word_parser_module.ocr_processor import (
+from alpaca.application.document_processing.parsers.word_parser_module.ocr_processor import (
     extract_images_from_docx,
     process_images_with_ocr
 )
@@ -239,11 +239,11 @@ images = extract_images_from_docx("/path/to/file.docx")
 ocr_texts = process_images_with_ocr(images, ocr_strategy="hi_res")
 
 # Извлечение метаданных
-from app.parsers.word_parser_module.metadata_extractor import extract_word_metadata
+from alpaca.application.document_processing.parsers.word_parser_module.metadata_extractor import extract_word_metadata
 metadata = extract_word_metadata("/path/to/file.docx")
 
 # Fallback парсинг
-from app.parsers.word_parser_module.fallback_parser import fallback_parse
+from alpaca.application.document_processing.parsers.word_parser_module.fallback_parser import fallback_parse
 text = fallback_parse("/path/to/file.docx")
 ```
 
@@ -261,11 +261,11 @@ text = fallback_parse("/path/to/file.docx")
 
 ```python
 # До рефакторинга
-from app.parsers.word_parser_module.word_parser import WordParser
+from alpaca.application.document_processing.parsers.word_parser_module.word_parser import WordParser
 parser = WordParser()
 
 # После рефакторинга (тот же API)
-from app.parsers.word_parser_module.word_parser import WordParser
+from alpaca.application.document_processing.parsers.word_parser_module.word_parser import WordParser
 parser = WordParser()
 ```
 

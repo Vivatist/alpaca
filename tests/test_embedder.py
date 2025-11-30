@@ -4,7 +4,7 @@
 import pytest
 import responses
 from unittest.mock import Mock, patch, MagicMock
-from app.embedders.custom_embedder import embedding
+from alpaca.application.document_processing.embedding import embedding
 from settings import settings
 from alpaca.domain.files.models import FileSnapshot
 

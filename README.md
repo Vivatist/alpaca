@@ -54,7 +54,7 @@ curl http://localhost:9000/general/v0/general
 
 # Проверка подключения к Supabase
 source venv/bin/activate
-python -c "from app.settings import settings; print(settings.DATABASE_URL)"
+python -c "from settings import settings; print(settings.DATABASE_URL)"
 ```
 
 ## Архитектура

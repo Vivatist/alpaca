@@ -13,9 +13,12 @@ from alpaca.domain.files.models import FileSnapshot
 from tests.runner import run_tests_on_startup
 from alpaca.application.files import ResetStuckFiles
 from alpaca.application.processing import IngestDocument, ProcessFileEvent
-from alpaca.domain.document_processing import get_parser_for_path, embed_chunks
-from app.parsers.word_parser_module.word_parser import WordParser
-from app.chunkers.custom_chunker import chunking
+from alpaca.domain.document_processing import (
+    get_parser_for_path,
+    embed_chunks,
+    chunk_document,
+)
+from alpaca.application.document_processing.parsers import WordParser
 
 logger = get_logger("alpaca.worker")
 
@@ -44,7 +47,7 @@ ingest_document = IngestDocument(
     file_service=file_service,
     database=db,
     parser_resolver=legacy_parser_resolver,
-    chunker=chunking,
+    chunker=chunk_document,
     embedder=embed_chunks,
     parse_semaphore=PARSE_SEMAPHORE,
     embed_semaphore=EMBED_SEMAPHORE,
@@ -54,6 +57,9 @@ process_file_use_case = ProcessFileEvent(
     ingest_document=ingest_document,
     file_service=file_service,
 )
+
+# Backward-compatible attribute for legacy tests/imports
+chunking = chunk_document
 
 
 def ingest_pipeline(file: FileSnapshot) -> bool:

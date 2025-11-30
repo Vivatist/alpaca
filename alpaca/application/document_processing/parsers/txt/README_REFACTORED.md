@@ -34,7 +34,7 @@ txt_parser_module/
 Координирует работу всех модулей, реализует основной pipeline:
 
 ```python
-from app.parsers.txt_parser_module.txt_parser import TXTParser
+from alpaca.application.document_processing.parsers.txt_parser_module.txt_parser import TXTParser
 
 parser = TXTParser()
 result = parser.parse(file_object)  # возвращает str (было Dict)
@@ -55,7 +55,7 @@ result = parser.parse(file_object)  # возвращает str (было Dict)
 Определяет кодировку текстового файла через chardet.
 
 ```python
-from app.parsers.txt_parser_module.encoding_detector import detect_encoding
+from alpaca.application.document_processing.parsers.txt_parser_module.encoding_detector import detect_encoding
 
 encoding = detect_encoding("/path/to/file.txt")
 # 'utf-8', 'windows-1251', 'ascii', etc.
@@ -84,7 +84,7 @@ encoding = detect_encoding("/path/to/file.txt")
 Конвертирует обычный текст в структурированный Markdown.
 
 ```python
-from app.parsers.txt_parser_module.text_formatter import format_as_markdown
+from alpaca.application.document_processing.parsers.txt_parser_module.text_formatter import format_as_markdown
 
 markdown = format_as_markdown(content, "document.txt")
 ```
@@ -105,7 +105,7 @@ markdown = format_as_markdown(content, "document.txt")
 Извлекает специфичные для TXT метаданные.
 
 ```python
-from app.parsers.txt_parser_module.metadata_extractor import extract_txt_metadata
+from alpaca.application.document_processing.parsers.txt_parser_module.metadata_extractor import extract_txt_metadata
 
 metadata = extract_txt_metadata("utf-8", content)
 # {'encoding': 'utf-8', 'lines': 42, 'characters': 1234, 'words': 234}
@@ -159,7 +159,7 @@ python test_refactored_txt_parser.py
 ### Базовое использование
 
 ```python
-from app.parsers.txt_parser_module.txt_parser import TXTParser
+from alpaca.application.document_processing.parsers.txt_parser_module.txt_parser import TXTParser
 
 # Создаем парсер
 parser = TXTParser()
@@ -172,15 +172,15 @@ result = parser.parse(file_object)  # str
 
 ```python
 # Определение кодировки
-from app.parsers.txt_parser_module.encoding_detector import detect_encoding
+from alpaca.application.document_processing.parsers.txt_parser_module.encoding_detector import detect_encoding
 encoding = detect_encoding("/path/to/file.txt")
 
 # Извлечение метаданных
-from app.parsers.txt_parser_module.metadata_extractor import extract_txt_metadata
+from alpaca.application.document_processing.parsers.txt_parser_module.metadata_extractor import extract_txt_metadata
 metadata = extract_txt_metadata(encoding, content)
 
 # Форматирование
-from app.parsers.txt_parser_module.text_formatter import format_as_markdown
+from alpaca.application.document_processing.parsers.txt_parser_module.text_formatter import format_as_markdown
 markdown = format_as_markdown(content, "file.txt")
 ```
 

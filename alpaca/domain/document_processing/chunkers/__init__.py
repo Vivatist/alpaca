@@ -1,5 +1,5 @@
 """Chunker re-exports."""
 
-from app.chunkers.custom_chunker import chunking as chunk_document
+from alpaca.application.document_processing.chunking import chunk_document
 
 __all__ = ["chunk_document"]
