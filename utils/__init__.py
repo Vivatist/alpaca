@@ -1,5 +1,3 @@
-"""Utility functions"""
-from .file_manager import FileManager
-from .chunk_manager import ChunkManager
+"""Utility helpers package."""
 
-__all__ = ['FileManager', 'ChunkManager']
+__all__: list[str] = []

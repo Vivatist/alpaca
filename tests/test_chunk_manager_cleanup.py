@@ -1,11 +1,11 @@
 import psycopg2.extras
 
-from utils.chunk_manager import ChunkManager
+from alpaca.application.files.services import FileService
 from alpaca.domain.files.models import FileSnapshot
 
 
 def test_delete_chunks_fallback_by_path(test_db):
-    chunk_manager = ChunkManager(test_db)
+    file_service = FileService(repository=test_db)
     test_path = "/tmp/test_chunk_fallback.txt"
     legacy_hash = "legacy_hash_123"
     current_hash = "current_hash_456"
@@ -46,7 +46,7 @@ def test_delete_chunks_fallback_by_path(test_db):
                 ("legacy chunk", psycopg2.extras.Json(metadata)),
             )
 
-    deleted = chunk_manager.delete_chunks(file)
+    deleted = file_service.delete_chunks_only(file)
 
     assert deleted == 1
     assert not test_db.get_chunks_by_hash(legacy_hash)
