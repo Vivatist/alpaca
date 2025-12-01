@@ -11,16 +11,16 @@ from core.domain.files.models import FileSnapshot
 
 
 class TestEmbedding:
-    """Тесты функции embedding"""
+    """Тесты функции embedding (batch API)"""
     
     @responses.activate
     def test_embedding_success(self, test_db):
-        """Тест успешного создания эмбеддингов"""
-        # Mock Ollama API
+        """Тест успешного создания эмбеддингов через batch API"""
+        # Mock Ollama batch API
         responses.add(
             responses.POST,
-            f"{settings.OLLAMA_BASE_URL}/api/embeddings",
-            json={'embedding': [0.1] * 1024},
+            f"{settings.OLLAMA_BASE_URL}/api/embed",
+            json={'embeddings': [[0.1] * 1024, [0.2] * 1024]},
             status=200
         )
         
@@ -32,7 +32,7 @@ class TestEmbedding:
         result = custom_embedding(test_db, file, chunks)
         
         assert result == 2
-        assert len(responses.calls) == 2
+        assert len(responses.calls) == 1  # Один batch-запрос вместо двух
     
     def test_embedding_empty_chunks(self, test_db):
         """Тест эмбеддинга с пустым списком чанков"""
@@ -51,7 +51,7 @@ class TestEmbedding:
         # Mock Ollama API с ошибкой
         responses.add(
             responses.POST,
-            f"{settings.OLLAMA_BASE_URL}/api/embeddings",
+            f"{settings.OLLAMA_BASE_URL}/api/embed",
             json={'error': 'Service unavailable'},
             status=503
         )
@@ -66,45 +66,48 @@ class TestEmbedding:
         assert result == 0
     
     @responses.activate
-    def test_embedding_partial_success(self, test_db):
-        """Тест частичного успеха (одни чанки успешны, другие нет)"""
-        # Mock Ollama API - первый успешен, второй с ошибкой
+    def test_embedding_batch_partial_failure(self, test_db):
+        """Тест когда один батч успешен, а другой нет"""
+        # Первый батч успешен
         responses.add(
             responses.POST,
-            f"{settings.OLLAMA_BASE_URL}/api/embeddings",
-            json={'embedding': [0.1] * 1024},
+            f"{settings.OLLAMA_BASE_URL}/api/embed",
+            json={'embeddings': [[0.1] * 1024, [0.2] * 1024]},
             status=200
         )
+        # Второй батч — ошибка
         responses.add(
             responses.POST,
-            f"{settings.OLLAMA_BASE_URL}/api/embeddings",
+            f"{settings.OLLAMA_BASE_URL}/api/embed",
             json={'error': 'Error'},
             status=500
         )
-        responses.add(
-            responses.POST,
-            f"{settings.OLLAMA_BASE_URL}/api/embeddings",
-            json={'embedding': [0.1] * 1024},
-            status=200
-        )
         
-        chunks = ["Чанк 1", "Чанк 2", "Чанк 3"]
-        file_hash = "test_hash_partial"
-        file_path = "/tmp/test_partial.txt"
+        # Создаём чанки для двух батчей (BATCH_SIZE=50, но для теста патчим)
+        from core.application.document_processing.embedders import custom_embedder
+        original_batch_size = custom_embedder.BATCH_SIZE
+        custom_embedder.BATCH_SIZE = 2  # Временно уменьшаем для теста
         
-        file = FileSnapshot(hash=file_hash, path=file_path, status_sync="added")
-        result = custom_embedding(test_db, file, chunks)
-        
-        # Должны быть сохранены 2 из 3 чанков
-        assert result == 2
+        try:
+            chunks = ["Чанк 1", "Чанк 2", "Чанк 3", "Чанк 4"]
+            file_hash = "test_hash_partial_batch"
+            file_path = "/tmp/test_partial_batch.txt"
+            
+            file = FileSnapshot(hash=file_hash, path=file_path, status_sync="added")
+            result = custom_embedding(test_db, file, chunks)
+            
+            # Должны быть сохранены 2 из 4 чанков (первый батч)
+            assert result == 2
+        finally:
+            custom_embedder.BATCH_SIZE = original_batch_size
     
     @responses.activate
-    def test_embedding_no_embedding_in_response(self, test_db):
-        """Тест когда Ollama возвращает ответ без embedding"""
+    def test_embedding_no_embeddings_in_response(self, test_db):
+        """Тест когда Ollama возвращает ответ без embeddings"""
         responses.add(
             responses.POST,
-            f"{settings.OLLAMA_BASE_URL}/api/embeddings",
-            json={'model': 'bge-m3'},  # Нет поля 'embedding'
+            f"{settings.OLLAMA_BASE_URL}/api/embed",
+            json={'model': 'bge-m3'},  # Нет поля 'embeddings'
             status=200
         )
         
@@ -122,8 +125,8 @@ class TestEmbedding:
         """Тест что эмбеддинги сохраняются в БД"""
         responses.add(
             responses.POST,
-            f"{settings.OLLAMA_BASE_URL}/api/embeddings",
-            json={'embedding': [0.1] * 1024},
+            f"{settings.OLLAMA_BASE_URL}/api/embed",
+            json={'embeddings': [[0.1] * 1024]},
             status=200
         )
         
@@ -152,11 +155,11 @@ class TestEmbedding:
         file_hash = "test_hash_delete_old"
         file_path = "/tmp/test_delete_old.txt"
         
-        # Mock Ollama API
+        # Mock Ollama batch API - первая вставка
         responses.add(
             responses.POST,
-            f"{settings.OLLAMA_BASE_URL}/api/embeddings",
-            json={'embedding': [0.1] * 1024},
+            f"{settings.OLLAMA_BASE_URL}/api/embed",
+            json={'embeddings': [[0.1] * 1024, [0.1] * 1024, [0.1] * 1024]},
             status=200
         )
         
@@ -175,14 +178,13 @@ class TestEmbedding:
                 )
                 assert cur.fetchone()[0] == 3
         
-        # Добавляем ещё mock-ответов для второй вставки
-        for _ in range(2):
-            responses.add(
-                responses.POST,
-                f"{settings.OLLAMA_BASE_URL}/api/embeddings",
-                json={'embedding': [0.2] * 1024},
-                status=200
-            )
+        # Mock для второй вставки
+        responses.add(
+            responses.POST,
+            f"{settings.OLLAMA_BASE_URL}/api/embed",
+            json={'embeddings': [[0.2] * 1024, [0.2] * 1024]},
+            status=200
+        )
         
         # Вторая вставка - 2 чанка (должны удалиться старые 3)
         chunks_v2 = ["Чанк 1 v2", "Чанк 2 v2"]

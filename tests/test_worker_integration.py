@@ -63,11 +63,11 @@ class TestWorkerIntegration:
         from core.application.document_processing.parsers import WordParser
         monkeypatch.setattr(WordParser, "_parse", MagicMock(return_value=test_text))
         
-        # Mock Ollama API
+        # Mock Ollama API (batch endpoint)
         responses.add(
             responses.POST,
-            f"{settings.OLLAMA_BASE_URL}/api/embeddings",
-            json={'embedding': [0.1] * 1024},
+            f"{settings.OLLAMA_BASE_URL}/api/embed",
+            json={'embeddings': [[0.1] * 1024]},
             status=200
         )
         
@@ -167,11 +167,11 @@ class TestWorkerIntegration:
     @responses.activate
     def test_process_file_updated(self, test_db, temp_docx_file, mock_file_info, process_file_use_case):
         """Тест обработки обновлённого файла"""
-        # Мокаем Ollama API для эмбеддингов
+        # Мокаем Ollama API для эмбеддингов (batch endpoint)
         responses.add(
             responses.POST,
-            "http://localhost:11434/api/embeddings",
-            json={'embedding': [0.1] * 1024},
+            "http://localhost:11434/api/embed",
+            json={'embeddings': [[0.1] * 1024]},
             status=200
         )
         

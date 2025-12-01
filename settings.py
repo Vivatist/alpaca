@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_LLM_MODEL: str = "qwen2.5:32b"
     OLLAMA_EMBEDDING_MODEL: str = "bge-m3"
-    EMBEDDER_BACKEND: str = "langchain"  # "custom" или "langchain"
+    EMBEDDER_BACKEND: str = "custom"  # "custom" или "langchain"
     
     # Cleaner
     ENABLE_CLEANER: bool = True  # Включить очистку текста перед чанкингом
