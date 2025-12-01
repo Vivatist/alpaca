@@ -4,11 +4,22 @@
 import pytest
 import os
 import hashlib
+import json
 from unittest.mock import MagicMock
 import responses
 
 from settings import settings
 from core.domain.files.models import FileSnapshot
+
+
+def ollama_embed_callback(request):
+    """Callback для мока Ollama /api/embed — возвращает N эмбеддингов для N текстов"""
+    body = json.loads(request.body)
+    texts = body.get("input", [])
+    if isinstance(texts, str):
+        texts = [texts]
+    embeddings = [[0.1] * 1024 for _ in texts]
+    return (200, {}, json.dumps({"embeddings": embeddings}))
 
 
 class TestWorkerIntegration:
@@ -63,12 +74,12 @@ class TestWorkerIntegration:
         from core.application.document_processing.parsers import WordParser
         monkeypatch.setattr(WordParser, "_parse", MagicMock(return_value=test_text))
         
-        # Mock Ollama API (batch endpoint)
-        responses.add(
+        # Mock Ollama API (batch endpoint) — возвращает N эмбеддингов для N текстов
+        responses.add_callback(
             responses.POST,
             f"{settings.OLLAMA_BASE_URL}/api/embed",
-            json={'embeddings': [[0.1] * 1024]},
-            status=200
+            callback=ollama_embed_callback,
+            content_type="application/json",
         )
         
         file_hash = "test_pipeline_hash_123"
@@ -167,12 +178,12 @@ class TestWorkerIntegration:
     @responses.activate
     def test_process_file_updated(self, test_db, temp_docx_file, mock_file_info, process_file_use_case):
         """Тест обработки обновлённого файла"""
-        # Мокаем Ollama API для эмбеддингов (batch endpoint)
-        responses.add(
+        # Мокаем Ollama API для эмбеддингов (batch endpoint) — возвращает N эмбеддингов
+        responses.add_callback(
             responses.POST,
             "http://localhost:11434/api/embed",
-            json={'embeddings': [[0.1] * 1024]},
-            status=200
+            callback=ollama_embed_callback,
+            content_type="application/json",
         )
         
         file_info = mock_file_info(temp_docx_file, "hash_updated_123", "updated")

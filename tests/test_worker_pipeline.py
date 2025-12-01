@@ -3,6 +3,7 @@
 """
 import pytest
 import os
+import json
 import tempfile
 from unittest.mock import MagicMock
 import responses
@@ -11,18 +12,28 @@ from settings import settings
 from core.domain.files.models import FileSnapshot
 
 
+def ollama_embed_callback(request):
+    """Возвращает N эмбеддингов для N текстов"""
+    body = json.loads(request.body)
+    texts = body.get("input", [])
+    if isinstance(texts, str):
+        texts = [texts]
+    embeddings = [[0.1] * 1024 for _ in texts]
+    return (200, {}, json.dumps({"embeddings": embeddings}))
+
+
 class TestWorkerPipeline:
     """Тесты полного пайплайна обработки"""
     
     @responses.activate
     def test_pipeline_docx_to_chunks(self, test_db, temp_docx_file, cleanup_temp_parsed, ingest_pipeline):
         """Тест полного пайплайна: DOCX → парсинг → чанки → эмбеддинги"""
-        # Mock Ollama API (batch endpoint)
-        responses.add(
+        # Mock Ollama API (batch endpoint) — возвращает N эмбеддингов для N текстов
+        responses.add_callback(
             responses.POST,
             f"{settings.OLLAMA_BASE_URL}/api/embed",
-            json={'embeddings': [[0.1] * 1024]},
-            status=200
+            callback=ollama_embed_callback,
+            content_type="application/json",
         )
         
         file_hash = "test_full_pipeline_123"
@@ -147,12 +158,12 @@ class TestWorkerPipeline:
         from core.application.document_processing.parsers import WordParser
         monkeypatch.setattr(WordParser, "_parse", MagicMock(return_value=test_text))
         
-        # Mock Ollama (batch endpoint)
-        responses.add(
+        # Mock Ollama (batch endpoint) — возвращает N эмбеддингов для N текстов
+        responses.add_callback(
             responses.POST,
             f"{settings.OLLAMA_BASE_URL}/api/embed",
-            json={'embeddings': [[0.1] * 1024]},
-            status=200
+            callback=ollama_embed_callback,
+            content_type="application/json",
         )
         
         file_hash = "test_temp_file_123"
