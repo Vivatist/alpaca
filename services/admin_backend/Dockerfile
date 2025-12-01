@@ -15,11 +15,5 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 # Копирование кода приложения
 COPY services/admin_backend/src /app
 
-# Копирование доменной библиотеки
-COPY core /opt/alpaca/core
-COPY utils /opt/alpaca/utils
-COPY settings.py /opt/alpaca/settings.py
-ENV PYTHONPATH="/opt/alpaca:${PYTHONPATH}"
-
 # Запуск FastAPI с uvicorn
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]

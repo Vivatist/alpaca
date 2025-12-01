@@ -2,38 +2,62 @@
 
 Этот модуль предоставляет специфичные для мониторинга методы, которые не входят
 в domain/repository контракт. Admin Backend - это отдельный микросервис с собственными
-нуждами (дашборды, статистика, health checks), поэтому здесь допустима обёртка
-над PostgresFileRepository.
+нуждами (дашборды, статистика, health checks).
 
-Почему не используем PostgresFileRepository напрямую:
-1. FileRepository (domain) - контракт для Worker'а (CRUD операций)
-2. Admin Backend нужна статистика, агрегации, health checks
-3. Не стоит засорять domain-контракт методами мониторинга
+Почему изолирован от core/:
+1. Admin Backend — независимый микросервис с собственной кодовой базой
+2. Ему нужна только статистика, агрегации, health checks
+3. Не зависит от доменной логики Worker'а
 
-Этот слой абстракции оправдан, т.к. Admin Backend - независимый микросервис.
+Модуль содержит собственную реализацию подключения к PostgreSQL.
 """
 
 from contextlib import contextmanager
 from typing import Dict, List, Optional, Any
 import os
 
-from core.infrastructure.database.postgres import PostgresFileRepository
+import psycopg2
+from psycopg2.pool import ThreadedConnectionPool
 
 
 class Database:
     """Фасад для мониторинговых запросов Admin Backend.
     
-    Использует PostgresFileRepository для подключения к БД,
-    но предоставляет специфичные для dashboard/monitoring методы.
+    Содержит собственную реализацию подключения к PostgreSQL
+    и предоставляет методы для dashboard/monitoring.
     """
 
     def __init__(self):
-        self.repo = PostgresFileRepository(database_url=os.getenv("DATABASE_URL"))
+        self._database_url = os.getenv("DATABASE_URL")
+        if not self._database_url:
+            raise ValueError("DATABASE_URL не установлен")
+        
+        # Пул соединений для многопоточности
+        self._pool: Optional[ThreadedConnectionPool] = None
+    
+    def _get_pool(self) -> ThreadedConnectionPool:
+        """Ленивая инициализация пула соединений."""
+        if self._pool is None:
+            self._pool = ThreadedConnectionPool(
+                minconn=1,
+                maxconn=5,
+                dsn=self._database_url
+            )
+        return self._pool
 
     @contextmanager
     def get_connection(self):
-        with self.repo.get_connection() as conn:
+        """Контекстный менеджер для получения соединения из пула."""
+        pool = self._get_pool()
+        conn = pool.getconn()
+        try:
             yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            pool.putconn(conn)
     
     def get_file_state_stats(self) -> Dict[str, int]:
         """Получает статистику по файлам в таблице files

@@ -16,11 +16,6 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 COPY services/file_watcher /app
 RUN chmod +x /app/entrypoint.sh
 
-# Копируем монолит (доменные и инфраструктурные пакеты)
-COPY core /opt/alpaca/core
-COPY utils /opt/alpaca/utils
-ENV PYTHONPATH="/opt/alpaca:${PYTHONPATH}"
-
 # Создаем точку монтирования для наблюдаемой папки
 RUN mkdir -p /monitored_folder
 

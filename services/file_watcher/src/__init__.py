@@ -1,5 +1,5 @@
 """
-File Watcher — сервис мониторинга файлов.
+File Watcher — изолированный сервис мониторинга файлов.
 
 === НАЗНАЧЕНИЕ ===
 Docker-сервис, который:
@@ -8,9 +8,13 @@ Docker-сервис, который:
 3. Обновляет таблицу files в БД
 4. Предоставляет REST API для очереди
 
+=== ИЗОЛЯЦИЯ ===
+Сервис НЕ зависит от core/ — использует локальный repository.py
+с собственной реализацией SQL-запросов.
+
 === КОМПОНЕНТЫ ===
 - Scanner — сканер файловой системы
-- PostgresFileRepository — работа с БД
+- FileWatcherRepository — работа с БД (локальная реализация)
 - VectorSync — синхронизация векторов
 - FileFilter — фильтрация по расширениям
 - FileWatcherService — основной сервис
@@ -18,6 +22,7 @@ Docker-сервис, который:
 === REST API ===
 - GET /api/next-file — следующий файл для обработки
 - GET /api/queue/stats — статистика очереди
+- GET /health — проверка здоровья
 
 === ПОРТ ===
 http://localhost:8081
@@ -32,9 +37,9 @@ http://localhost:8081
 """
 
 from scanner import Scanner
-from core.infrastructure.database.postgres import PostgresFileRepository
+from repository import FileWatcherRepository
 from vector_sync import VectorSync
 from file_filter import FileFilter
 from service import FileWatcherService
 
-__all__ = ['Scanner', 'PostgresFileRepository', 'VectorSync', 'FileFilter', 'FileWatcherService']
+__all__ = ['Scanner', 'FileWatcherRepository', 'VectorSync', 'FileFilter', 'FileWatcherService']
