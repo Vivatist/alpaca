@@ -12,8 +12,9 @@ from core.application.document_processing.parsers import (
     ExcelParser,
     TXTParser,
 )
-from core.application.document_processing.chunking import chunk_document as default_chunker
-from core.application.document_processing.embedding import custom_embedding, langchain_embedding
+from core.application.document_processing.cleaners import clean_text
+from core.application.document_processing.chunkers import chunk_document as default_chunker
+from core.application.document_processing.embedders import custom_embedding, langchain_embedding
 from core.application.processing import IngestDocument, ProcessFileEvent
 from core.domain.document_processing import ParserRegistry
 from core.infrastructure.database.postgres import PostgresFileRepository
@@ -47,16 +48,19 @@ def build_worker_application(app_settings: Settings = settings) -> WorkerApplica
         (".txt",): TXTParser(),
     })
     
-    # 3. Chunker
+    # 3. Cleaner
+    cleaner = clean_text if app_settings.ENABLE_CLEANER else None
+
+    # 4. Chunker
     chunker = default_chunker
     
-    # 4. Embedder
+    # 5. Embedder
     if app_settings.EMBEDDER_BACKEND == "langchain":
         embedder = langchain_embedding
     else:
         embedder = custom_embedding
     
-    # 5. Ingest pipeline
+    # 6. Ingest pipeline
     ingest = IngestDocument(
         repository=repository,
         parser_registry=parsers,
@@ -64,15 +68,16 @@ def build_worker_application(app_settings: Settings = settings) -> WorkerApplica
         embedder=embedder,
         parse_semaphore=Semaphore(app_settings.WORKER_MAX_CONCURRENT_PARSING),
         embed_semaphore=Semaphore(app_settings.WORKER_MAX_CONCURRENT_EMBEDDING),
+        cleaner=cleaner,
     )
     
-    # 6. Process file use case
+    # 7. Process file use case
     process_file = ProcessFileEvent(
         ingest_document=ingest,
         repository=repository,
     )
     
-    # 7. Worker
+    # 8. Worker
     filewatcher_url = os.getenv("FILEWATCHER_API_URL", "http://localhost:8081")
     worker = Worker(
         db=repository,

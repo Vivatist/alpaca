@@ -63,7 +63,7 @@ alpaca/
 │   │   │   └── use_cases.py           # IngestDocument, ProcessFileEvent
 │   │   ├── document_processing/
 │   │   │   ├── parsers/               # WordParser, PDFParser, etc.
-│   │   │   ├── chunking/              # chunk_document()
+│   │   │   ├── chunkers/              # chunk_document()
 │   │   │   └── embedders/             # custom_embedding, langchain_embedding
 │   │   └── bootstrap.py               # ⭐ build_worker_application()
 │   │

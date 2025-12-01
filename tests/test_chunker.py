@@ -2,7 +2,7 @@
 Тесты для модуля чанкования (custom_chunker)
 """
 import pytest
-from core.application.document_processing.chunking import chunking
+from core.application.document_processing.chunkers import chunking
 from core.domain.files.models import FileSnapshot
 
 

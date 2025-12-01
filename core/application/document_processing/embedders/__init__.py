@@ -17,7 +17,7 @@
 
 === ИСПОЛЬЗОВАНИЕ ===
 
-    from core.application.document_processing.embedding import (
+    from core.application.document_processing.embedders import (
         embed_chunks, custom_embedding, langchain_embedding
     )
     from core.domain.files import FileSnapshot

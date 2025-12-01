@@ -542,7 +542,7 @@ def _parse(self, file: FileSnapshot) -> str:
 - **ExcelParser** — openpyxl, автоопределение шапок
 - **TXTParser** — определение кодировки (chardet)
 
-### 4.4 Чанкеры (`core/application/document_processing/chunking/`)
+### 4.4 Чанкеры (`core/application/document_processing/chunkers/`)
 
 **Текущая реализация** — простой fixed-size чанкинг:
 
@@ -586,7 +586,7 @@ chunker = semantic_chunker  # вместо default_chunker_impl
 set_chunker(chunker)
 ```
 
-### 4.5 Эмбеддеры (`core/application/document_processing/embedding/`)
+### 4.5 Эмбеддеры (`core/application/document_processing/embedders/`)
 
 #### custom_embedding (Ollama)
 
@@ -1210,7 +1210,7 @@ def _build_parser_registry(word_parser: WordParser) -> ParserRegistry:
 **Шаг 1:** Создать новый чанкер
 
 ```python
-# core/application/document_processing/chunking/semantic_chunker.py
+# core/application/document_processing/chunkers/semantic_chunker.py
 
 def semantic_chunking(file: FileSnapshot) -> List[str]:
     """Разбивает текст по семантическим границам."""
@@ -1246,7 +1246,7 @@ def build_chunker(app_settings: Settings) -> Chunker:
     chunker_type = getattr(app_settings, "CHUNKER_TYPE", "fixed")
     
     if chunker_type == "semantic":
-        from core.application.document_processing.chunking import semantic_chunking
+        from core.application.document_processing.chunkers import semantic_chunking
         return semantic_chunking
     else:
         return default_chunker_impl

@@ -32,10 +32,7 @@
 См. core/application/document_processing/chunking/custom_chunker.py
 """
 
-from __future__ import annotations
-
 from typing import Callable, List
-
 from core.domain.files.models import FileSnapshot
 
 Chunker = Callable[[FileSnapshot], List[str]]

@@ -14,7 +14,7 @@
 
 === ИСПОЛЬЗОВАНИЕ ===
 
-    from core.application.document_processing.chunking import chunk_document
+    from core.application.document_processing.chunkers import chunk_document
     from core.domain.files import FileSnapshot
 
     file = FileSnapshot(path="doc.txt", hash="abc", raw_text="Длинный текст...")
@@ -24,7 +24,7 @@
     print(f"Created {len(chunks)} chunks")
 
     # Или с кастомным размером
-    from core.application.document_processing.chunking import chunking
+    from core.application.document_processing.chunkers import chunking
     chunks = chunking(file, chunk_size=500)
 
 === ТЕКУЩАЯ РЕАЛИЗАЦИЯ ===
@@ -35,7 +35,7 @@ Fixed-size chunking: разбивает текст на части по N сим
 - Чанкинг с перекрытием (overlap)
 """
 
-from .custom_chunker import chunking
+from .simple_chunker import chunking
 
 chunk_document = chunking
 

@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     OLLAMA_EMBEDDING_MODEL: str = "bge-m3"
     EMBEDDER_BACKEND: str = "custom"  # "custom" (Ollama) или "langchain"
     
+    # Cleaner
+    ENABLE_CLEANER: bool = True  # Включить очистку текста перед чанкингом
+    
     # Worker Settings
     WORKER_POLL_INTERVAL: int = 5  # Интервал опроса очереди (секунды)
     WORKER_MAX_CONCURRENT_FILES: int = 5  # Максимум файлов обрабатываемых параллельно

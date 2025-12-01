@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from typing import Optional
 from dataclasses import dataclass, field
 from threading import Semaphore
 from typing import Dict, Any, List
@@ -8,19 +8,23 @@ import os
 from utils.logging import get_logger
 from core.domain.files.repository import FileRepository
 from core.domain.files.models import FileSnapshot
-from core.domain.document_processing import ParserRegistry, Chunker, Embedder
+from core.domain.document_processing import ParserRegistry, Chunker, Embedder, Cleaner
 
 
 @dataclass
 class IngestDocument:
-    """Полный пайплайн обработки документа (parse → chunk → embed)."""
+    """Полный пайплайн обработки документа (parse → clean → chunk → embed)."""
 
+    # Обязательные поля (без default)
     repository: FileRepository
     parser_registry: ParserRegistry
     chunker: Chunker
     embedder: Embedder
     parse_semaphore: Semaphore
     embed_semaphore: Semaphore
+    
+    # Опциональные поля (с default)
+    cleaner: Optional[Cleaner] = None
     temp_dir: str = "/home/alpaca/tmp_md"
     logger_name: str = field(default="core.ingest")
 
@@ -43,8 +47,13 @@ class IngestDocument:
 
             self.logger.info(f"✅ Parsed: {len(file.raw_text) if file.raw_text else 0} chars")
 
-            # 2. Save to disk for debugging
+            # 1.1. Save to disk for debugging
             self._save_to_disk(file)
+            
+            # 2. Clean (если cleaner задан)        
+            if self.cleaner is not None:
+                file.raw_text = self.cleaner(file)
+                self.logger.info(f"✅ Cleaned: {len(file.raw_text) if file.raw_text else 0} chars")
 
             # 3. Chunk
             chunks = self.chunker(file)

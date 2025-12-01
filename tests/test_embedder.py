@@ -4,7 +4,7 @@
 import pytest
 import responses
 from unittest.mock import Mock, patch, MagicMock
-from core.application.document_processing.embedding import custom_embedding
+from core.application.document_processing.embedders import custom_embedding
 from settings import settings
 from core.domain.files.models import FileSnapshot
 

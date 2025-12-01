@@ -6,8 +6,8 @@
 
 === СТРУКТУРА ===
 - parsers/     — парсеры документов (WordParser, PDFParser, ...)
-- chunking/    — функции разбиения на чанки
-- embedding/   — функции создания эмбеддингов
+- chunkers/    — функции разбиения на чанки
+- embedders/   — функции создания эмбеддингов
 
 === ИСПОЛЬЗОВАНИЕ ===
 
@@ -19,11 +19,11 @@
     text = parser.parse(file)
 
     # Чанкинг
-    from core.application.document_processing.chunking import chunk_document
+    from core.application.document_processing.chunkers import chunk_document
     chunks = chunk_document(file)  # List[str]
 
     # Эмбеддинг
-    from core.application.document_processing.embedding import (
+    from core.application.document_processing.embedders import (
         embed_chunks, custom_embedding, langchain_embedding
     )
     count = embed_chunks(repo, file, chunks)  # использует custom_embedding
