@@ -241,10 +241,12 @@ class FileWatcherRepository:
     # -------------------------------------------------------------------------
 
     def get_next_file(self) -> Optional[FileQueueItem]:
-        """Получает следующий файл для обработки с атомарной блокировкой.
+        """Получает следующий файл для обработки.
         
         Приоритет: deleted > updated > added
-        Помечает файл как 'processed' для предотвращения дублирования.
+        
+        ВАЖНО: Этот метод НЕ меняет статус файла!
+        Worker должен сам пометить файл как 'processed' после получения.
         
         Returns:
             FileQueueItem или None если очередь пуста
@@ -252,22 +254,17 @@ class FileWatcherRepository:
         with self.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(f"""
-                    UPDATE {self.files_table}
-                    SET status_sync = 'processed', last_checked = CURRENT_TIMESTAMP
-                    WHERE id = (
-                        SELECT id FROM {self.files_table}
-                        WHERE status_sync IN ('deleted', 'updated', 'added')
-                        ORDER BY
-                            CASE status_sync
-                                WHEN 'deleted' THEN 1
-                                WHEN 'updated' THEN 2
-                                ELSE 3
-                            END,
-                            last_checked
-                        LIMIT 1
-                        FOR UPDATE SKIP LOCKED
-                    )
-                    RETURNING path, hash, size, mtime, status_sync, last_checked
+                    SELECT path, hash, size, mtime, status_sync, last_checked
+                    FROM {self.files_table}
+                    WHERE status_sync IN ('deleted', 'updated', 'added')
+                    ORDER BY
+                        CASE status_sync
+                            WHEN 'deleted' THEN 1
+                            WHEN 'updated' THEN 2
+                            ELSE 3
+                        END,
+                        last_checked
+                    LIMIT 1
                 """)
                 row = cur.fetchone()
                 if row:
@@ -279,7 +276,7 @@ class FileWatcherRepository:
                         status_sync=row[4],
                         last_checked=row[5],
                     )
-        return None
+                return None
 
     def get_queue_stats(self) -> Dict[str, int]:
         """Возвращает статистику очереди по статусам."""
