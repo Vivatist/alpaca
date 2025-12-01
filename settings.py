@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     # Cleaner
     ENABLE_CLEANER: bool = True  # Включить очистку текста перед чанкингом
     
+    # Chunker
+    CHUNKER_BACKEND: str = "smart"  # "simple" или "smart" (LangChain с overlap)
+    CHUNK_SIZE: int = 1000  # Размер чанка в символах
+    CHUNK_OVERLAP: int = 200  # Перекрытие между чанками (только для smart)
+    
     # Worker Settings
     WORKER_POLL_INTERVAL: int = 5  # Интервал опроса очереди (секунды)
     WORKER_MAX_CONCURRENT_FILES: int = 5  # Максимум файлов обрабатываемых параллельно

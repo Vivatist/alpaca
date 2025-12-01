@@ -27,16 +27,46 @@
     from core.application.document_processing.chunkers import chunking
     chunks = chunking(file, chunk_size=500)
 
-=== ТЕКУЩАЯ РЕАЛИЗАЦИЯ ===
-Fixed-size chunking: разбивает текст на части по N символов.
+=== РЕАЛИЗАЦИИ ===
+- simple_chunker: Fixed-size chunking (без overlap)
+- smart_chunker: LangChain RecursiveCharacterTextSplitter с overlap
 
-=== TODO ===
-- Семантический чанкинг (по параграфам)
-- Чанкинг с перекрытием (overlap)
+=== ВЫБОР ЧАНКЕРА ===
+Выбор осуществляется через settings.CHUNKER_BACKEND:
+- "simple" — простой чанкер без перекрытия
+- "smart" — умный чанкер с LangChain (по умолчанию)
+
+Дополнительные настройки:
+- settings.CHUNK_SIZE — размер чанка (по умолчанию 1000)
+- settings.CHUNK_OVERLAP — перекрытие для smart (по умолчанию 200)
 """
+from typing import List
+from settings import settings
+from core.domain.files.models import FileSnapshot
 
-from .simple_chunker import chunking
+from .simple_chunker import chunking as simple_chunking
+from .smart_chunker import smart_chunking
 
-chunk_document = chunking
 
-__all__ = ["chunking", "chunk_document"]
+def chunk_document(file: FileSnapshot) -> List[str]:
+    """
+    Разбивает документ на чанки согласно настройкам.
+    
+    Использует settings.CHUNKER_BACKEND для выбора реализации:
+    - "simple" — простое разбиение по размеру
+    - "smart" — умное разбиение с LangChain и overlap
+    """
+    if settings.CHUNKER_BACKEND == "simple":
+        return simple_chunking(file)
+    else:  # "smart" или любое другое значение
+        return smart_chunking(
+            file,
+            chunk_size=settings.CHUNK_SIZE,
+            chunk_overlap=settings.CHUNK_OVERLAP,
+        )
+
+
+# Алиас для совместимости
+chunking = chunk_document
+
+__all__ = ["chunking", "chunk_document", "smart_chunking", "simple_chunking"]
