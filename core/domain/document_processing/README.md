@@ -1,20 +1,46 @@
 # Domain Document Processing
 
-Этот пакет описывает публичный API доменного слоя для работы с парсерами, чанкерами и эмбеддерами.
+Доменный слой определяет **контракты** (интерфейсы) для компонентов пайплайна обработки документов.
 
-## Ответственность
+## Структура
 
-- Определяет протоколы (`ParserProtocol`, `Chunker`, `Embedder`) и реестры, необходимые приложению.
-- Содержит минимальный стейт для активных реализаций (`configure_parser_registry`, `set_chunker`, `set_embedder`).
-- Не знает о конкретных реализациях: объекты передаются сверху (через bootstrap) и могут быть заменены без изменения домена.
+```
+domain/document_processing/
+├── parsers/      # ParserProtocol, ParserRegistry
+├── cleaners/     # Cleaner (type alias)
+├── chunkers/     # Chunker (type alias)
+└── embedders/    # Embedder (type alias)
+```
+
+## Контракты
+
+| Контракт | Сигнатура | Назначение |
+|----------|-----------|------------|
+| `ParserProtocol` | `parse(FileSnapshot) -> str` | Извлечение текста из файла |
+| `ParserRegistry` | `get_parser(path) -> Parser` | Реестр парсеров по расширениям |
+| `Cleaner` | `(FileSnapshot) -> str` | Очистка/нормализация текста |
+| `Chunker` | `(FileSnapshot) -> List[str]` | Разбиение на чанки |
+| `Embedder` | `(FileRepository, FileSnapshot, List[str]) -> int` | Создание эмбеддингов |
 
 ## Использование
 
-1. На этапе bootstrap вызовите `configure_parser_registry(...)`, `set_chunker(...)` и `set_embedder(...)`, передав реализации из application-слоя.
-2. Внешние модули должны импортировать только из доменного фасада (`core.domain.document_processing`). Например:
-   ```python
-   from core.domain.document_processing import get_parser_for_path, chunk_document
-   ```
-3. Любые новые реализации должны жить в `core/application/document_processing`, а в домен добавляются лишь новые протоколы/хелперы.
+```python
+from core.domain.document_processing import (
+    ParserProtocol, ParserRegistry, Cleaner, Chunker, Embedder
+)
 
-Такой подход гарантирует направленную зависимость: домен ← application, и упрощает тестирование/подмену реализаций.
+# Типизация зависимостей в use-case
+@dataclass
+class IngestDocument:
+    parser_registry: ParserRegistry
+    cleaner: Optional[Cleaner]
+    chunker: Chunker
+    embedder: Embedder
+```
+
+## Принципы
+
+- **Домен не знает о реализациях** — только контракты
+- **Реализации в application/** — `parsers/`, `cleaners/`, `chunkers/`, `embedders/`
+- **Связывание в bootstrap** — `build_worker_application()` подключает реализации
+- **Направленность зависимостей**: `domain ← application ← infrastructure`

@@ -1,17 +1,65 @@
 # Application Document Processing
 
-Здесь находятся конкретные реализации парсеров, чанкерa и эмбеддеров, которые подключаются к доменному фасаду во время bootstrap.
+Конкретные **реализации** компонентов пайплайна обработки документов.
 
-## Что внутри
+## Структура
 
-- `parsers/` — реализации для DOCX, PDF, PPTX, XLS/XLSX, TXT и общие утилиты.
-- `chunking/` — стратегия разбивки текста (по умолчанию `custom_chunker.chunking`).
-- `embedding/` — клиенты Ollama (`custom_embedding`) и LangChain (`langchain_embedding`).
+```
+application/document_processing/
+├── parsers/      # WordParser, PDFParser, PowerPointParser, ExcelParser, TXTParser
+├── cleaners/     # clean_text (simple_cleaner)
+├── chunkers/     # chunk_document (custom_chunker)
+└── embedders/    # custom_embedding (Ollama), langchain_embedding
+```
 
-## Как использовать
+## Реализации
 
-1. Импортируйте нужные реализации в bootstrap и передайте их в домен через `set_chunker`, `set_embedder`, `configure_parser_registry`.
-2. Для переключения эмбеддера используйте настройку `settings.EMBEDDER_BACKEND`. Bootstrap выберет `custom_embedding` или `langchain_embedding` и зарегистрирует его в домене.
-3. Новые стратегии следует добавлять здесь, сохраняя чистые контракты домена.
+### Парсеры (`parsers/`)
+| Класс | Расширения | Технология |
+|-------|------------|------------|
+| `WordParser` | `.doc`, `.docx` | python-docx + MarkItDown + OCR |
+| `PDFParser` | `.pdf` | PyMuPDF + fallback Unstructured |
+| `PowerPointParser` | `.ppt`, `.pptx` | python-pptx |
+| `ExcelParser` | `.xls`, `.xlsx` | openpyxl |
+| `TXTParser` | `.txt` | chardet для кодировки |
 
-Таким образом весь прикладной код зависит от доменного API, а конкретные реализации остаются заменяемыми.
+### Клинеры (`cleaners/`)
+- `clean_text` — удаление лишних пробелов, нормализация Unicode, управляющих символов
+
+### Чанкеры (`chunkers/`)
+- `chunk_document` — fixed-size chunking по 1000 символов с разбиением по параграфам
+
+### Эмбеддеры (`embedders/`)
+- `custom_embedding` — Ollama bge-m3 (бесплатно, локально)
+- `langchain_embedding` — LangChain/OpenAI (платно)
+
+## Использование
+
+Реализации подключаются в `bootstrap.py`:
+
+```python
+from core.application.document_processing.parsers import WordParser, PDFParser
+from core.application.document_processing.cleaners import clean_text
+from core.application.document_processing.chunkers import chunk_document
+from core.application.document_processing.embedders import custom_embedding
+
+# Собираем пайплайн
+ingest = IngestDocument(
+    parser_registry=ParserRegistry({...}),
+    cleaner=clean_text,
+    chunker=chunk_document,
+    embedder=custom_embedding,
+)
+```
+
+## Настройки
+
+- `ENABLE_CLEANER` — включить/выключить очистку текста
+- `EMBEDDER_BACKEND` — `"custom"` (Ollama) или `"langchain"`
+
+## Добавление новых реализаций
+
+1. Создайте файл в соответствующей папке (например, `chunkers/semantic_chunker.py`)
+2. Реализуйте функцию/класс, соответствующий контракту из `domain/`
+3. Экспортируйте в `__init__.py`
+4. Подключите в `bootstrap.py`
