@@ -3,11 +3,8 @@ from __future__ import annotations
 
 from typing import List, Optional, Protocol
 
-import psycopg2
-import psycopg2.extras
-
 from core.domain.files.models import FileSnapshot
-from core.domain.files.repository import Database
+from core.domain.files.repository import FileRepository
 from settings import settings
 from utils.logging import get_logger
 
@@ -41,7 +38,7 @@ def _build_default_provider() -> Optional[EmbeddingsProvider]:
 
 
 def langchain_embedding(
-    db: Database,
+    repo: FileRepository,
     file: FileSnapshot,
     chunks: List[str],
     provider: Optional[EmbeddingsProvider] = None,
@@ -70,30 +67,26 @@ def langchain_embedding(
         )
         return 0
 
-    with db.get_connection() as conn:
-        with conn.cursor() as cur:
-            inserted = 0
-            for idx, (chunk_text, vector) in enumerate(zip(chunks, vectors)):
-                try:
-                    embedding_str = "[" + ",".join(map(str, vector)) + "]"
-                    metadata = {
-                        "file_hash": file.hash,
-                        "file_path": file.path,
-                        "chunk_index": idx,
-                        "total_chunks": len(chunks),
-                    }
-                    cur.execute(
-                        """
-                        INSERT INTO chunks (content, metadata, embedding)
-                        VALUES (%s, %s, %s::vector)
-                        """,
-                        (chunk_text, psycopg2.extras.Json(metadata), embedding_str),
-                    )
-                    inserted += 1
-                except Exception as exc:  # noqa: BLE001
-                    logger.error(f"Failed to persist chunk #{idx} | file={file.path} error={exc}")
-                    continue
-            conn.commit()
+    # Удаляем старые чанки через репозиторий
+    deleted_count = repo.delete_chunks_by_hash(file.hash)
+    if deleted_count > 0:
+        logger.info(f"🗑️ Deleted {deleted_count} old chunks for {file.path}")
+
+    inserted = 0
+    for idx, (chunk_text, vector) in enumerate(zip(chunks, vectors)):
+        try:
+            metadata = {
+                "file_hash": file.hash,
+                "file_path": file.path,
+                "chunk_index": idx,
+                "total_chunks": len(chunks),
+            }
+            # Сохраняем через репозиторий
+            repo.save_chunk(chunk_text, metadata, vector)
+            inserted += 1
+        except Exception as exc:  # noqa: BLE001
+            logger.error(f"Failed to persist chunk #{idx} | file={file.path} error={exc}")
+            continue
 
     logger.info(
         "LangChain embedded %s/%s chunks | file=%s",
