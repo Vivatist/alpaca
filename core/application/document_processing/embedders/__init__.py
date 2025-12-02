@@ -11,26 +11,27 @@
 - embed_chunks — алиас, по умолчанию custom_embedding
 
 === СИГНАТУРА ===
-    def embedder(repo: FileRepository, file: FileSnapshot, chunks: List[str]) -> int
+    def embedder(
+        repo: FileRepository,
+        file: FileSnapshot,
+        chunks: List[str],
+        doc_metadata: Dict[str, Any] = None
+    ) -> int
 
 Возвращает: количество сохранённых чанков
 
 === ИСПОЛЬЗОВАНИЕ ===
 
-    from core.application.document_processing.embedders import (
-        embed_chunks, custom_embedding, langchain_embedding
-    )
+    from core.application.document_processing.embedders import embed_chunks
     from core.domain.files import FileSnapshot
 
     file = FileSnapshot(path="doc.txt", hash="abc123")
     chunks = ["First chunk...", "Second chunk..."]
+    metadata = {"extension": "txt", "title": "My Doc", "keywords": ["test"]}
 
     # Использовать дефолтный embedder (Ollama)
-    count = embed_chunks(repository, file, chunks)
-    print(f"Saved {count} chunks with embeddings")
-
-    # Или явно выбрать embedder
-    count = langchain_embedding(repository, file, chunks)
+    count = embed_chunks(repository, file, chunks, metadata)
+    print(f"Saved {count} chunks with embeddings and metadata")
 
 === КОНФИГУРАЦИЯ ===
 Ollama настройки в settings.py:

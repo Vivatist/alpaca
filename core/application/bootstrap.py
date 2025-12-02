@@ -15,6 +15,7 @@ from core.application.document_processing.parsers import (
 from core.application.document_processing.cleaners import clean_text
 from core.application.document_processing.chunkers import chunk_document as default_chunker
 from core.application.document_processing.embedders import custom_embedding, langchain_embedding
+from core.application.document_processing.metaextractors import extract_metadata
 from core.application.processing import IngestDocument, ProcessFileEvent
 from core.domain.document_processing import ParserRegistry
 from core.infrastructure.database.postgres import PostgresFileRepository
@@ -54,13 +55,16 @@ def build_worker_application(app_settings: Settings = settings) -> WorkerApplica
     # 4. Chunker
     chunker = default_chunker
     
-    # 5. Embedder
+    # 5. MetaExtractor
+    metaextractor = extract_metadata if app_settings.METAEXTRACTOR_BACKEND != "none" else None
+    
+    # 6. Embedder
     if app_settings.EMBEDDER_BACKEND == "langchain":
         embedder = langchain_embedding
     else:
         embedder = custom_embedding
     
-    # 6. Ingest pipeline
+    # 7. Ingest pipeline
     ingest = IngestDocument(
         repository=repository,
         parser_registry=parsers,
@@ -69,9 +73,10 @@ def build_worker_application(app_settings: Settings = settings) -> WorkerApplica
         parse_semaphore=Semaphore(app_settings.WORKER_MAX_CONCURRENT_PARSING),
         embed_semaphore=Semaphore(app_settings.WORKER_MAX_CONCURRENT_EMBEDDING),
         cleaner=cleaner,
+        metaextractor=metaextractor,
     )
     
-    # 7. Process file use case
+    # 8. Process file use case
     process_file = ProcessFileEvent(
         ingest_document=ingest,
         repository=repository,

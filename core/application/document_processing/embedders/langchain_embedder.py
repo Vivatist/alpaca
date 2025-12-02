@@ -1,7 +1,7 @@
 """Минимальная интеграция LangChain для генерации эмбеддингов."""
 from __future__ import annotations
 
-from typing import List, Optional, Protocol
+from typing import Any, Dict, List, Optional, Protocol
 
 from core.domain.files.models import FileSnapshot
 from core.domain.files.repository import FileRepository
@@ -41,13 +41,25 @@ def langchain_embedding(
     repo: FileRepository,
     file: FileSnapshot,
     chunks: List[str],
+    doc_metadata: Dict[str, Any] = None,
     provider: Optional[EmbeddingsProvider] = None,
 ) -> int:
-    """Создание эмбеддингов через LangChain провайдер и запись в БД."""
+    """Создание эмбеддингов через LangChain провайдер и запись в БД.
+    
+    Args:
+        repo: Репозиторий для работы с БД
+        file: Объект FileSnapshot с информацией о файле
+        chunks: Список текстовых чанков
+        doc_metadata: Метаданные документа (extension, title, summary, keywords)
+        provider: Опциональный провайдер эмбеддингов
+    """
 
     if not chunks:
         logger.warning(f"No chunks to embed for {file.path}")
         return 0
+
+    if doc_metadata is None:
+        doc_metadata = {}
 
     provider = provider or _build_default_provider()
     if provider is None:
@@ -75,7 +87,9 @@ def langchain_embedding(
     inserted = 0
     for idx, (chunk_text, vector) in enumerate(zip(chunks, vectors)):
         try:
+            # Объединяем метаданные документа с метаданными чанка
             metadata = {
+                **doc_metadata,  # extension, title, summary, keywords
                 "file_hash": file.hash,
                 "file_path": file.path,
                 "chunk_index": idx,

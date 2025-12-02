@@ -9,6 +9,7 @@ from utils.logging import get_logger
 from core.domain.files.repository import FileRepository
 from core.domain.files.models import FileSnapshot
 from core.domain.document_processing import ParserRegistry, Chunker, Embedder, Cleaner
+from core.domain.document_processing.metaextractors import MetaExtractor
 
 
 @dataclass
@@ -25,6 +26,7 @@ class IngestDocument:
     
     # Опциональные поля (с default)
     cleaner: Optional[Cleaner] = None
+    metaextractor: Optional[MetaExtractor] = None
     temp_dir: str = "/home/alpaca/tmp_md"
     logger_name: str = field(default="core.ingest")
 
@@ -55,23 +57,30 @@ class IngestDocument:
                 file.raw_text = self.cleaner(file)
                 self.logger.info(f"✅ Cleaned: {len(file.raw_text) if file.raw_text else 0} chars")
 
-            # 3. Chunk
+            # 3. Extract metadata (если metaextractor задан)
+            if self.metaextractor is not None:
+                file.metadata = self.metaextractor(file)
+                self.logger.info(f"✅ Metadata extracted: {list(file.metadata.keys()) if file.metadata else []}")
+            else:
+                file.metadata = {}
+
+            # 4. Chunk
             chunks = self.chunker(file)
             if not chunks:
                 self.logger.warning(f"No chunks created for {file.path}")
                 self.repository.mark_as_error(file.hash)
                 return False
 
-            # 4. Embed
+            # 5. Embed (передаём metadata в эмбеддер)
             with self.embed_semaphore:
-                chunks_count = self.embedder(self.repository, file, chunks)
+                chunks_count = self.embedder(self.repository, file, chunks, file.metadata)
 
             if chunks_count == 0:
                 self.logger.warning(f"No embeddings created for {file.path}")
                 self.repository.mark_as_error(file.hash)
                 return False
 
-            # 5. Mark success
+            # 6. Mark success
             self.repository.mark_as_ok(file.hash)
             self.logger.info(f"✅ File processed successfully: {file.path} | chunks={chunks_count}")
             return True

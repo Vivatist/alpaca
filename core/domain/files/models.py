@@ -21,6 +21,7 @@ class FileSnapshot:
     raw_text: Optional[str] = None
     mtime: Optional[float] = None
     last_checked: Optional[datetime] = None
+    metadata: Optional[dict] = None  # Метаданные извлечённые metaextractor'oм
 
     @property
     def full_path(self) -> str:

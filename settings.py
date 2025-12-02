@@ -63,6 +63,11 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 1000  # Размер чанка в символах
     CHUNK_OVERLAP: int = 200  # Перекрытие между чанками (только для smart)
     
+    # MetaExtractor
+    METAEXTRACTOR_BACKEND: str = "llm"  # "simple" или "llm"
+    LLM_METAEXTRACTOR_PREVIEW_LENGTH: int = 2000  # Длина текста для анализа LLM
+    LLM_METAEXTRACTOR_TIMEOUT: int = 60  # Таймаут LLM-запроса в секундах
+    
     # Worker Settings
     WORKER_POLL_INTERVAL: int = 5  # Интервал опроса очереди (секунды)
     WORKER_MAX_CONCURRENT_FILES: int = 5  # Максимум файлов обрабатываемых параллельно

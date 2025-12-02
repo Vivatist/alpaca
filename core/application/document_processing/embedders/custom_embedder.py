@@ -1,4 +1,4 @@
-from typing import List
+from typing import Any, Dict, List
 import requests
 
 from core.domain.files.repository import FileRepository
@@ -48,13 +48,19 @@ def _get_embeddings_batch(texts: List[str]) -> List[List[float]]:
         return []
 
 
-def custom_embedding(repo: FileRepository, file: FileSnapshot, chunks: List[str]) -> int:
+def custom_embedding(
+    repo: FileRepository,
+    file: FileSnapshot,
+    chunks: List[str],
+    doc_metadata: Dict[str, Any] = None
+) -> int:
     """Создание эмбеддингов через Ollama (batch API) и сохранение в БД
     
     Args:
         repo: Репозиторий для работы с БД
         file: Объект FileSnapshot с информацией о файле
         chunks: Список текстовых чанков
+        doc_metadata: Метаданные документа (extension, title, summary, keywords)
         
     Returns:
         int: количество успешно сохранённых чанков
@@ -63,6 +69,9 @@ def custom_embedding(repo: FileRepository, file: FileSnapshot, chunks: List[str]
         if not chunks:
             logger.warning(f"No chunks to embed for {file.path}")
             return 0
+        
+        if doc_metadata is None:
+            doc_metadata = {}
         
         logger.info(f"🔮 Embedding {len(chunks)} chunks (batch): {file.path}")
         
@@ -90,7 +99,9 @@ def custom_embedding(repo: FileRepository, file: FileSnapshot, chunks: List[str]
             for idx, (chunk_text, embedding) in enumerate(zip(batch_chunks, embeddings)):
                 try:
                     global_idx = batch_start + idx
+                    # Объединяем метаданные документа с метаданными чанка
                     metadata = {
+                        **doc_metadata,  # extension, title, summary, keywords
                         'file_hash': file.hash,
                         'file_path': file.path,
                         'chunk_index': global_idx,
