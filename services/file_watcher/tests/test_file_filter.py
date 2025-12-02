@@ -5,8 +5,12 @@ import sys
 import tempfile
 from pathlib import Path
 
-# Добавляем src/ в PYTHONPATH
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+# Добавляем src/ и корень репозитория в PYTHONPATH
+src_path = Path(__file__).parent.parent / "src"
+repo_root = Path(__file__).resolve().parents[3]
+for extra_path in (src_path, repo_root):
+    if str(extra_path) not in sys.path:
+        sys.path.insert(0, str(extra_path))
 
 from file_filter import FileFilter
 

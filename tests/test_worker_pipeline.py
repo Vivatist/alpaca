@@ -3,26 +3,37 @@
 """
 import pytest
 import os
+import json
 import tempfile
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 import responses
 
-from main import ingest_pipeline
 from settings import settings
+from core.domain.files.models import FileSnapshot
+
+
+def ollama_embed_callback(request):
+    """Возвращает N эмбеддингов для N текстов"""
+    body = json.loads(request.body)
+    texts = body.get("input", [])
+    if isinstance(texts, str):
+        texts = [texts]
+    embeddings = [[0.1] * 1024 for _ in texts]
+    return (200, {}, json.dumps({"embeddings": embeddings}))
 
 
 class TestWorkerPipeline:
     """Тесты полного пайплайна обработки"""
     
     @responses.activate
-    def test_pipeline_docx_to_chunks(self, test_db, temp_docx_file, cleanup_temp_parsed):
+    def test_pipeline_docx_to_chunks(self, test_db, temp_docx_file, cleanup_temp_parsed, ingest_pipeline):
         """Тест полного пайплайна: DOCX → парсинг → чанки → эмбеддинги"""
-        # Mock Ollama API
-        responses.add(
+        # Mock Ollama API (batch endpoint) — возвращает N эмбеддингов для N текстов
+        responses.add_callback(
             responses.POST,
-            f"{settings.OLLAMA_BASE_URL}/api/embeddings",
-            json={'embedding': [0.1] * 1024},
-            status=200
+            f"{settings.OLLAMA_BASE_URL}/api/embed",
+            callback=ollama_embed_callback,
+            content_type="application/json",
         )
         
         file_hash = "test_full_pipeline_123"
@@ -37,8 +48,7 @@ class TestWorkerPipeline:
                 )
             conn.commit()
         
-        from utils.file_manager import File
-        file = File(hash=file_hash, path=file_path, status_sync="added")
+        file = FileSnapshot(hash=file_hash, path=file_path, status_sync="added")
         result = ingest_pipeline(file)
         
         assert result is True
@@ -59,7 +69,7 @@ class TestWorkerPipeline:
                 chunks_count = cur.fetchone()[0]
                 assert chunks_count > 0
     
-    def test_pipeline_unsupported_file_type(self, test_db):
+    def test_pipeline_unsupported_file_type(self, test_db, ingest_pipeline):
         """Тест обработки неподдерживаемого типа файла"""
         file_hash = "test_unsupported_123"
         file_path = "/tmp/test_file.pdf"  # PDF не поддерживается
@@ -73,8 +83,7 @@ class TestWorkerPipeline:
                 )
             conn.commit()
         
-        from utils.file_manager import File
-        file = File(hash=file_hash, path=file_path, status_sync="added")
+        file = FileSnapshot(hash=file_hash, path=file_path, status_sync="added")
         result = ingest_pipeline(file)
         
         assert result is False
@@ -88,10 +97,10 @@ class TestWorkerPipeline:
                     assert row[0] == "error"
     
     @responses.activate
-    @patch('main.word_parser.parse')
-    def test_pipeline_empty_parsed_text(self, mock_parser, test_db, temp_docx_file):
+    def test_pipeline_empty_parsed_text(self, test_db, temp_docx_file, ingest_pipeline, monkeypatch):
         """Тест обработки файла с пустым результатом парсинга"""
-        mock_parser.return_value = ""  # Пустой текст
+        from core.application.document_processing.parsers import WordParser
+        monkeypatch.setattr(WordParser, "_parse", MagicMock(return_value=""))
         
         file_hash = "test_empty_parsed_123"
         file_path = temp_docx_file
@@ -105,8 +114,7 @@ class TestWorkerPipeline:
                 )
             conn.commit()
         
-        from utils.file_manager import File
-        file = File(hash=file_hash, path=file_path, status_sync="added")
+        file = FileSnapshot(hash=file_hash, path=file_path, status_sync="added")
         result = ingest_pipeline(file)
         
         assert result is False
@@ -120,12 +128,11 @@ class TestWorkerPipeline:
                     assert row[0] == "error"
     
     @responses.activate
-    @patch('main.word_parser.parse')
-    @patch('main.chunking')
-    def test_pipeline_no_chunks_created(self, mock_chunking, mock_parser, test_db, temp_docx_file):
+    def test_pipeline_no_chunks_created(self, test_db, temp_docx_file, ingest_pipeline, monkeypatch):
         """Тест когда чанкование не создаёт чанков"""
-        mock_parser.return_value = "Текст был распарсен"
-        mock_chunking.return_value = []  # Пустой список чанков
+        from core.application.document_processing.parsers import WordParser
+        monkeypatch.setattr(WordParser, "_parse", MagicMock(return_value="Текст был распарсен"))
+        ingest_pipeline.chunker = lambda _file: []
         
         file_hash = "test_no_chunks_123"
         file_path = temp_docx_file
@@ -139,25 +146,24 @@ class TestWorkerPipeline:
                 )
             conn.commit()
         
-        from utils.file_manager import File
-        file = File(hash=file_hash, path=file_path, status_sync="added")
+        file = FileSnapshot(hash=file_hash, path=file_path, status_sync="added")
         result = ingest_pipeline(file)
         
         assert result is False
     
     @responses.activate
-    @patch('main.word_parser.parse')
-    def test_pipeline_creates_temp_file(self, mock_parser, test_db, temp_docx_file, cleanup_temp_parsed):
+    def test_pipeline_creates_temp_file(self, test_db, temp_docx_file, cleanup_temp_parsed, ingest_pipeline, monkeypatch):
         """Тест что пайплайн создаёт временный .md файл"""
         test_text = "Тестовый текст для сохранения"
-        mock_parser.return_value = test_text
+        from core.application.document_processing.parsers import WordParser
+        monkeypatch.setattr(WordParser, "_parse", MagicMock(return_value=test_text))
         
-        # Mock Ollama
-        responses.add(
+        # Mock Ollama (batch endpoint) — возвращает N эмбеддингов для N текстов
+        responses.add_callback(
             responses.POST,
-            f"{settings.OLLAMA_BASE_URL}/api/embeddings",
-            json={'embedding': [0.1] * 1024},
-            status=200
+            f"{settings.OLLAMA_BASE_URL}/api/embed",
+            callback=ollama_embed_callback,
+            content_type="application/json",
         )
         
         file_hash = "test_temp_file_123"
@@ -172,8 +178,7 @@ class TestWorkerPipeline:
                 )
             conn.commit()
         
-        from utils.file_manager import File
-        file = File(hash=file_hash, path=file_path, status_sync="added")
+        file = FileSnapshot(hash=file_hash, path=file_path, status_sync="added")
         result = ingest_pipeline(file)
         
         assert result is True

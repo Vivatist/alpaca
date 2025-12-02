@@ -1,6 +1,14 @@
 # ALPACA RAG
 
+> **Версия:** После рефакторинга упрощения (январь 2025)
+
 Система обработки документов с RAG (Retrieval Augmented Generation).
+
+## 📚 Документация
+
+- **[ARCHITECTURE_SIMPLE.md](docs/ARCHITECTURE_SIMPLE.md)** — актуальное описание архитектуры после упрощения
+- **[REFACTORING_REPORT.md](docs/REFACTORING_REPORT.md)** — отчёт об упрощении (метрики, причины, результаты)
+- **[architecture_roadmap.md](docs/architecture_roadmap.md)** — история развития архитектуры
 
 ## Быстрый старт
 
@@ -54,7 +62,7 @@ curl http://localhost:9000/general/v0/general
 
 # Проверка подключения к Supabase
 source venv/bin/activate
-python -c "from app.settings import settings; print(settings.DATABASE_URL)"
+python -c "from settings import settings; print(settings.DATABASE_URL)"
 ```
 
 ## Архитектура

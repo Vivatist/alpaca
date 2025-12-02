@@ -1,47 +1,55 @@
-"""Database module - работа с PostgreSQL
+"""Database module для Admin Backend - мониторинг и статистика.
 
-Предоставляет методы для получения статистики и данных из БД
+Этот модуль предоставляет специфичные для мониторинга методы, которые не входят
+в domain/repository контракт. Admin Backend - это отдельный микросервис с собственными
+нуждами (дашборды, статистика, health checks).
+
+Почему изолирован от core/:
+1. Admin Backend — независимый микросервис с собственной кодовой базой
+2. Ему нужна только статистика, агрегации, health checks
+3. Не зависит от доменной логики Worker'а
+
+Модуль содержит собственную реализацию подключения к PostgreSQL.
 """
 
-import psycopg # type: ignore
 from contextlib import contextmanager
 from typing import Dict, List, Optional, Any
 import os
 
+import psycopg2
+from psycopg2.pool import ThreadedConnectionPool
+
 
 class Database:
-    """Класс для работы с базой данных"""
+    """Фасад для мониторинговых запросов Admin Backend.
     
+    Содержит собственную реализацию подключения к PostgreSQL
+    и предоставляет методы для dashboard/monitoring.
+    """
+
     def __init__(self):
-        # Приоритет DATABASE_URL, иначе отдельные переменные
-        database_url = os.getenv('DATABASE_URL')
+        self._database_url = os.getenv("DATABASE_URL")
+        if not self._database_url:
+            raise ValueError("DATABASE_URL не установлен")
         
-        if database_url:
-            # Парсим DATABASE_URL
-            from urllib.parse import urlparse
-            parsed = urlparse(database_url)
-            
-            self.config = {
-                'host': parsed.hostname,
-                'port': parsed.port or 5432,
-                'dbname': parsed.path.lstrip('/'),
-                'user': parsed.username,
-                'password': parsed.password
-            }
-        else:
-            # Fallback на отдельные переменные
-            self.config = {
-                'host': os.getenv('POSTGRES_HOST', 'localhost'),
-                'port': os.getenv('POSTGRES_PORT', '5432'),
-                'dbname': os.getenv('POSTGRES_DB', 'postgres'),
-                'user': os.getenv('POSTGRES_USER', 'postgres'),
-                'password': os.getenv('POSTGRES_PASSWORD', 'postgres')
-            }
+        # Пул соединений для многопоточности
+        self._pool: Optional[ThreadedConnectionPool] = None
     
+    def _get_pool(self) -> ThreadedConnectionPool:
+        """Ленивая инициализация пула соединений."""
+        if self._pool is None:
+            self._pool = ThreadedConnectionPool(
+                minconn=1,
+                maxconn=5,
+                dsn=self._database_url
+            )
+        return self._pool
+
     @contextmanager
     def get_connection(self):
-        """Context manager для подключения к БД"""
-        conn = psycopg.connect(**self.config)
+        """Контекстный менеджер для получения соединения из пула."""
+        pool = self._get_pool()
+        conn = pool.getconn()
         try:
             yield conn
             conn.commit()
@@ -49,7 +57,7 @@ class Database:
             conn.rollback()
             raise
         finally:
-            conn.close()
+            pool.putconn(conn)
     
     def get_file_state_stats(self) -> Dict[str, int]:
         """Получает статистику по файлам в таблице files

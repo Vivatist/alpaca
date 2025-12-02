@@ -14,18 +14,24 @@ import tempfile
 import shutil
 from pathlib import Path
 
-# Добавляем src/ в PYTHONPATH
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+# Добавляем src/ и корень репозитория в PYTHONPATH
+src_path = Path(__file__).parent.parent / "src"
+repo_root = Path(__file__).resolve().parents[3]
+for extra_path in (src_path, repo_root):
+    if str(extra_path) not in sys.path:
+        sys.path.insert(0, str(extra_path))
 
-from utils.database import PostgreDataBase
+from core.infrastructure.database.postgres import PostgresFileRepository
 from scanner import Scanner
 
 
 class TestSyncLogic:
     """Тесты синхронизации согласно таблице сценариев"""
+
+    __test__ = False  # pytest: do not auto-collect (requires manual wiring)
     
     def __init__(self, database_url: str):
-        self.db = PostgreDataBase(database_url, table_name='test_files')
+        self.db = PostgresFileRepository(database_url, table_name='test_files')
         self.test_dir = tempfile.mkdtemp(prefix='filewatcher_test_')
         
         # Создаём file_filter без ограничений для тестов

@@ -65,8 +65,8 @@ services:
   # File Watcher для мониторинга файлов
   filewatcher:
     build:
-      context: ./file_watcher
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: services/file_watcher/Dockerfile
     restart: always
     networks:
       - alpaca_network
@@ -101,6 +101,9 @@ services:
 
   # Admin Backend для мониторинга и управления
   admin-backend:
+    build:
+      context: ..
+      dockerfile: services/admin_backend/Dockerfile
     image: alpaca-admin-backend:latest
     restart: always
     networks:

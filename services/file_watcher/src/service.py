@@ -1,9 +1,11 @@
 """
-File Watcher Service - изолированный сервис для мониторинга файлов
+File Watcher Service - изолированный сервис для мониторинга файлов.
+Не зависит от core/.
 """
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+
 from scanner import Scanner
-from database import Database
+from repository import FileWatcherRepository
 from vector_sync import VectorSync
 from file_filter import FileFilter
 
@@ -21,8 +23,8 @@ class FileWatcherService:
         allowed_extensions: list[str],
         file_min_size: int = 100,
         file_max_size: int = 10 * 1024 * 1024,
-        excluded_dirs: list[str] = None,
-        excluded_patterns: list[str] = None,
+        excluded_dirs: Optional[list[str]] = None,
+        excluded_patterns: Optional[list[str]] = None,
         table_name: str = "files"
     ):
         """
@@ -36,7 +38,7 @@ class FileWatcherService:
             excluded_patterns: Исключённые паттерны файлов
             table_name: Название таблицы файлов в БД
         """
-        self.db = Database(database_url=database_url, table_name=table_name)
+        self.db = FileWatcherRepository(database_url=database_url, files_table=table_name)
         
         file_filter = FileFilter(
             min_size=file_min_size,
@@ -67,7 +69,7 @@ class FileWatcherService:
             # Сканирование диска
             files = self.scanner.scan()
             
-            # Синхронизация с БД
+            # Синхронизация с БД (используем локальный repository)
             file_sync = self.db.sync_by_hash(files)
             
             duration = time.time() - start_time

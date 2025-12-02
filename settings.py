@@ -53,6 +53,20 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_LLM_MODEL: str = "qwen2.5:32b"
     OLLAMA_EMBEDDING_MODEL: str = "bge-m3"
+    EMBEDDER_BACKEND: str = "custom"  # "custom" или "langchain"
+    
+    # Cleaner
+    ENABLE_CLEANER: bool = True  # Включить очистку текста перед чанкингом
+    
+    # Chunker
+    CHUNKER_BACKEND: str = "smart"  # "simple" или "smart" (LangChain с overlap)
+    CHUNK_SIZE: int = 1000  # Размер чанка в символах
+    CHUNK_OVERLAP: int = 200  # Перекрытие между чанками (только для smart)
+    
+    # MetaExtractor
+    METAEXTRACTOR_BACKEND: str = "llm"  # "simple" или "llm"
+    LLM_METAEXTRACTOR_PREVIEW_LENGTH: int = 2000  # Длина текста для анализа LLM
+    LLM_METAEXTRACTOR_TIMEOUT: int = 60  # Таймаут LLM-запроса в секундах
     
     # Worker Settings
     WORKER_POLL_INTERVAL: int = 5  # Интервал опроса очереди (секунды)

@@ -116,7 +116,7 @@ DATABASE_URL=postgresql://postgres:ваш-пароль@localhost:6543/postgres
 cd ~/alpaca
 source venv/bin/activate
 python -c "
-from app.settings import settings
+from settings import settings
 print(f'DATABASE_URL: {settings.DATABASE_URL}')
 "
 ```

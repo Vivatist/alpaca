@@ -8,19 +8,16 @@ RUN apt-get update && apt-get install -y \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Копируем requirements
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Устанавливаем Python-зависимости
+COPY services/file_watcher/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 # Копируем код сервиса
-COPY . /app/
+COPY services/file_watcher /app
+RUN chmod +x /app/entrypoint.sh
 
 # Создаем точку монтирования для наблюдаемой папки
 RUN mkdir -p /monitored_folder
-
-# Копируем и делаем исполняемым entrypoint
-COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
 
 # Запускаем через entrypoint (API + Scanner)
 CMD ["/app/entrypoint.sh"]

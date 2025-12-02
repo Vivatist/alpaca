@@ -10,7 +10,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Generator
 
-from utils.database import PostgreDataBase
+from core.application.bootstrap import build_worker_application
+from core.infrastructure.database.postgres import PostgresFileRepository
 from settings import settings
 
 
@@ -38,9 +39,9 @@ def setup_test_logging():
 
 
 @pytest.fixture
-def test_db() -> Generator[PostgreDataBase, None, None]:
+def test_db() -> Generator[PostgresFileRepository, None, None]:
     """Создание тестовой БД"""
-    db = PostgreDataBase(settings.DATABASE_URL)
+    db = PostgresFileRepository(settings.DATABASE_URL)
     yield db
     # Cleanup после тестов
     with db.get_connection() as conn:
@@ -49,6 +50,27 @@ def test_db() -> Generator[PostgreDataBase, None, None]:
             cur.execute("DELETE FROM chunks WHERE metadata->>'file_path' LIKE '/tmp/test_%'")
             cur.execute("DELETE FROM files WHERE path LIKE '/tmp/test_%'")
         conn.commit()
+
+
+@pytest.fixture(scope="session")
+def worker_app():
+    """Готовый bootstrap worker приложения для тестов."""
+    return build_worker_application(settings)
+
+
+@pytest.fixture
+def ingest_pipeline(worker_app):
+    """Возвращает пайплайн IngestDocument."""
+    # Пересоздаём worker_app каждый раз для изоляции
+    app = build_worker_application(settings)
+    return app.worker.process_file.ingest_document
+
+
+@pytest.fixture
+def process_file_use_case(worker_app):
+    """Возвращает use-case ProcessFileEvent."""
+    app = build_worker_application(settings)
+    return app.worker.process_file
 
 
 @pytest.fixture

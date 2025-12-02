@@ -1,161 +1,16 @@
-"""
-Worker - бизнес-логика обработки файлов
-Содержит функции парсинга, чанкинга, эмбеддинга и обработки файлов
-"""
-import os
-from typing import Any, Callable, Dict, Optional, Tuple
-from threading import Semaphore
+"""Основной модуль worker с совместимостью старого API."""
 
-from app.parsers.base_parser import BaseParser
-from app.parsers.word_parser_module.word_parser import WordParser
-from app.parsers.pdf_parser_module.pdf_parser import PDFParser
-from app.parsers.pptx_parser_module.pptx_parser import PowerPointParser
-from app.parsers.excel_parser_module.excel_parser import ExcelParser
-from app.parsers.txt_parser_module.txt_parser import TXTParser
-from app.chunkers.custom_chunker import chunking
-from app.embedders.custom_embedder import embedding
 from utils.logging import setup_logging, get_logger
-from utils.worker import Worker
 from settings import settings
-from utils.database import PostgreDataBase
-from utils.file_manager import File, FileManager
 from tests.runner import run_tests_on_startup
+from core.application.files import ResetStuckFiles
+from core.application.bootstrap import build_worker_application
 
-logger = get_logger("alpaca.worker")
+logger = get_logger("core.worker")
 
-# Инициализация
-db = PostgreDataBase(settings.DATABASE_URL)
-fm = FileManager(db)
-word_parser = WordParser(enable_ocr=True)  # Создаём экземпляр парсера
-pdf_parser = PDFParser()
-powerpoint_parser = PowerPointParser()
-excel_parser = ExcelParser()
-txt_parser = TXTParser()
-FILEWATCHER_API = os.getenv("FILEWATCHER_API_URL", "http://localhost:8081")
-
-# Семафоры для ограничения конкурентности разных операций (из settings)
-PARSE_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_PARSING)
-EMBED_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_EMBEDDING)
-LLM_SEMAPHORE = Semaphore(settings.WORKER_MAX_CONCURRENT_LLM)
+bootstrap_app = build_worker_application(settings)
 
 
-def _reuse(parser: BaseParser) -> Callable[[], BaseParser]:
-    return lambda parser=parser: parser
-
-
-PARSER_REGISTRY: Tuple[Tuple[Tuple[str, ...], Callable[[], BaseParser]], ...] = (
-    ((".docx", ".doc"), _reuse(word_parser)),
-    ((".pdf",), _reuse(pdf_parser)),
-    ((".pptx", ".ppt"), _reuse(powerpoint_parser)),
-    ((".xlsx", ".xls"), _reuse(excel_parser)),
-    ((".txt",), _reuse(txt_parser)),
-)
-
-
-def get_parser_for_file(file_path: str) -> Optional[BaseParser]:
-    """Simple Factory: вернуть подходящий парсер по расширению."""
-    lower_path = file_path.lower()
-    for extensions, factory in PARSER_REGISTRY:
-        if lower_path.endswith(extensions):
-            return factory()
-    return None
-
-
-def ingest_pipeline(file: File) -> bool:
-    """Полный пайплайн обработки файла: парсинг → чанкинг → эмбеддинг
-    
-    Args:
-        file: Объект File с информацией о файле
-        
-    Returns:
-        bool: True если успешно обработан
-    """
-    logger.info(f"🍎 Start ingest pipeline: {file.path} (hash: {file.hash[:8]}...)")
-    
-    try:
-        parser = get_parser_for_file(file.path)
-        if parser is None:
-            logger.error(f"Unsupported file type: {file.path}")
-            fm.mark_as_error(file)
-            return False
-
-        with PARSE_SEMAPHORE:
-            file.raw_text = parser.parse(file)
-            fm.set_raw_text(file, file.raw_text)
-
-        logger.info(f"✅ Parsed: {len(file.raw_text) if file.raw_text else 0} chars")
-
-    
-        
-        # 2. Сохранение в temp_parsed
-        fm.save_file_to_disk(file)
-        
-        # 3. Чанкинг
-        chunks = chunking(file)
-        
-        if not chunks:
-            logger.warning(f"No chunks created for {file.path}")
-            fm.mark_as_error(file)
-            return False
-        
-        # 4. Эмбеддинг (с ограничением конкурентности)
-        with EMBED_SEMAPHORE:
-            chunks_count = embedding(db, file, chunks)
-        
-        if chunks_count == 0:
-            logger.warning(f"No embeddings created for {file.path}")
-            fm.mark_as_error(file)
-            return False
-        
-        fm.mark_as_ok(file)
-        logger.info(f"✅ File processed successfully: {file.path} | chunks={chunks_count}")
-        return True
-        
-    except Exception as e:
-        import traceback
-        logger.error(f"Pipeline failed for {file.path}: {e}")
-        logger.error(f"Traceback:\n{traceback.format_exc()}")
-        fm.mark_as_error(file)
-        return False
-
-
-def process_file(file_info: Dict[str, Any]) -> bool:
-    """Обработать один файл
-    
-    Args:
-        file_info: Информация о файле из filewatcher
-        
-    Returns:
-        bool: True если успешно обработан
-    """
-    # Создаём объект File из словаря
-    file = File(**file_info)
-    
-    logger.info(f"Processing file: {file.path} (status={file.status_sync})")
-    
-    try:
-        if file.status_sync == 'deleted':
-            # Удаляем чанки и файл из БД
-            fm.delete_file_and_chunks(file)
-            return True
-            
-        elif file.status_sync == 'updated':
-            # Удаляем только старые чанки, файл остаётся в БД
-            fm.delete_chunks_only(file)
-            return ingest_pipeline(file)
-            
-        elif file.status_sync == 'added':
-            # Новый файл - просто обрабатываем
-            return ingest_pipeline(file)
-            
-        else:
-            logger.warning(f"Unknown status: {file.status_sync} for {file.path}")
-            return False
-            
-    except Exception as e:
-        logger.error(f"✗ Error processing {file.path}: {e}")
-        fm.mark_as_error(file)
-        return False
 
 if __name__ == "__main__":
     # Запуск тестов при старте (если включено в настройках)
@@ -170,20 +25,16 @@ if __name__ == "__main__":
 
     # Сбрасываем зависшие 'processed' статусы на 'added' при старте
     try:
-        with db.get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("UPDATE files SET status_sync = 'added' WHERE status_sync = 'processed'")
-                reset_count = cur.rowcount
-                if reset_count > 0:
-                    logger.info(f"🔄 Reset {reset_count} stuck 'processed' files to 'added' on startup")
+        reset_use_case = ResetStuckFiles(bootstrap_app.repository)
+        reset_count = reset_use_case()
+        if reset_count > 0:
+            logger.info(f"🔄 Reset {reset_count} stuck 'processed' files to 'added' on startup")
     except Exception as e:
         logger.error(f"Failed to reset processed statuses: {e}")
 
     # Создаём worker и запускаем
-    worker = Worker(
-        db = db,
-        filewatcher_api_url=FILEWATCHER_API,
-        process_file_func=process_file # передаем функцию которую будем дергать при изменении на диске
+    bootstrap_app.worker.start(
+        poll_interval=settings.WORKER_POLL_INTERVAL,
+        max_workers=settings.WORKER_MAX_CONCURRENT_FILES,
     )
-    worker.start(poll_interval=settings.WORKER_POLL_INTERVAL, max_workers=settings.WORKER_MAX_CONCURRENT_FILES)
 

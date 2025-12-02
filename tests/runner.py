@@ -11,7 +11,50 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.logging import get_logger
 
-logger = get_logger("alpaca.tests")
+logger = get_logger("core.tests")
+
+
+def run_ollama_readiness_tests(verbose: bool = True) -> bool:
+    """Запустить критические тесты готовности Ollama.
+    
+    Проверяет:
+    - Доступность сервера Ollama
+    - Наличие эмбеддинг модели (bge-m3)
+    - Работоспособность LLM модели (qwen2.5:32b)
+    
+    Args:
+        verbose: Подробный вывод
+        
+    Returns:
+        bool: True если Ollama готов к работе
+    """
+    tests_dir = Path(__file__).parent
+    test_file = str(tests_dir / "test_ollama_readiness.py")
+    
+    print("🔌 Проверка готовности Ollama моделей...")
+    
+    args = [test_file]
+    if verbose:
+        args.append("-v")
+    else:
+        args.append("-q")
+    
+    # Останавливаемся при первой ошибке - если Ollama недоступен, дальше нет смысла
+    args.append("-x")
+    
+    try:
+        exit_code = pytest.main(args)
+        
+        if exit_code == 0:
+            print("✅ Ollama модели готовы к работе!")
+            return True
+        else:
+            print("❌ Ollama модели не готовы!")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Ошибка при проверке Ollama: {e}")
+        return False
 
 
 def run_tests(
@@ -100,6 +143,24 @@ def run_tests_on_startup(settings) -> bool:
     print("RUN_TESTS_ON_START=True - Запуск тестов перед стартом...")
     print("=" * 60)
     
+    # 1. Критические тесты - проверка готовности Ollama
+    print("\n📋 Шаг 1: Проверка готовности Ollama моделей")
+    ollama_ready = run_ollama_readiness_tests(verbose=True)
+    
+    if not ollama_ready:
+        print("=" * 60)
+        print("❌ КРИТИЧЕСКАЯ ОШИБКА: Ollama не готов!")
+        print("Проверьте:")
+        print("  1. Запущен ли сервис Ollama: docker ps | grep ollama")
+        print("  2. Загружены ли модели: curl localhost:11434/api/tags")
+        print("  3. Установите модели если нужно:")
+        print(f"     ollama pull {settings.OLLAMA_EMBEDDING_MODEL}")
+        print(f"     ollama pull {settings.OLLAMA_LLM_MODEL}")
+        print("=" * 60)
+        return False
+    
+    # 2. Основные тесты (если Ollama готов)
+    print(f"\n📋 Шаг 2: Запуск тестов ({settings.TEST_SUITE})")
     success = run_tests(
         suite=settings.TEST_SUITE,
         verbose=True,

@@ -1,5 +1,6 @@
 # Application specific
 *.pid
+figures/
 
 
 # Python
