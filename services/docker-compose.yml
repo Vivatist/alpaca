@@ -120,6 +120,64 @@ services:
       retries: 3
       start_period: 10s
 
+  # Ingest Service - обработка документов
+  ingest:
+    build:
+      context: ..
+      dockerfile: services/ingest/Dockerfile
+    image: alpaca-ingest:latest
+    restart: always
+    networks:
+      - alpaca_network
+    volumes:
+      - /home/alpaca/monitored_folder:/monitored_folder:ro
+      - /home/alpaca/tmp_md:/tmp_md
+    environment:
+      # === CREDENTIALS ===
+      - DATABASE_URL=postgresql://postgres:IFEmDfNac7SuIZsEdCFG3LC2rejPyupEHZkdYe3kS+k=@172.17.0.1:54322/postgres
+      
+      # === SYSTEM SETTINGS ===
+      - TZ=Europe/Moscow
+      - LOG_LEVEL=INFO
+      
+      # === SERVICE URLs ===
+      - FILEWATCHER_URL=http://filewatcher:8081
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - UNSTRUCTURED_API_URL=http://unstructured:8000/general/v0/general
+      
+      # === MODEL SETTINGS ===
+      - OLLAMA_EMBEDDING_MODEL=bge-m3
+      - OLLAMA_LLM_MODEL=qwen2.5:32b
+      
+      # === WORKER SETTINGS ===
+      - WORKER_POLL_INTERVAL=5
+      - WORKER_MAX_CONCURRENT_FILES=5
+      - WORKER_MAX_CONCURRENT_PARSING=2
+      - WORKER_MAX_CONCURRENT_EMBEDDING=3
+      
+      # === PIPELINE SETTINGS ===
+      - ENABLE_CLEANER=true
+      - CLEANER_PIPELINE=["simple","stamps"]
+      - CHUNKER_BACKEND=smart
+      - CHUNK_SIZE=1000
+      - CHUNK_OVERLAP=200
+      - ENABLE_METAEXTRACTOR=true
+      - METAEXTRACTOR_BACKEND=simple
+      
+      # === PATHS ===
+      - MONITORED_PATH=/monitored_folder
+      - TMP_MD_PATH=/tmp_md
+    depends_on:
+      - filewatcher
+      - ollama
+      - unstructured
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "python"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
 volumes:
   unstructured_data:
   ollama_storage:

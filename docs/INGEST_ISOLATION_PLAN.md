@@ -45,59 +45,60 @@ services/
 
 ## Этапы реализации
 
-### Этап 1: Создание структуры (30 мин)
-- [ ] Создать `services/ingest/` директорию
-- [ ] Создать `requirements.txt` с зависимостями
-- [ ] Создать `Dockerfile`
-- [ ] Создать `src/config.py` — настройки из ENV
-- [ ] Создать `src/contracts.py` — все type aliases
+### Этап 1: Создание структуры (30 мин) ✅
+- [x] Создать `services/ingest/` директорию
+- [x] Создать `requirements.txt` с зависимостями
+- [x] Создать `Dockerfile`
+- [x] Создать `src/config.py` — настройки из ENV
+- [x] Создать `src/contracts.py` — все type aliases
 
-### Этап 2: Repository (20 мин)
-- [ ] Создать `src/repository.py` — PostgreSQL адаптер
+### Этап 2: Repository (20 мин) ✅
+- [x] Создать `src/repository.py` — PostgreSQL адаптер
   - `mark_as_ok()`, `mark_as_error()`, `mark_as_processed()`
   - `delete_chunks_by_hash()`, `save_chunk()`
   - `get_connection()` context manager
 
-### Этап 3: Парсеры (40 мин)
-- [ ] Скопировать и адаптировать из `core/application/document_processing/parsers/`:
+### Этап 3: Парсеры (40 мин) ✅
+- [x] Скопировать и адаптировать из `core/application/document_processing/parsers/`:
   - `word.py` → `src/parsers/word.py`
   - `pdf.py` → `src/parsers/pdf.py`
   - `txt.py` → `src/parsers/txt.py`
   - `pptx.py` → `src/parsers/pptx.py`
-  - `xls.py` → `src/parsers/xls.py`
-- [ ] Создать `src/parsers/__init__.py` с registry
+  - `xls.py` → `src/parsers/excel.py`
+- [x] Создать `src/parsers/__init__.py` с registry
 
-### Этап 4: Cleaners, Chunkers (20 мин)
-- [ ] `src/cleaners/simple.py` — скопировать из `core/application/document_processing/cleaners/`
-- [ ] `src/chunkers/fixed_size.py` — скопировать из `core/application/document_processing/chunkers/`
-- [ ] Создать `__init__.py` с фабриками
+### Этап 4: Cleaners, Chunkers (20 мин) ✅
+- [x] `src/cleaners/__init__.py` — simple_cleaner + stamps_cleaner + pipeline
+- [x] `src/chunkers/__init__.py` — simple_chunker + smart_chunker (LangChain)
+- [x] Создать фабрики `build_cleaner()`, `build_chunker()`
 
-### Этап 5: Embedder (20 мин)
-- [ ] `src/embedders/ollama.py` — адаптировать `custom_embedder.py`
-- [ ] Убрать зависимость от `core/domain/files/repository`
-- [ ] Использовать локальный `repository.py`
+### Этап 5: Embedder (20 мин) ✅
+- [x] `src/embedders/__init__.py` — адаптировать `custom_embedder.py`
+- [x] Убрать зависимость от `core/domain/files/repository`
+- [x] Использовать локальный `repository.py`
 
-### Этап 6: Pipeline (30 мин)
-- [ ] `src/pipeline/ingest.py` — IngestDocument use-case
-- [ ] `src/pipeline/process.py` — ProcessFileEvent (роутинг по статусу)
-- [ ] Адаптировать логику из `core/application/processing/use_cases.py`
+### Этап 6: Pipeline (30 мин) ✅
+- [x] `src/pipeline/ingest.py` — IngestDocument use-case
+- [x] `src/pipeline/process.py` — ProcessFileEvent (роутинг по статусу)
+- [x] Адаптировать логику из `core/application/processing/use_cases.py`
 
-### Этап 7: Worker (20 мин)
-- [ ] `src/worker.py` — цикл опроса FileWatcher API
-- [ ] Адаптировать из `utils/worker.py`
-- [ ] ThreadPoolExecutor для параллельной обработки
+### Этап 7: Worker (20 мин) ✅
+- [x] `src/worker.py` — цикл опроса FileWatcher API
+- [x] Адаптировать из `utils/worker.py`
+- [x] ThreadPoolExecutor для параллельной обработки
 
-### Этап 8: Main и сборка (15 мин)
-- [ ] `src/main.py` — точка входа
+### Этап 8: Main и сборка (15 мин) ✅
+- [x] `src/main.py` — точка входа
   - Инициализация repository
   - Сборка pipeline с зависимостями
   - Запуск worker
-- [ ] Обновить `services/docker-compose.yml`
+- [x] Обновить `services/docker-compose.yml`
 
-### Этап 9: Тестирование (30 мин)
-- [ ] `docker compose build ingest`
-- [ ] `docker compose up ingest`
-- [ ] Проверить обработку файлов
+### Этап 9: Тестирование (30 мин) ✅
+- [x] `docker compose build ingest`
+- [x] `docker compose up ingest`
+- [x] Сервис успешно запущен и ждёт файлы
+- [ ] Проверить обработку файлов (требуется добавить новый файл)
 - [ ] Проверить логи и статусы
 
 ### Этап 10: Cleanup (опционально)
