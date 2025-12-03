@@ -11,7 +11,7 @@ import requests
 from typing import List, Dict, Optional
 from docx import Document  # type: ignore
 
-from utils.logging import get_logger
+from logging_config import get_logger
 from .image_converter import convert_wmf_to_png, extract_images_via_pdf, get_image_extension
 from settings import settings
 

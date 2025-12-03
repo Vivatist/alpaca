@@ -158,11 +158,11 @@ services:
       # === PIPELINE SETTINGS ===
       - ENABLE_CLEANER=true
       - CLEANER_PIPELINE=["simple","stamps"]
-      - CHUNKER_BACKEND=smart
+      - CHUNKER_BACKEND=smart # options: simple, smart
       - CHUNK_SIZE=1000
       - CHUNK_OVERLAP=200
       - ENABLE_METAEXTRACTOR=true
-      - METAEXTRACTOR_BACKEND=simple
+      - METAEXTRACTOR_BACKEND=llm # options: llm, simple
       - LLM_METAEXTRACTOR_PREVIEW_LENGTH=2000
       
       # === PATHS ===

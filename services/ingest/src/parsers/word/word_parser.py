@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 from ..base_parser import BaseParser
 
 if TYPE_CHECKING:
-    from core.domain.files.models import FileSnapshot
+    from contracts import FileSnapshot
 
 from markitdown import MarkItDown  # type: ignore
 
@@ -97,10 +97,7 @@ class WordParser(BaseParser):
                 else:
                     self.logger.warning(f"Failed to convert .doc to .docx, will try direct parsing")
             
-            # 2. Добавляем ОБЩИЕ метаданные (в базовом классе)
-            common_metadata = self._add_common_metadata(original_file_path, file_hash)
-            
-            # 3. Извлечение СПЕЦИФИЧНЫХ метаданных Word через python-docx (только для .docx)
+            # 2. Извлечение СПЕЦИФИЧНЫХ метаданных Word через python-docx (только для .docx)
             specific_metadata = {}
             
             if file_ext == '.docx':
@@ -113,10 +110,10 @@ class WordParser(BaseParser):
                         file_path = original_file_path
                         file_ext = '.doc'
             
-            # 4. Основной парсинг через Markitdown
+            # 3. Основной парсинг через Markitdown
             markdown_content = self._parse_with_markitdown(file_path)
             
-            # 5. OCR для изображений (если включено и это .docx)
+            # 4. OCR для изображений (если включено и это .docx)
             if self.enable_ocr and file_ext == '.docx':
                 self.logger.info(f"Processing document with OCR | enable_ocr={self.enable_ocr}")
                 

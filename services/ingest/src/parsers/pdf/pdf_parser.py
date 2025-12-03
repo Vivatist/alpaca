@@ -13,11 +13,11 @@ from typing import TYPE_CHECKING
 from ..base_parser import BaseParser
 from .orientation_detector import smart_rotate_pdf
 from .metadata_extractor import extract_pdf_metadata
-from utils.logging import get_logger
+from logging_config import get_logger
 from settings import settings
 
 if TYPE_CHECKING:  # pragma: no cover - только для type checkers
-    from core.domain.files.models import FileSnapshot
+    from contracts import FileSnapshot
 
 
 import fitz  # PyMuPDF

@@ -26,7 +26,7 @@ except ImportError:
     TESSERACT_AVAILABLE = False
     PDF2IMAGE_AVAILABLE = False
 
-from utils.logging import get_logger
+from logging_config import get_logger
 
 logger = get_logger("core.parser.orientation_detector")
 

@@ -14,7 +14,7 @@ from typing import Optional
 from PIL import Image
 from pdf2image import convert_from_path
 
-from utils.logging import get_logger
+from logging_config import get_logger
 
 logger = get_logger("core.parser.image_converter")
 

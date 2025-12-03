@@ -27,7 +27,6 @@ Word Parser — модуль для обработки Word-документов
 
 === ИСПОЛЬЗОВАНИЕ ===
 
-    from core.application.document_processing.parsers.word import (
         extract_images_from_docx, process_images_with_ocr
     )
 

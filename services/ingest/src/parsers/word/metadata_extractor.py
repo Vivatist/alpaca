@@ -8,7 +8,7 @@ Metadata Extractor - извлечение метаданных из Word док�
 from typing import Dict
 from docx import Document  # type: ignore
 
-from utils.logging import get_logger
+from logging_config import get_logger
 
 logger = get_logger("core.parser.metadata_extractor")
 

@@ -13,7 +13,7 @@ try:
 except ImportError:
     PYPDF_AVAILABLE = False
 
-from utils.logging import get_logger
+from logging_config import get_logger
 
 logger = get_logger("core.parser.pdf_metadata_extractor")
 

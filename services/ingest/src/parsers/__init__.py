@@ -15,10 +15,9 @@
 
 === ИСПОЛЬЗОВАНИЕ ===
 
-    from core.application.document_processing.parsers import (
         WordParser, PDFParser, PowerPointParser, ExcelParser, TXTParser
     )
-    from core.domain.files import FileSnapshot
+    from contracts import FileSnapshot
 
     # Создать парсер
     parser = WordParser(enable_ocr=True)
@@ -29,7 +28,6 @@
     print(f"Extracted {len(text)} chars")
 
     # Или использовать через ParserRegistry
-    from core.domain.document_processing import ParserRegistry
     registry = ParserRegistry(parsers={
         (".doc", ".docx"): WordParser(),
         (".pdf",): PDFParser(),

@@ -17,8 +17,7 @@ PowerPoint Parser — модуль для обработки презентац�
 
 === ИСПОЛЬЗОВАНИЕ ===
 
-    from core.application.document_processing.parsers.pptx import PowerPointParser
-    from core.domain.files import FileSnapshot
+    from contracts import FileSnapshot
 
     parser = PowerPointParser()
     file = FileSnapshot(path="presentation.pptx", hash="abc123")

@@ -18,10 +18,9 @@ PDF Parser — модуль для обработки PDF-документов.
 
 === ИСПОЛЬЗОВАНИЕ ===
 
-    from core.application.document_processing.parsers.pdf import (
         PDFParser, extract_pdf_metadata
     )
-    from core.domain.files import FileSnapshot
+    from contracts import FileSnapshot
 
     # Парсинг PDF
     parser = PDFParser()

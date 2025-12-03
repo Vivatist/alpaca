@@ -18,10 +18,9 @@ TXT Parser — модуль для обработки текстовых фай�
 
 === ИСПОЛЬЗОВАНИЕ ===
 
-    from core.application.document_processing.parsers.txt import (
         TXTParser, detect_encoding
     )
-    from core.domain.files import FileSnapshot
+    from contracts import FileSnapshot
 
     # Парсинг TXT
     parser = TXTParser()

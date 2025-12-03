@@ -16,8 +16,7 @@ Excel Parser — модуль для обработки таблиц.
 
 === ИСПОЛЬЗОВАНИЕ ===
 
-    from core.application.document_processing.parsers.excel import ExcelParser
-    from core.domain.files import FileSnapshot
+    from contracts import FileSnapshot
 
     parser = ExcelParser()
     file = FileSnapshot(path="data.xlsx", hash="abc123")

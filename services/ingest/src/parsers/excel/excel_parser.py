@@ -22,7 +22,7 @@ from ..base_parser import BaseParser
 from ..document_converter import convert_xls_to_xlsx
 
 if TYPE_CHECKING:  # pragma: no cover
-    from core.domain.files.models import FileSnapshot
+    from contracts import FileSnapshot
 
 
 class ExcelParser(BaseParser):

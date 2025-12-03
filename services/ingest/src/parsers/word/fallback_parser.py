@@ -13,7 +13,7 @@ from docx.oxml.text.paragraph import CT_P  # type: ignore
 from docx.table import Table  # type: ignore
 from docx.text.paragraph import Paragraph  # type: ignore
 
-from utils.logging import get_logger
+from logging_config import get_logger
 
 if TYPE_CHECKING:
     from docx.table import Table

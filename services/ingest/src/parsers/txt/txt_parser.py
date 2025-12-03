@@ -20,12 +20,11 @@ from typing import TYPE_CHECKING
 from ..base_parser import BaseParser
 
 if TYPE_CHECKING:
-    from core.domain.files.models import FileSnapshot
+    from contracts import FileSnapshot
 
 # Импорты из модулей
 from .encoding_detector import detect_encoding
 from .text_formatter import format_as_markdown
-from .metadata_extractor import extract_txt_metadata
 
 
 class TXTParser(BaseParser):
@@ -62,14 +61,11 @@ class TXTParser(BaseParser):
             
             self.logger.info(f"Parsing TXT document | file={file.path}")
             
-            # 1. Добавляем ОБЩИЕ метаданные (в базовом классе)
-            common_metadata = self._add_common_metadata(file_path, file_hash)
-            
-            # 2. Определение кодировки
+            # 1. Определение кодировки
             encoding = detect_encoding(file_path)
             self.logger.info(f"Detected encoding | encoding={encoding}")
             
-            # 3. Чтение контента
+            # 2. Чтение контента
             try:
                 with open(file_path, 'r', encoding=encoding, errors='replace') as f:
                     content = f.read()
@@ -83,12 +79,7 @@ class TXTParser(BaseParser):
                 self.logger.warning(f"Empty content | file={file_path}")
                 raise ValueError(f"TXT file is empty | file={file_path}")
             
-            # 4. Извлечение СПЕЦИФИЧНЫХ метаданных для TXT
-            specific_metadata = extract_txt_metadata(encoding, content)
-            
-            self.logger.info(f"Metadata extracted | lines={specific_metadata.get('lines', 0)} chars={specific_metadata.get('characters', 0)}")
-            
-            # 5. Форматирование в Markdown
+            # 3. Форматирование в Markdown
             markdown_content = format_as_markdown(content, Path(file_path).name)
             
             self.logger.info(f"TXT parsed successfully | file={file_path} content_length={len(markdown_content)}")

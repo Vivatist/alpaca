@@ -7,7 +7,7 @@ Text Formatter - форматирование текста в Markdown
 
 from pathlib import Path
 
-from utils.logging import get_logger
+from logging_config import get_logger
 
 logger = get_logger("core.parser.text_formatter")
 
