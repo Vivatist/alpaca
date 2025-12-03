@@ -9,6 +9,8 @@ from settings import settings
 from logging_config import setup_logging, get_logger
 from api import router as api_router
 
+
+
 logger = get_logger("chat_backend")
 
 

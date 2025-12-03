@@ -9,6 +9,13 @@
   
   "forwardPorts": [8000],
   
+  "containerEnv": {
+    "HTTP_PROXY": "socks5://172.17.0.1:10809",
+    "HTTPS_PROXY": "socks5://172.17.0.1:10809",
+    "ALL_PROXY": "socks5://172.17.0.1:10809",
+    "NO_PROXY": "localhost,127.0.0.1,db,ollama,172.18.0.0/16"
+  },
+  
   "customizations": {
     "vscode": {
       "extensions": [
@@ -36,6 +43,7 @@
   
   "runArgs": [
     "--env-file", ".env.example",
-    "--network", "alpaca_network"
+    "--network", "alpaca_network",
+    "--add-host", "host.docker.internal:172.17.0.1"
   ]
 }

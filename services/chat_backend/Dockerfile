@@ -7,6 +7,13 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     git \
+    # Сетевые утилиты
+    iputils-ping \
+    net-tools \
+    dnsutils \
+    traceroute \
+    telnet \
+    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
 # Python зависимости

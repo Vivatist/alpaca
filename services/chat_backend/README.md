@@ -1,5 +1,6 @@
 # Chat Backend Service
 
+
 REST API для чата с RAG-системой ALPACA.
 
 ## Разработка в контейнере (Dev Container)
