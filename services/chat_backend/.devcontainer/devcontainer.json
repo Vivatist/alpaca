@@ -1,8 +1,13 @@
 {
   "name": "ALPACA Chat Backend",
-  "dockerComposeFile": ["../../docker-compose.yml", "docker-compose.dev.yml"],
-  "service": "chat-backend-dev",
+  "build": {
+    "dockerfile": "../Dockerfile.dev",
+    "context": ".."
+  },
   "workspaceFolder": "/app",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/app,type=bind,consistency=cached",
+  
+  "forwardPorts": [8000],
   
   "customizations": {
     "vscode": {
@@ -11,7 +16,6 @@
         "ms-python.vscode-pylance",
         "charliermarsh.ruff",
         "ms-python.debugpy",
-        "tamasfe.even-better-toml",
         "redhat.vscode-yaml"
       ],
       "settings": {
@@ -20,10 +24,6 @@
         "python.testing.pytestEnabled": true,
         "python.testing.pytestArgs": ["tests"],
         "editor.formatOnSave": true,
-        "editor.codeActionsOnSave": {
-          "source.fixAll.ruff": "explicit",
-          "source.organizeImports.ruff": "explicit"
-        },
         "[python]": {
           "editor.defaultFormatter": "charliermarsh.ruff"
         }
@@ -31,7 +31,11 @@
     }
   },
   
-  "forwardPorts": [8000],
-  "postCreateCommand": "pip install -e . 2>/dev/null || true",
-  "remoteUser": "developer"
+  "postCreateCommand": "pip install -r requirements-dev.txt 2>/dev/null || true",
+  "remoteUser": "developer",
+  
+  "runArgs": [
+    "--env-file", ".env.example",
+    "--network", "alpaca_network"
+  ]
 }
