@@ -11,7 +11,7 @@ Ingest Service - точка входа.
 
 from threading import Semaphore
 
-from config import settings
+from settings import settings
 from logging_config import setup_logging, get_logger
 from repository import IngestRepository
 from worker import Worker

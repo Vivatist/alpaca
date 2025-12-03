@@ -24,7 +24,7 @@ from contracts import (
     Embedder, 
     MetaExtractor
 )
-from config import settings
+from settings import settings
 
 
 @dataclass

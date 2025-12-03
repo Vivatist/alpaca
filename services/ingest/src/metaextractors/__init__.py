@@ -14,7 +14,7 @@ import requests
 
 from logging_config import get_logger
 from contracts import FileSnapshot, MetaExtractor
-from config import settings
+from settings import settings
 
 logger = get_logger("ingest.metaextractor")
 

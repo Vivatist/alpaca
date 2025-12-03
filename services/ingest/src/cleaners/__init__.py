@@ -8,7 +8,7 @@ import re
 from typing import List, Callable
 
 from logging_config import get_logger
-from config import settings
+from settings import settings
 
 logger = get_logger("ingest.cleaner")
 
@@ -130,7 +130,9 @@ def get_cleaner_pipeline(cleaner_names: List[str]) -> CleanerFunc:
 
 
 def build_cleaner() -> CleanerFunc:
-    """Создаёт клинер на основе настроек."""
+    """Создаёт клинер на основе настроек.
+    Если ENABLE_CLEANER=False, возвращается функция, возвращающая входной текст 
+    без изменений. Иначе создаётся пайплайн из CLEANER_PIPELINE."""
     if not settings.ENABLE_CLEANER:
         logger.info("Cleaner disabled")
         return lambda x: x

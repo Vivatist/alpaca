@@ -27,7 +27,7 @@ class FileSnapshot:
     @property
     def full_path(self) -> str:
         """Полный путь к файлу на диске."""
-        from config import settings
+        from settings import settings
         return f"{settings.MONITORED_PATH}/{self.path}"
 
 

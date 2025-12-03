@@ -163,6 +163,7 @@ services:
       - CHUNK_OVERLAP=200
       - ENABLE_METAEXTRACTOR=true
       - METAEXTRACTOR_BACKEND=simple
+      - LLM_METAEXTRACTOR_PREVIEW_LENGTH=2000
       
       # === PATHS ===
       - MONITORED_PATH=/monitored_folder

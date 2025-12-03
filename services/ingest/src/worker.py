@@ -11,7 +11,7 @@ from typing import Callable, Optional, Dict, Any
 
 from logging_config import get_logger
 from contracts import Repository
-from config import settings
+from settings import settings
 
 logger = get_logger("ingest.worker")
 

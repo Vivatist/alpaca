@@ -13,7 +13,7 @@ from docx import Document  # type: ignore
 
 from utils.logging import get_logger
 from .image_converter import convert_wmf_to_png, extract_images_via_pdf, get_image_extension
-from config import settings
+from settings import settings
 
 logger = get_logger("core.parser.ocr_processor")
 
