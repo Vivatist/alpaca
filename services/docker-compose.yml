@@ -179,9 +179,74 @@ services:
       retries: 3
       start_period: 30s
 
+  # Chat Backend - REST API для чата с RAG
+  chat-backend:
+    build:
+      context: chat_backend
+      dockerfile: Dockerfile
+    image: alpaca-chat-backend:latest
+    restart: always
+    networks:
+      - alpaca_network
+    ports:
+      - "8082:8000"
+    environment:
+      # === CREDENTIALS ===
+      - DATABASE_URL=postgresql://postgres:IFEmDfNac7SuIZsEdCFG3LC2rejPyupEHZkdYe3kS+k=@172.17.0.1:54322/postgres
+      
+      # === SYSTEM SETTINGS ===
+      - TZ=Europe/Moscow
+      - LOG_LEVEL=INFO
+      - ENVIRONMENT=production
+      
+      # === SERVICE URLs ===
+      - OLLAMA_BASE_URL=http://ollama:11434
+      
+      # === MODEL SETTINGS ===
+      - OLLAMA_EMBEDDING_MODEL=bge-m3
+      - OLLAMA_LLM_MODEL=qwen2.5:32b
+      
+      # === RAG SETTINGS ===
+      - RAG_TOP_K=5
+      - RAG_SIMILARITY_THRESHOLD=0.7
+    depends_on:
+      - ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Chat Backend Dev Container (для разработки)
+  chat-backend-dev:
+    build:
+      context: chat_backend
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./chat_backend/src:/app/src:cached
+      - ./chat_backend/tests:/app/tests:cached
+      - chat-backend-pip-cache:/home/developer/.cache/pip
+    environment:
+      - DATABASE_URL=postgresql://postgres:IFEmDfNac7SuIZsEdCFG3LC2rejPyupEHZkdYe3kS+k=@172.17.0.1:54322/postgres
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_LLM_MODEL=qwen2.5:32b
+      - OLLAMA_EMBEDDING_MODEL=bge-m3
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+    ports:
+      - "8083:8000"
+    networks:
+      - alpaca_network
+    depends_on:
+      - ollama
+    profiles:
+      - dev  # Запускается только с --profile dev
+
 volumes:
   unstructured_data:
   ollama_storage:
+  chat-backend-pip-cache:
 
 networks:
   alpaca_network:

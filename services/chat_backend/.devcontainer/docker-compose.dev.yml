@@ -1,0 +1,28 @@
+# Dev Container compose override
+services:
+  chat-backend-dev:
+    build:
+      context: ..
+      dockerfile: Dockerfile.dev
+    volumes:
+      # Монтируем исходники для live reload
+      - ../src:/app/src:cached
+      - ../tests:/app/tests:cached
+      # Persist pip cache
+      - chat-backend-pip-cache:/home/developer/.cache/pip
+    environment:
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-password}@supabase-db:5432/postgres
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_LLM_MODEL=qwen2.5:32b
+      - OLLAMA_EMBEDDING_MODEL=bge-m3
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+    ports:
+      - "8000:8000"
+    networks:
+      - alpaca-network
+    depends_on:
+      - ollama
+
+volumes:
+  chat-backend-pip-cache:

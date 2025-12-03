@@ -1,0 +1,36 @@
+# Chat Backend - Development Container
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Системные зависимости для разработки
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    git \
+    vim \
+    htop \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python зависимости (включая dev)
+COPY requirements.txt requirements-dev.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-dev.txt
+
+# Создаём пользователя для разработки (не root)
+ARG USERNAME=developer
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+
+RUN groupadd --gid $USER_GID $USERNAME \
+    && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
+    && chown -R $USERNAME:$USERNAME /app
+
+USER $USERNAME
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app/src
+
+# Для hot reload
+EXPOSE 8000
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
