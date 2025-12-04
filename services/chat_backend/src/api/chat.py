@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 from pydantic import BaseModel
 
 from logging_config import get_logger
-from rag_pipeline import get_rag_service
+from pipelines import get_pipeline
 from settings import settings
 
 logger = get_logger("chat_backend.api.chat")
@@ -82,8 +82,8 @@ async def chat(request: ChatRequest, req: Request) -> ChatResponse:
     logger.info(f"📨 Chat request: {request.message[:50]}...")
     
     try:
-        rag = get_rag_service()
-        result = rag.generate_answer(
+        pipeline = get_pipeline()
+        result = pipeline.generate_answer(
             query=request.message,
             conversation_id=request.conversation_id
         )
@@ -155,8 +155,8 @@ async def chat_with_file(
         await file.seek(0)
     
     try:
-        rag = get_rag_service()
-        result = rag.generate_answer(
+        pipeline = get_pipeline()
+        result = pipeline.generate_answer(
             query=message,
             conversation_id=conversation_id
         )
@@ -183,10 +183,10 @@ async def chat_with_file(
 async def stats():
     """Статистика базы знаний."""
     try:
-        rag = get_rag_service()
+        pipeline = get_pipeline()
         return {
-            "total_chunks": rag.repository.get_total_chunks_count(),
-            "unique_files": rag.repository.get_unique_files_count(),
+            "total_chunks": pipeline.repository.get_total_chunks_count(),
+            "unique_files": pipeline.repository.get_unique_files_count(),
         }
     except Exception as e:
         logger.error(f"Stats error: {e}")

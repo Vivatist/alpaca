@@ -1,24 +1,24 @@
 """
-RAG Service - оркестратор pipeline.
+Simple RAG Pipeline.
 
-Объединяет searcher и LLM для генерации ответов.
+Простой RAG пайплайн: поиск → промпт → генерация.
+Без истории диалога, без реранкинга.
 """
 
 from typing import List, Dict, Any, Optional
 import uuid
 
 from logging_config import get_logger
-from settings import settings
-from repository import ChatRepository
-from embedders import build_embedder
-from vector_searchers import build_searcher
+from contracts import Embedder, Repository
 from llm import generate_response
 
-logger = get_logger("chat_backend.rag")
+from .base import BasePipeline
+
+logger = get_logger("chat_backend.pipelines.simple")
 
 
-# Системный промпт для RAG
-RAG_SYSTEM_PROMPT = """Ты — полезный ассистент компании ALPACA. Отвечай на вопросы пользователя, используя предоставленный контекст из документов.
+# Системный промпт по умолчанию
+DEFAULT_SYSTEM_PROMPT = """Ты — полезный ассистент компании ALPACA. Отвечай на вопросы пользователя, используя предоставленный контекст из документов.
 
 Правила:
 1. Отвечай ТОЛЬКО на основе предоставленного контекста
@@ -28,25 +28,34 @@ RAG_SYSTEM_PROMPT = """Ты — полезный ассистент компан
 5. Будь точным и конкретным"""
 
 
-class RAGService:
-    """Сервис RAG для генерации ответов на основе документов."""
+class SimpleRAGPipeline(BasePipeline):
+    """
+    Простой RAG pipeline без истории и реранкинга.
     
-    def __init__(self, repository: ChatRepository):
+    Этапы:
+    1. Поиск релевантных чанков через searcher
+    2. Формирование промпта с контекстом
+    3. Генерация ответа через LLM
+    """
+    
+    def __init__(
+        self,
+        searcher,
+        repository=None,
+        system_prompt: str = DEFAULT_SYSTEM_PROMPT
+    ):
+        """
+        Args:
+            searcher: Searcher для поиска релевантных чанков
+            repository: Репозиторий для доступа к БД (опционально)
+            system_prompt: Системный промпт для LLM
+        """
+        self.searcher = searcher
         self.repository = repository
-        embedder = build_embedder()
-        self.searcher = build_searcher(embedder, repository)
+        self.system_prompt = system_prompt
     
     def build_prompt(self, query: str, chunks: List[Dict[str, Any]]) -> str:
-        """
-        Формирует prompt для LLM с контекстом.
-        
-        Args:
-            query: Вопрос пользователя
-            chunks: Релевантные чанки
-            
-        Returns:
-            Готовый prompt для LLM
-        """
+        """Формирует prompt для LLM с контекстом."""
         if not chunks:
             context = "Контекст не найден. Отвечай на основе общих знаний, но укажи, что информация не из документов компании."
         else:
@@ -60,29 +69,21 @@ class RAGService:
                 )
             context = "\n\n".join(context_parts)
         
-        prompt = f"""Контекст из документов:
+        return f"""Контекст из документов:
 {context}
 
 Вопрос пользователя: {query}
 
 Ответ:"""
-        
-        return prompt
     
     def generate_answer(
         self,
         query: str,
-        conversation_id: Optional[str] = None
+        conversation_id: Optional[str] = None,
+        **kwargs
     ) -> Dict[str, Any]:
         """
         Полный RAG pipeline: поиск → промпт → генерация.
-        
-        Args:
-            query: Вопрос пользователя
-            conversation_id: ID разговора (для истории)
-            
-        Returns:
-            Dict с answer, conversation_id, sources
         """
         logger.info(f"🔍 RAG query: {query[:50]}...")
         
@@ -95,7 +96,7 @@ class RAGService:
         # 3. Генерируем ответ
         answer = generate_response(
             prompt=prompt,
-            system_prompt=RAG_SYSTEM_PROMPT
+            system_prompt=self.system_prompt
         )
         
         if not answer:
@@ -124,20 +125,4 @@ class RAGService:
         }
 
 
-# Singleton instance (инициализируется при первом использовании)
-_rag_service: Optional[RAGService] = None
-
-
-def get_rag_service() -> RAGService:
-    """Получить singleton RAG сервиса."""
-    global _rag_service
-    if _rag_service is None:
-        repository = ChatRepository(settings.DATABASE_URL)
-        _rag_service = RAGService(repository)
-    return _rag_service
-
-
-__all__ = [
-    "RAGService",
-    "get_rag_service",
-]
+__all__ = ["SimpleRAGPipeline", "DEFAULT_SYSTEM_PROMPT"]
