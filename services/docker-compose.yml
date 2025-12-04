@@ -257,4 +257,8 @@ volumes:
 
 networks:
   alpaca_network:
-    external: true
+    # Используем существующую сеть или создаём новую
+    # name: задаёт фиксированное имя (без префикса проекта)
+    name: alpaca_network
+    driver: bridge
+    # external: false (по умолчанию) — создаёт сеть если не существует
