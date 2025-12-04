@@ -190,6 +190,8 @@ services:
       - alpaca_network
     ports:
       - "8082:8000"
+    volumes:
+      - /home/alpaca/monitored_folder:/monitored_folder:ro  # Для скачивания документов
     environment:
       # === CREDENTIALS ===
       - DATABASE_URL=postgresql://postgres:IFEmDfNac7SuIZsEdCFG3LC2rejPyupEHZkdYe3kS+k=@172.17.0.1:54322/postgres
@@ -209,7 +211,10 @@ services:
       
       # === RAG SETTINGS ===
       - RAG_TOP_K=5
-      - RAG_SIMILARITY_THRESHOLD=0.7
+      - RAG_SIMILARITY_THRESHOLD=0.3
+      
+      # === FILE SETTINGS ===
+      - MONITORED_PATH=/monitored_folder
     depends_on:
       - ollama
     healthcheck:

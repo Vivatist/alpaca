@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     
     # RAG Settings
     RAG_TOP_K: int = 5  # Количество релевантных чанков
-    RAG_SIMILARITY_THRESHOLD: float = 0.7  # Минимальный порог схожести
+    RAG_SIMILARITY_THRESHOLD: float = 0.3  # Минимальный порог схожести
 
 
 settings = Settings()
