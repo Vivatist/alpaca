@@ -89,17 +89,16 @@ def build_pipeline(...) -> BasePipeline:
     ...
 ```
 
-### 4. Настройте через settings
+### 4. Настройте через переменную окружения
 
-Добавьте в `settings.py`:
-```python
-PIPELINE_TYPE: str = "my_pipeline"
+В `docker-compose.yml`:
+```yaml
+chat-backend:
+  environment:
+    - PIPELINE_TYPE=my_pipeline
 ```
 
-Или через переменную окружения:
-```
-PIPELINE_TYPE=my_pipeline
-```
+**Обязательно** — сервис не запустится без `PIPELINE_TYPE`.
 
 ## Примеры пайплайнов для реализации
 

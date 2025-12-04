@@ -42,7 +42,7 @@ def build_pipeline(
         Инстанс pipeline
     """
     # Определяем тип пайплайна
-    backend = pipeline_type or getattr(settings, 'PIPELINE_TYPE', 'simple')
+    backend = pipeline_type or settings.PIPELINE_TYPE
     
     if backend not in PIPELINES:
         logger.warning(f"Unknown pipeline '{backend}', falling back to simple")

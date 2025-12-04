@@ -213,6 +213,7 @@ services:
       # === RAG SETTINGS ===
       - RAG_TOP_K=5
       - RAG_SIMILARITY_THRESHOLD=0.3
+      - PIPELINE_TYPE=simple
       
       # === FILE SETTINGS ===
       - MONITORED_PATH=/monitored_folder
