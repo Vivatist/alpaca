@@ -1,7 +1,7 @@
 """
 RAG Service - оркестратор pipeline.
 
-Объединяет embedder, repository и LLM для генерации ответов.
+Объединяет searcher и LLM для генерации ответов.
 """
 
 from typing import List, Dict, Any, Optional
@@ -11,6 +11,7 @@ from logging_config import get_logger
 from settings import settings
 from repository import ChatRepository
 from embedders import build_embedder
+from searchers import build_searcher
 from llm import generate_response
 
 logger = get_logger("chat_backend.rag")
@@ -32,46 +33,8 @@ class RAGService:
     
     def __init__(self, repository: ChatRepository):
         self.repository = repository
-        self.embedder = build_embedder()
-    
-    def search_context(
-        self,
-        query: str,
-        top_k: int = None,
-        threshold: float = None
-    ) -> List[Dict[str, Any]]:
-        """
-        Поиск релевантного контекста для запроса.
-        
-        Args:
-            query: Текст запроса
-            top_k: Количество чанков (default: из settings)
-            threshold: Порог схожести (default: из settings)
-            
-        Returns:
-            Список релевантных чанков с метаданными
-        """
-        if top_k is None:
-            top_k = settings.RAG_TOP_K
-        if threshold is None:
-            threshold = settings.RAG_SIMILARITY_THRESHOLD
-        
-        # 1. Получаем embedding запроса
-        embedding = self.embedder(query)
-        
-        if not embedding:
-            logger.warning("Failed to get embedding for query")
-            return []
-        
-        # 2. Ищем похожие чанки
-        chunks = self.repository.search_similar_chunks(
-            embedding=embedding,
-            limit=top_k,
-            threshold=threshold
-        )
-        
-        logger.info(f"Found {len(chunks)} relevant chunks for query")
-        return chunks
+        embedder = build_embedder()
+        self.searcher = build_searcher(embedder, repository)
     
     def build_prompt(self, query: str, chunks: List[Dict[str, Any]]) -> str:
         """
@@ -124,7 +87,7 @@ class RAGService:
         logger.info(f"🔍 RAG query: {query[:50]}...")
         
         # 1. Поиск контекста
-        chunks = self.search_context(query)
+        chunks = self.searcher.search(query)
         
         # 2. Формируем промпт
         prompt = self.build_prompt(query, chunks)
