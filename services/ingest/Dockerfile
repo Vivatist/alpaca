@@ -19,11 +19,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Копируем зависимости
-COPY requirements.txt .
+COPY services/ingest/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Копируем код сервиса
-COPY src/ ./src/
+COPY services/ingest/src/ ./src/
 
 # Создаём директории для данных
 RUN mkdir -p /tmp_md /monitored_folder

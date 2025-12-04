@@ -45,15 +45,15 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int
     CHUNK_OVERLAP: int
     ENABLE_METAEXTRACTOR: bool
-    METAEXTRACTOR_BACKEND: str
+    METAEXTRACTOR_PIPELINE: List[str]  # ["base", "llm"] - цепочка экстракторов
     LLM_METAEXTRACTOR_PREVIEW_LENGTH: int
     
     # === LOGGING ===
     LOG_LEVEL: str
     
-    @field_validator('CLEANER_PIPELINE', mode='before')
+    @field_validator('CLEANER_PIPELINE', 'METAEXTRACTOR_PIPELINE', mode='before')
     @classmethod
-    def parse_cleaner_pipeline(cls, v):
+    def parse_json_list(cls, v):
         """Парсинг JSON строки в список."""
         if isinstance(v, str):
             try:

@@ -162,7 +162,7 @@ services:
       - CHUNK_SIZE=1000
       - CHUNK_OVERLAP=200
       - ENABLE_METAEXTRACTOR=true
-      - METAEXTRACTOR_BACKEND=llm # options: llm, simple
+      - METAEXTRACTOR_PIPELINE=["base","llm"]
       - LLM_METAEXTRACTOR_PREVIEW_LENGTH=2000
       
       # === PATHS ===

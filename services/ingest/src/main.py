@@ -99,7 +99,7 @@ def main():
     logger.info(f"  Ollama: {settings.OLLAMA_BASE_URL}")
     logger.info(f"  Cleaner pipeline: {settings.CLEANER_PIPELINE}")
     logger.info(f"  Chunker: {settings.CHUNKER_BACKEND} (size={settings.CHUNK_SIZE}, overlap={settings.CHUNK_OVERLAP})")
-    logger.info(f"  MetaExtractor: {settings.METAEXTRACTOR_BACKEND}")
+    logger.info(f"  MetaExtractor pipeline: {settings.METAEXTRACTOR_PIPELINE}")
     logger.info("=" * 60)
     
     # 6. Запуск worker
