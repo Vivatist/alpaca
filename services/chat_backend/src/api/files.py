@@ -1,11 +1,12 @@
 """
-Files API - скачивание исходных документов.
+Files API - скачивание и просмотр исходных документов.
 """
 import os
+import mimetypes
 from pathlib import Path
+from urllib.parse import quote, unquote
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
-from urllib.parse import unquote
+from fastapi.responses import FileResponse, Response
 
 from logging_config import get_logger
 from settings import settings
@@ -16,6 +17,28 @@ router = APIRouter(prefix="/files", tags=["Files"])
 
 # Базовая папка с документами (монтируется в контейнер)
 MONITORED_PATH = os.getenv("MONITORED_PATH", "/monitored_folder")
+
+# Дополнительные MIME-типы для офисных документов
+MIME_TYPES = {
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".doc": "application/msword",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xls": "application/vnd.ms-excel",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".ppt": "application/vnd.ms-powerpoint",
+    ".pdf": "application/pdf",
+    ".txt": "text/plain; charset=utf-8",
+}
+
+
+def _get_mime_type(file_path: Path) -> str:
+    """Определить MIME-тип файла."""
+    ext = file_path.suffix.lower()
+    if ext in MIME_TYPES:
+        return MIME_TYPES[ext]
+    # Fallback на стандартную библиотеку
+    mime_type, _ = mimetypes.guess_type(str(file_path))
+    return mime_type or "application/octet-stream"
 
 
 def _safe_path(file_path: str) -> Path:
@@ -49,18 +72,20 @@ def _safe_path(file_path: str) -> Path:
 
 
 @router.get("/download")
-async def download_file(path: str):
+async def download_file(path: str, inline: bool = True):
     """
-    Скачать файл по относительному пути.
+    Получить файл по относительному пути.
     
     Args:
         path: Относительный путь к файлу (как в metadata.file_path)
+        inline: True - открыть в браузере, False - скачать (по умолчанию True)
         
     Returns:
-        Файл для скачивания
+        Файл для просмотра или скачивания
         
     Example:
         GET /api/files/download?path=Георезонанс/устав.docx
+        GET /api/files/download?path=Георезонанс/устав.docx&inline=false
     """
     try:
         full_path = _safe_path(path)
@@ -72,15 +97,26 @@ async def download_file(path: str):
         if not full_path.is_file():
             raise HTTPException(status_code=400, detail="Not a file")
         
-        # Определяем имя файла для скачивания
         filename = full_path.name
+        mime_type = _get_mime_type(full_path)
         
-        logger.info(f"📥 Download: {path}")
+        logger.info(f"📥 {'View' if inline else 'Download'}: {path}")
         
-        return FileResponse(
-            path=full_path,
-            filename=filename,
-            media_type="application/octet-stream"
+        # Читаем файл и возвращаем с правильными заголовками
+        with open(full_path, "rb") as f:
+            content = f.read()
+        
+        # Content-Disposition: inline (открыть) или attachment (скачать)
+        # RFC 5987: filename* для кириллицы и спецсимволов
+        disposition = "inline" if inline else "attachment"
+        encoded_filename = quote(filename)
+        
+        return Response(
+            content=content,
+            media_type=mime_type,
+            headers={
+                "Content-Disposition": f"{disposition}; filename*=UTF-8''{encoded_filename}"
+            }
         )
         
     except HTTPException:
