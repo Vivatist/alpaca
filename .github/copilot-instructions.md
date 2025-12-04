@@ -281,6 +281,153 @@ elements = response.json()  # Список элементов документа
 6. **Русский язык** - Комментарии, логи, документация смешивают русский и английский; код/API на английском
 7. **Изолированные микросервисы** - FileWatcher и Admin Backend не зависят от core/, имеют собственные репозитории для работы с БД
 
+## Внешний доступ к API (Интернет)
+
+### Архитектура доступа
+
+Локальная машина находится за NAT без белого IP. Внешний доступ организован через **reverse SSH tunnel** на VDS:
+
+```
+Интернет → VDS (95.217.205.233:8443/HTTPS) → SSH туннель → Локальная машина → Docker-сервисы
+```
+
+- **VDS**: Hetzner, Ubuntu, IP: 95.217.205.233
+- **Домен**: `api.alpaca-smart.com` (DNS A-запись на VDS)
+- **SSL**: Let's Encrypt сертификат, HTTPS на порту 8443
+- **SSH туннель**: autossh reverse tunnel через порт 2222
+
+### Конфигурация nginx на VDS
+
+Файл `/etc/nginx/sites-available/api.alpaca-smart.com`:
+```nginx
+server {
+    listen 8443 ssl;
+    server_name api.alpaca-smart.com;
+    
+    ssl_certificate /etc/letsencrypt/live/api.alpaca-smart.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.alpaca-smart.com/privkey.pem;
+    
+    # Chat Backend
+    location /chat/ {
+        proxy_pass http://localhost:8082/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+    
+    # Admin Backend  
+    location /admin/ {
+        proxy_pass http://localhost:8080/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+    
+    # Fallback
+    location / {
+        proxy_pass http://localhost:8080/;
+    }
+}
+```
+
+### SSH туннель (autossh)
+
+Файл `/etc/systemd/system/autossh-tunnel.service` на локальной машине:
+```ini
+[Service]
+ExecStart=/usr/bin/autossh -M 0 -N \
+    -o "ServerAliveInterval 30" \
+    -o "ServerAliveCountMax 3" \
+    -R 2223:localhost:22 \
+    -R 8080:localhost:8080 \
+    -R 8082:localhost:8082 \
+    vds
+```
+
+Управление:
+```bash
+sudo systemctl status autossh-tunnel   # Проверить статус
+sudo systemctl restart autossh-tunnel  # Перезапустить
+journalctl -u autossh-tunnel -f        # Логи
+```
+
+### Проброс портов через туннель
+
+| Локальный порт | VDS порт | Сервис |
+|---------------|----------|--------|
+| 22 | 2223 | SSH (для доступа к локальной машине) |
+| 8080 | 8080 | Admin Backend |
+| 8082 | 8082 | Chat Backend |
+
+### URL-адреса API
+
+- **Admin Backend**: `https://api.alpaca-smart.com:8443/admin/`
+  - Health: `/admin/health`
+  - Docs: `/admin/docs`
+- **Chat Backend**: `https://api.alpaca-smart.com:8443/chat/`
+  - Health: `/chat/health`
+  - Docs: `/chat/docs`
+
+### ROOT_PATH для Swagger
+
+При работе за reverse proxy с путевой маршрутизацией (path-based routing), FastAPI требует `root_path` для корректной генерации URL в Swagger UI:
+
+```python
+# В main.py сервиса
+app = FastAPI(
+    title="Service Name",
+    root_path=os.getenv("ROOT_PATH", "")
+)
+```
+
+```yaml
+# В docker-compose.yml
+environment:
+  - ROOT_PATH=/chat  # или /admin
+```
+
+### Известные проблемы с сетью
+
+**Проблема**: Некоторые порты (не 8080) могут не работать через SSH туннель из определённых сетей. TCP-соединение устанавливается, но HTTP-ответы не возвращаются.
+
+**Симптомы**:
+- `curl` зависает после установки соединения
+- Работает с мобильной сети, не работает из домашней
+- На VDS `curl localhost:порт` работает
+
+**Диагностика**:
+```bash
+# На VDS - проверить что туннель работает
+curl -v http://localhost:8082/health
+
+# На локальной машине - проверить Docker
+curl http://localhost:8082/health
+
+# Проверить туннель
+ssh vds "netstat -tlnp | grep 808"
+```
+
+**Временное решение (если порт не работает напрямую)**:
+
+1. Добавить локальный nginx как прокси:
+```nginx
+# /etc/nginx/sites-available/chat-backend
+server {
+    listen 8082;
+    location / {
+        proxy_pass http://127.0.0.1:18082;
+    }
+}
+```
+
+2. Изменить порт Docker на локальный:
+```yaml
+ports:
+  - "127.0.0.1:18082:8000"  # Только localhost
+```
+
+3. nginx слушает 8082, проксирует на 18082 (Docker)
+
+**Текущий статус**: Проблема обойдена использованием единого HTTPS-порта 8443 с path-based routing на VDS. Все сервисы доступны через этот порт.
+
 ## Изоляция микросервисов
 
 **FileWatcher** и **Admin Backend** — полностью изолированные Docker-сервисы:
