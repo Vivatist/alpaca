@@ -10,7 +10,7 @@ from logging_config import get_logger
 from settings import settings
 from contracts import Embedder, Repository
 
-logger = get_logger("chat_backend.searcher.vector")
+logger = get_logger("chat_backend.vector_searchers")
 
 
 class VectorSearcher:

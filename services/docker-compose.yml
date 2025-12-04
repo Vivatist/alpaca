@@ -201,6 +201,7 @@ services:
       - LOG_LEVEL=INFO
       - ENVIRONMENT=production
       - ROOT_PATH=/chat
+      - PUBLIC_URL=https://api.alpaca-smart.com:8443/chat
       
       # === SERVICE URLs ===
       - OLLAMA_BASE_URL=http://ollama:11434
@@ -256,5 +257,4 @@ volumes:
 
 networks:
   alpaca_network:
-    name: alpaca_network
-    driver: bridge
+    external: true

@@ -11,7 +11,7 @@ from logging_config import get_logger
 from settings import settings
 from repository import ChatRepository
 from embedders import build_embedder
-from searchers import build_searcher
+from vector_searchers import build_searcher
 from llm import generate_response
 
 logger = get_logger("chat_backend.rag")

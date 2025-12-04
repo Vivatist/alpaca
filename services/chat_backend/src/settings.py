@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     # RAG Settings
     RAG_TOP_K: int = 5  # Количество релевантных чанков
     RAG_SIMILARITY_THRESHOLD: float = 0.3  # Минимальный порог схожести
+    
+    # Public URL для генерации ссылок на скачивание
+    # Если не задан, используется base_url из запроса
+    PUBLIC_URL: str = ""
 
 
 settings = Settings()

@@ -6,11 +6,12 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from logging_config import get_logger
-from rag import get_rag_service
+from rag_pipeline import get_rag_service
+from settings import settings
 
 logger = get_logger("chat_backend.api.chat")
 
-router = APIRouter(prefix="/chat", tags=["Chat"])
+router = APIRouter(prefix="/chat", tags=["Chat"], redirect_slashes=True)
 
 
 class ChatRequest(BaseModel):
@@ -53,7 +54,8 @@ def _build_source_info(source: dict, base_url: str) -> SourceInfo:
     )
 
 
-@router.post("/", response_model=ChatResponse)
+@router.post("", response_model=ChatResponse)
+@router.post("/", response_model=ChatResponse, include_in_schema=False)
 async def chat(request: ChatRequest, req: Request) -> ChatResponse:
     """
     Отправить сообщение в чат с RAG.
@@ -75,8 +77,11 @@ async def chat(request: ChatRequest, req: Request) -> ChatResponse:
         )
         
         # Формируем base_url для ссылок
-        # В проде это будет https://api.alpaca-smart.com:8443/chat
-        base_url = str(req.base_url).rstrip("/")
+        # Используем PUBLIC_URL если задан, иначе base_url из запроса
+        if settings.PUBLIC_URL:
+            base_url = settings.PUBLIC_URL.rstrip("/")
+        else:
+            base_url = str(req.base_url).rstrip("/")
         
         return ChatResponse(
             answer=result["answer"],

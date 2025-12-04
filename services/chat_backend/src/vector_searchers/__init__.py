@@ -15,7 +15,7 @@ from settings import settings
 
 from .vector import VectorSearcher
 
-logger = get_logger("chat_backend.searcher")
+logger = get_logger("chat_backend.vector_searchers")
 
 
 # Тип searcher'а
