@@ -24,12 +24,14 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("👋 Chat Backend shutting down...")
 
+import os
 
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.VERSION,
     description="REST API для чата с RAG-системой ALPACA",
     lifespan=lifespan,
+    root_path=os.getenv("ROOT_PATH", ""),
 )
 
 # CORS для фронтенда
@@ -53,4 +55,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=9000)

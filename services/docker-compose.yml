@@ -93,7 +93,7 @@ services:
       - EXCLUDED_PATTERNS=~*,.*
       - PRE_LAUNCH_TESTS=true  # Тесты при запуске
     healthcheck:
-      test: ["CMD", "pgrep", "-f", "python"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -114,7 +114,7 @@ services:
       - DATABASE_URL=postgresql://postgres:IFEmDfNac7SuIZsEdCFG3LC2rejPyupEHZkdYe3kS+k=@172.17.0.1:54322/postgres
       - TZ=Europe/Moscow
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -198,6 +198,7 @@ services:
       - TZ=Europe/Moscow
       - LOG_LEVEL=INFO
       - ENVIRONMENT=production
+      - ROOT_PATH=/chat
       
       # === SERVICE URLs ===
       - OLLAMA_BASE_URL=http://ollama:11434
