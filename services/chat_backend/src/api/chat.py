@@ -56,9 +56,10 @@ class ChatResponse(BaseModel):
     attachment: AttachmentInfo | None = None  # Информация о прикреплённом файле
 
 
-def _build_source_info(source: dict, base_url: str) -> SourceInfo:
-    """Построить SourceInfo с download_url и метаданными."""
-    file_path = source.get("file_path", "")
+def _build_source_info(chunk: dict, base_url: str) -> SourceInfo:
+    """Построить SourceInfo из chunk с download_url и метаданными."""
+    metadata = chunk.get("metadata", {})
+    file_path = metadata.get("file_path", "")
     file_name = file_path.split("/")[-1] if file_path else "unknown"
     
     # URL-encode путь для безопасной передачи
@@ -68,14 +69,14 @@ def _build_source_info(source: dict, base_url: str) -> SourceInfo:
     return SourceInfo(
         file_path=file_path,
         file_name=file_name,
-        chunk_index=source.get("chunk_index", 0),
-        similarity=source.get("similarity", 0),
+        chunk_index=metadata.get("chunk_index", 0),
+        similarity=chunk.get("similarity", 0),
         download_url=download_url,
         # Метаданные из чанка
-        title=source.get("title"),
-        summary=source.get("summary"),
-        category=source.get("category"),
-        modified_at=source.get("modified_at"),
+        title=metadata.get("title"),
+        summary=metadata.get("summary"),
+        category=metadata.get("category"),
+        modified_at=metadata.get("modified_at"),
     )
 
 
@@ -111,7 +112,7 @@ async def chat(request: ChatRequest, req: Request) -> ChatResponse:
         return ChatResponse(
             answer=result["answer"],
             conversation_id=result["conversation_id"],
-            sources=[_build_source_info(s, base_url) for s in result["sources"]]
+            sources=[_build_source_info(c, base_url) for c in result["chunks"]]
         )
         
     except Exception as e:
@@ -151,10 +152,10 @@ async def chat_stream(request: ChatRequest, req: Request) -> StreamingResponse:
                 event_type = event.get("type", "chunk")
                 
                 if event_type == "metadata":
-                    # Обогащаем sources download_url
+                    # Формируем sources из chunks
                     sources = []
-                    for s in event.get("sources", []):
-                        source_info = _build_source_info(s, base_url)
+                    for c in event.get("chunks", []):
+                        source_info = _build_source_info(c, base_url)
                         sources.append(source_info.model_dump())
                     
                     data = {
@@ -253,7 +254,7 @@ async def chat_with_file(
         return ChatResponse(
             answer=result["answer"],
             conversation_id=result["conversation_id"],
-            sources=[_build_source_info(s, base_url) for s in result["sources"]],
+            sources=[_build_source_info(c, base_url) for c in result["chunks"]],
             attachment=attachment_info
         )
         

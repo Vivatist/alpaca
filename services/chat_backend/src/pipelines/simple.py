@@ -103,31 +103,16 @@ class SimpleRAGPipeline(BasePipeline):
         if not answer:
             answer = "Извините, не удалось сгенерировать ответ. Попробуйте позже."
         
-        # 4. Формируем источники с метаданными
-        sources = []
-        for chunk in chunks:
-            metadata = chunk.get("metadata", {})
-            sources.append({
-                "file_path": metadata.get("file_path", ""),
-                "chunk_index": metadata.get("chunk_index", 0),
-                "similarity": chunk.get("similarity", 0),
-                # Метаданные документа
-                "title": metadata.get("title"),
-                "summary": metadata.get("summary"),
-                "category": metadata.get("category"),
-                "modified_at": metadata.get("modified_at"),
-            })
-        
-        # 5. Генерируем conversation_id если не передан
+        # 4. Генерируем conversation_id если не передан
         if not conversation_id:
             conversation_id = str(uuid.uuid4())
         
-        logger.info(f"✅ RAG response generated | sources={len(sources)}")
+        logger.info(f"✅ RAG response generated | chunks={len(chunks)}")
         
         return {
             "answer": answer,
             "conversation_id": conversation_id,
-            "sources": sources,
+            "chunks": chunks,
         }
     
     def generate_answer_stream(
@@ -161,28 +146,14 @@ class SimpleRAGPipeline(BasePipeline):
         if not conversation_id:
             conversation_id = str(uuid.uuid4())
         
-        # 4. Формируем источники с метаданными
-        sources = []
-        for chunk in chunks:
-            metadata = chunk.get("metadata", {})
-            sources.append({
-                "file_path": metadata.get("file_path", ""),
-                "chunk_index": metadata.get("chunk_index", 0),
-                "similarity": chunk.get("similarity", 0),
-                "title": metadata.get("title"),
-                "summary": metadata.get("summary"),
-                "category": metadata.get("category"),
-                "modified_at": metadata.get("modified_at"),
-            })
-        
-        # 5. Сначала отправляем метаданные (sources и conversation_id)
+        # 4. Сначала отправляем метаданные (chunks и conversation_id)
         t_metadata = time.time() - t_start
         logger.info(f"⏱️ TIMING: metadata ready in {t_metadata:.2f}s total")
         
         yield {
             "type": "metadata",
             "conversation_id": conversation_id,
-            "sources": sources,
+            "chunks": chunks,
         }
         
         # 6. Затем стримим части ответа
@@ -215,7 +186,7 @@ class SimpleRAGPipeline(BasePipeline):
             "type": "done",
         }
         
-        logger.info(f"✅ RAG stream completed | sources={len(sources)}")
+        logger.info(f"✅ RAG stream completed | chunks={len(chunks)}")
 
 
 __all__ = ["SimpleRAGPipeline", "DEFAULT_SYSTEM_PROMPT"]
