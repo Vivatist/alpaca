@@ -1,9 +1,11 @@
 """
 Chat API endpoints.
 """
-from typing import Optional
+import json
+from typing import Optional, AsyncGenerator
 from urllib.parse import quote
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from logging_config import get_logger
@@ -38,6 +40,11 @@ class SourceInfo(BaseModel):
     chunk_index: int
     similarity: float
     download_url: str
+    # Метаданные документа
+    title: str | None = None
+    summary: str | None = None
+    category: str | None = None
+    modified_at: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -49,7 +56,7 @@ class ChatResponse(BaseModel):
 
 
 def _build_source_info(source: dict, base_url: str) -> SourceInfo:
-    """Построить SourceInfo с download_url."""
+    """Построить SourceInfo с download_url и метаданными."""
     file_path = source.get("file_path", "")
     file_name = file_path.split("/")[-1] if file_path else "unknown"
     
@@ -62,7 +69,12 @@ def _build_source_info(source: dict, base_url: str) -> SourceInfo:
         file_name=file_name,
         chunk_index=source.get("chunk_index", 0),
         similarity=source.get("similarity", 0),
-        download_url=download_url
+        download_url=download_url,
+        # Метаданные из чанка
+        title=source.get("title"),
+        summary=source.get("summary"),
+        category=source.get("category"),
+        modified_at=source.get("modified_at"),
     )
 
 
@@ -104,6 +116,73 @@ async def chat(request: ChatRequest, req: Request) -> ChatResponse:
     except Exception as e:
         logger.error(f"❌ Chat error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/stream")
+async def chat_stream(request: ChatRequest, req: Request) -> StreamingResponse:
+    """
+    Отправить сообщение в чат с потоковым ответом (SSE).
+    
+    Формат событий:
+    - `event: metadata` — источники и conversation_id (отправляется первым)
+    - `event: chunk` — часть ответа LLM
+    - `event: done` — завершение генерации
+    - `event: error` — ошибка (если произошла)
+    
+    Каждое событие содержит data в формате JSON.
+    """
+    logger.info(f"📨 Chat stream request: {request.message[:50]}...")
+    
+    # Формируем base_url для ссылок
+    if settings.PUBLIC_URL:
+        base_url = settings.PUBLIC_URL.rstrip("/")
+    else:
+        base_url = str(req.base_url).rstrip("/")
+    
+    async def event_generator() -> AsyncGenerator[str, None]:
+        try:
+            pipeline = get_pipeline()
+            
+            for event in pipeline.generate_answer_stream(
+                query=request.message,
+                conversation_id=request.conversation_id
+            ):
+                event_type = event.get("type", "chunk")
+                
+                if event_type == "metadata":
+                    # Обогащаем sources download_url
+                    sources = []
+                    for s in event.get("sources", []):
+                        source_info = _build_source_info(s, base_url)
+                        sources.append(source_info.model_dump())
+                    
+                    data = {
+                        "conversation_id": event.get("conversation_id"),
+                        "sources": sources,
+                    }
+                    yield f"event: metadata\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+                
+                elif event_type == "chunk":
+                    data = {"content": event.get("content", "")}
+                    yield f"event: chunk\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+                
+                elif event_type == "done":
+                    yield f"event: done\ndata: {{}}\n\n"
+        
+        except Exception as e:
+            logger.error(f"❌ Chat stream error: {e}")
+            error_data = {"error": str(e)}
+            yield f"event: error\ndata: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Отключаем буферизацию nginx
+        }
+    )
 
 
 @router.post("/with-file", response_model=ChatResponse)

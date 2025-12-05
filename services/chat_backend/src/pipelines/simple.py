@@ -5,12 +5,12 @@ Simple RAG Pipeline.
 Без истории диалога, без реранкинга.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Iterator
 import uuid
 
 from logging_config import get_logger
 from contracts import Embedder, Repository
-from llm import generate_response
+from llm import generate_response, generate_response_stream
 
 from .base import BasePipeline
 
@@ -102,7 +102,7 @@ class SimpleRAGPipeline(BasePipeline):
         if not answer:
             answer = "Извините, не удалось сгенерировать ответ. Попробуйте позже."
         
-        # 4. Формируем источники
+        # 4. Формируем источники с метаданными
         sources = []
         for chunk in chunks:
             metadata = chunk.get("metadata", {})
@@ -110,6 +110,11 @@ class SimpleRAGPipeline(BasePipeline):
                 "file_path": metadata.get("file_path", ""),
                 "chunk_index": metadata.get("chunk_index", 0),
                 "similarity": chunk.get("similarity", 0),
+                # Метаданные документа
+                "title": metadata.get("title"),
+                "summary": metadata.get("summary"),
+                "category": metadata.get("category"),
+                "modified_at": metadata.get("modified_at"),
             })
         
         # 5. Генерируем conversation_id если не передан
@@ -123,6 +128,68 @@ class SimpleRAGPipeline(BasePipeline):
             "conversation_id": conversation_id,
             "sources": sources,
         }
+    
+    def generate_answer_stream(
+        self,
+        query: str,
+        conversation_id: Optional[str] = None,
+        **kwargs
+    ) -> Iterator[Dict[str, Any]]:
+        """
+        Потоковый RAG pipeline: поиск → промпт → генерация (stream).
+        
+        Yields:
+            Сначала метаданные (sources), затем части ответа (chunks)
+        """
+        logger.info(f"🔍 RAG stream query: {query[:50]}...")
+        
+        # 1. Поиск контекста (не streaming)
+        chunks = self.searcher.search(query)
+        
+        # 2. Формируем промпт
+        prompt = self.build_prompt(query, chunks)
+        
+        # 3. Генерируем conversation_id если не передан
+        if not conversation_id:
+            conversation_id = str(uuid.uuid4())
+        
+        # 4. Формируем источники с метаданными
+        sources = []
+        for chunk in chunks:
+            metadata = chunk.get("metadata", {})
+            sources.append({
+                "file_path": metadata.get("file_path", ""),
+                "chunk_index": metadata.get("chunk_index", 0),
+                "similarity": chunk.get("similarity", 0),
+                "title": metadata.get("title"),
+                "summary": metadata.get("summary"),
+                "category": metadata.get("category"),
+                "modified_at": metadata.get("modified_at"),
+            })
+        
+        # 5. Сначала отправляем метаданные (sources и conversation_id)
+        yield {
+            "type": "metadata",
+            "conversation_id": conversation_id,
+            "sources": sources,
+        }
+        
+        # 6. Затем стримим части ответа
+        for text_chunk in generate_response_stream(
+            prompt=prompt,
+            system_prompt=self.system_prompt
+        ):
+            yield {
+                "type": "chunk",
+                "content": text_chunk,
+            }
+        
+        # 7. Отправляем финальное событие
+        yield {
+            "type": "done",
+        }
+        
+        logger.info(f"✅ RAG stream completed | sources={len(sources)}")
 
 
 __all__ = ["SimpleRAGPipeline", "DEFAULT_SYSTEM_PROMPT"]
