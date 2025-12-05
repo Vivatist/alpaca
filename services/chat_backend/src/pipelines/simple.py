@@ -5,6 +5,7 @@ Simple RAG Pipeline.
 Без истории диалога, без реранкинга.
 """
 
+import time
 from typing import List, Dict, Any, Optional, Iterator
 import uuid
 
@@ -141,13 +142,20 @@ class SimpleRAGPipeline(BasePipeline):
         Yields:
             Сначала метаданные (sources), затем части ответа (chunks)
         """
+        t_start = time.time()
         logger.info(f"🔍 RAG stream query: {query[:50]}...")
         
-        # 1. Поиск контекста (не streaming)
+        # 1. Поиск контекста (не streaming) — включает embedding + pgvector
+        t_search_start = time.time()
         chunks = self.searcher.search(query)
+        t_search = time.time() - t_search_start
+        logger.info(f"⏱️ TIMING: search (embed+pgvector) took {t_search:.2f}s | found {len(chunks)} chunks")
         
         # 2. Формируем промпт
+        t_prompt_start = time.time()
         prompt = self.build_prompt(query, chunks)
+        t_prompt = time.time() - t_prompt_start
+        logger.info(f"⏱️ TIMING: build_prompt took {t_prompt:.3f}s | prompt_len={len(prompt)}")
         
         # 3. Генерируем conversation_id если не передан
         if not conversation_id:
@@ -168,6 +176,9 @@ class SimpleRAGPipeline(BasePipeline):
             })
         
         # 5. Сначала отправляем метаданные (sources и conversation_id)
+        t_metadata = time.time() - t_start
+        logger.info(f"⏱️ TIMING: metadata ready in {t_metadata:.2f}s total")
+        
         yield {
             "type": "metadata",
             "conversation_id": conversation_id,
@@ -175,16 +186,31 @@ class SimpleRAGPipeline(BasePipeline):
         }
         
         # 6. Затем стримим части ответа
+        t_llm_start = time.time()
+        first_chunk = True
+        chunk_count = 0
+        
         for text_chunk in generate_response_stream(
             prompt=prompt,
             system_prompt=self.system_prompt
         ):
+            if first_chunk:
+                t_first_token = time.time() - t_llm_start
+                logger.info(f"⏱️ TIMING: LLM time-to-first-token (TTFT) = {t_first_token:.2f}s")
+                first_chunk = False
+            
+            chunk_count += 1
             yield {
                 "type": "chunk",
                 "content": text_chunk,
             }
         
         # 7. Отправляем финальное событие
+        t_total = time.time() - t_start
+        t_llm_total = time.time() - t_llm_start
+        logger.info(f"⏱️ TIMING: LLM generation took {t_llm_total:.2f}s | {chunk_count} chunks")
+        logger.info(f"⏱️ TIMING: TOTAL request time = {t_total:.2f}s")
+        
         yield {
             "type": "done",
         }

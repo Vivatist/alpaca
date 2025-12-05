@@ -4,6 +4,7 @@ Vector Searcher - поиск релевантных чанков через pgve
 Использует embedder для получения вектора запроса и repository для поиска.
 """
 
+import time
 from typing import List, Dict, Any
 
 from logging_config import get_logger
@@ -48,18 +49,24 @@ class VectorSearcher:
             threshold = settings.RAG_SIMILARITY_THRESHOLD
         
         # 1. Получаем embedding запроса
+        t_embed_start = time.time()
         embedding = self.embedder(query)
+        t_embed = time.time() - t_embed_start
+        logger.info(f"⏱️ TIMING: embedding took {t_embed:.2f}s")
         
         if not embedding:
             logger.warning("Failed to get embedding for query")
             return []
         
         # 2. Ищем похожие чанки
+        t_search_start = time.time()
         chunks = self.repository.search_similar_chunks(
             embedding=embedding,
             limit=top_k,
             threshold=threshold
         )
+        t_search = time.time() - t_search_start
+        logger.info(f"⏱️ TIMING: pgvector search took {t_search:.3f}s")
         
         logger.info(f"🔎 Found {len(chunks)} chunks | query={query[:30]}... threshold={threshold}")
         return chunks
