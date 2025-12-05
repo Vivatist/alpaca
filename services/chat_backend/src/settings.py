@@ -18,29 +18,31 @@ class Settings(BaseSettings):
     )
     
     # Application
-    APP_NAME: str = "ALPACA Chat Backend"
-    VERSION: str = "1.0.0"
-    ENVIRONMENT: str = "development"
-    LOG_LEVEL: str = "INFO"
+    APP_NAME: str
+    VERSION: str
+    ENVIRONMENT: str
+    LOG_LEVEL: str
     
     # Database (PostgreSQL + pgvector)
     DATABASE_URL: str
     
     # Ollama
     OLLAMA_BASE_URL: str
-    OLLAMA_LLM_MODEL: str = "qwen2.5:32b"
-    OLLAMA_EMBEDDING_MODEL: str = "bge-m3"
+    OLLAMA_LLM_MODEL: str
+    OLLAMA_EMBEDDING_MODEL: str
     
     # RAG Settings
-    RAG_TOP_K: int = 5  # Количество релевантных чанков
-    RAG_SIMILARITY_THRESHOLD: float = 0.3  # Минимальный порог схожести
+    RAG_TOP_K: int
+    RAG_SIMILARITY_THRESHOLD: float
+    
+    # Streaming Settings
+    STREAM_CHUNK_DELAY: float  # Задержка между чанками в секундах (0 = без задержки)
     
     # Pipeline
-    PIPELINE_TYPE: str  # Тип пайплайна: simple, conversational, etc.
+    PIPELINE_TYPE: str
     
     # Public URL для генерации ссылок на скачивание
-    # Если не задан, используется base_url из запроса
-    PUBLIC_URL: str = ""
+    PUBLIC_URL: str
 
 
 settings = Settings()

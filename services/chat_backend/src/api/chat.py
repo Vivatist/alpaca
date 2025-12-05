@@ -166,8 +166,9 @@ async def chat_stream(request: ChatRequest, req: Request) -> StreamingResponse:
                 elif event_type == "chunk":
                     data = {"content": event.get("content", "")}
                     yield f"event: chunk\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
-                    # DEBUG: задержка для визуализации стриминга
-                    # await asyncio.sleep(0.2)
+                    # Задержка между чанками для обхода сетевой буферизации
+                    if settings.STREAM_CHUNK_DELAY > 0:
+                        await asyncio.sleep(settings.STREAM_CHUNK_DELAY)
                 
                 elif event_type == "done":
                     yield f"event: done\ndata: {{}}\n\n"
