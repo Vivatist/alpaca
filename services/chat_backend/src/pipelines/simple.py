@@ -1,19 +1,16 @@
 """
 Simple RAG Pipeline.
 
-Простой RAG пайплайн: поиск → промпт → генерация.
+Простой RAG пайплайн: поиск → промпт.
 Без истории диалога, без реранкинга.
 """
 
-import time
-from typing import List, Dict, Any, Optional, Iterator
+from typing import List, Dict, Any, Optional
 import uuid
 
 from logging_config import get_logger
-from contracts import Embedder, Repository
-from llm import generate_response, generate_response_stream
 
-from .base import BasePipeline
+from .base import BasePipeline, RAGContext
 
 logger = get_logger("chat_backend.pipelines.simple")
 
@@ -33,10 +30,11 @@ class SimpleRAGPipeline(BasePipeline):
     """
     Простой RAG pipeline без истории и реранкинга.
     
-    Этапы:
+    Отвечает за RAG логику:
     1. Поиск релевантных чанков через searcher
     2. Формирование промпта с контекстом
-    3. Генерация ответа через LLM
+    
+    LLM вызов (sync/stream) делается в API слое.
     """
     
     def __init__(
@@ -77,14 +75,19 @@ class SimpleRAGPipeline(BasePipeline):
 
 Ответ:"""
     
-    def generate_answer(
+    def prepare_context(
         self,
         query: str,
         conversation_id: Optional[str] = None,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> RAGContext:
         """
-        Полный RAG pipeline: поиск → промпт → генерация.
+        Подготавливает контекст для RAG генерации.
+        
+        Выполняет:
+        1. Поиск релевантных чанков
+        2. Формирование промпта
+        3. Генерацию conversation_id
         """
         logger.info(f"🔍 RAG query: {query[:50]}...")
         
@@ -94,99 +97,18 @@ class SimpleRAGPipeline(BasePipeline):
         # 2. Формируем промпт
         prompt = self.build_prompt(query, chunks)
         
-        # 3. Генерируем ответ
-        answer = generate_response(
-            prompt=prompt,
-            system_prompt=self.system_prompt
-        )
-        
-        if not answer:
-            answer = "Извините, не удалось сгенерировать ответ. Попробуйте позже."
-        
-        # 4. Генерируем conversation_id если не передан
-        if not conversation_id:
-            conversation_id = str(uuid.uuid4())
-        
-        logger.info(f"✅ RAG response generated | chunks={len(chunks)}")
-        
-        return {
-            "answer": answer,
-            "conversation_id": conversation_id,
-            "chunks": chunks,
-        }
-    
-    def generate_answer_stream(
-        self,
-        query: str,
-        conversation_id: Optional[str] = None,
-        **kwargs
-    ) -> Iterator[Dict[str, Any]]:
-        """
-        Потоковый RAG pipeline: поиск → промпт → генерация (stream).
-        
-        Yields:
-            Сначала метаданные (sources), затем части ответа (chunks)
-        """
-        t_start = time.time()
-        logger.info(f"🔍 RAG stream query: {query[:50]}...")
-        
-        # 1. Поиск контекста (не streaming) — включает embedding + pgvector
-        t_search_start = time.time()
-        chunks = self.searcher.search(query)
-        t_search = time.time() - t_search_start
-        logger.info(f"⏱️ TIMING: search (embed+pgvector) took {t_search:.2f}s | found {len(chunks)} chunks")
-        
-        # 2. Формируем промпт
-        t_prompt_start = time.time()
-        prompt = self.build_prompt(query, chunks)
-        t_prompt = time.time() - t_prompt_start
-        logger.info(f"⏱️ TIMING: build_prompt took {t_prompt:.3f}s | prompt_len={len(prompt)}")
-        
         # 3. Генерируем conversation_id если не передан
         if not conversation_id:
             conversation_id = str(uuid.uuid4())
         
-        # 4. Сначала отправляем метаданные (chunks и conversation_id)
-        t_metadata = time.time() - t_start
-        logger.info(f"⏱️ TIMING: metadata ready in {t_metadata:.2f}s total")
+        logger.info(f"✅ RAG context prepared | chunks={len(chunks)}")
         
-        yield {
-            "type": "metadata",
-            "conversation_id": conversation_id,
-            "chunks": chunks,
-        }
-        
-        # 6. Затем стримим части ответа
-        t_llm_start = time.time()
-        first_chunk = True
-        chunk_count = 0
-        
-        for text_chunk in generate_response_stream(
+        return RAGContext(
+            chunks=chunks,
             prompt=prompt,
-            system_prompt=self.system_prompt
-        ):
-            if first_chunk:
-                t_first_token = time.time() - t_llm_start
-                logger.info(f"⏱️ TIMING: LLM time-to-first-token (TTFT) = {t_first_token:.2f}s")
-                first_chunk = False
-            
-            chunk_count += 1
-            yield {
-                "type": "chunk",
-                "content": text_chunk,
-            }
-        
-        # 7. Отправляем финальное событие
-        t_total = time.time() - t_start
-        t_llm_total = time.time() - t_llm_start
-        logger.info(f"⏱️ TIMING: LLM generation took {t_llm_total:.2f}s | {chunk_count} chunks")
-        logger.info(f"⏱️ TIMING: TOTAL request time = {t_total:.2f}s")
-        
-        yield {
-            "type": "done",
-        }
-        
-        logger.info(f"✅ RAG stream completed | chunks={len(chunks)}")
+            conversation_id=conversation_id,
+            system_prompt=self.system_prompt,
+        )
 
 
 __all__ = ["SimpleRAGPipeline", "DEFAULT_SYSTEM_PROMPT"]

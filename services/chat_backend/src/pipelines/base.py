@@ -6,35 +6,46 @@
 
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional
+from dataclasses import dataclass
+
+
+@dataclass
+class RAGContext:
+    """Контекст для RAG генерации."""
+    chunks: List[Dict[str, Any]]  # Найденные чанки
+    prompt: str                    # Готовый промпт для LLM
+    conversation_id: str           # ID разговора
+    system_prompt: str             # Системный промпт
 
 
 class BasePipeline(ABC):
     """
     Абстрактный базовый класс для RAG pipeline.
     
-    Все пайплайны должны реализовать метод generate_answer().
+    Pipeline отвечает за RAG логику: поиск чанков + формирование промпта.
+    LLM вызов (sync/stream) делается в API слое.
     """
     
     @abstractmethod
-    def generate_answer(
+    def prepare_context(
         self,
         query: str,
         conversation_id: Optional[str] = None,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> RAGContext:
         """
-        Генерирует ответ на вопрос пользователя.
+        Подготавливает контекст для генерации ответа.
+        
+        Выполняет поиск релевантных чанков, формирует промпт,
+        генерирует conversation_id если не передан.
         
         Args:
             query: Вопрос пользователя
-            conversation_id: ID разговора (для истории)
+            conversation_id: ID разговора (опционально)
             **kwargs: Дополнительные параметры
             
         Returns:
-            Dict с обязательными полями:
-            - answer: str — текст ответа
-            - conversation_id: str — ID разговора
-            - sources: List[Dict] — список источников
+            RAGContext с чанками, промптом и conversation_id
         """
         pass
     
@@ -53,4 +64,4 @@ class BasePipeline(ABC):
         pass
 
 
-__all__ = ["BasePipeline"]
+__all__ = ["BasePipeline", "RAGContext"]

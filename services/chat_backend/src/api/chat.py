@@ -3,7 +3,8 @@ Chat API endpoints.
 """
 import asyncio
 import json
-from typing import Optional, AsyncGenerator
+import time
+from typing import Optional, AsyncGenerator, Iterator
 from urllib.parse import quote
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
@@ -11,6 +12,7 @@ from pydantic import BaseModel
 
 from logging_config import get_logger
 from pipelines import get_pipeline
+from llm import generate_response, generate_response_stream
 from settings import settings
 
 logger = get_logger("chat_backend.api.chat")
@@ -97,10 +99,19 @@ async def chat(request: ChatRequest, req: Request) -> ChatResponse:
     
     try:
         pipeline = get_pipeline()
-        result = pipeline.generate_answer(
+        ctx = pipeline.prepare_context(
             query=request.message,
             conversation_id=request.conversation_id
         )
+        
+        # Генерируем ответ через LLM
+        answer = generate_response(
+            prompt=ctx.prompt,
+            system_prompt=ctx.system_prompt
+        )
+        
+        if not answer:
+            answer = "Извините, не удалось сгенерировать ответ. Попробуйте позже."
         
         # Формируем base_url для ссылок
         # Используем PUBLIC_URL если задан, иначе base_url из запроса
@@ -110,9 +121,9 @@ async def chat(request: ChatRequest, req: Request) -> ChatResponse:
             base_url = str(req.base_url).rstrip("/")
         
         return ChatResponse(
-            answer=result["answer"],
-            conversation_id=result["conversation_id"],
-            sources=[_build_source_info(c, base_url) for c in result["chunks"]]
+            answer=answer,
+            conversation_id=ctx.conversation_id,
+            sources=[_build_source_info(c, base_url) for c in ctx.chunks]
         )
         
     except Exception as e:
@@ -145,34 +156,46 @@ async def chat_stream(request: ChatRequest, req: Request) -> StreamingResponse:
         try:
             pipeline = get_pipeline()
             
-            for event in pipeline.generate_answer_stream(
+            # 1. Подготавливаем контекст (search + prompt)
+            t_start = time.time()
+            ctx = pipeline.prepare_context(
                 query=request.message,
                 conversation_id=request.conversation_id
+            )
+            t_context = time.time() - t_start
+            logger.info(f"⏱️ TIMING: prepare_context took {t_context:.2f}s")
+            
+            # 2. Отправляем metadata
+            sources = [_build_source_info(c, base_url).model_dump() for c in ctx.chunks]
+            data = {
+                "conversation_id": ctx.conversation_id,
+                "sources": sources,
+            }
+            yield f"event: metadata\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+            
+            # 3. Стримим ответ LLM
+            t_llm_start = time.time()
+            first_chunk = True
+            
+            for text_chunk in generate_response_stream(
+                prompt=ctx.prompt,
+                system_prompt=ctx.system_prompt
             ):
-                event_type = event.get("type", "chunk")
+                if first_chunk:
+                    t_first_token = time.time() - t_llm_start
+                    logger.info(f"⏱️ TIMING: LLM TTFT = {t_first_token:.2f}s")
+                    first_chunk = False
                 
-                if event_type == "metadata":
-                    # Формируем sources из chunks
-                    sources = []
-                    for c in event.get("chunks", []):
-                        source_info = _build_source_info(c, base_url)
-                        sources.append(source_info.model_dump())
-                    
-                    data = {
-                        "conversation_id": event.get("conversation_id"),
-                        "sources": sources,
-                    }
-                    yield f"event: metadata\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+                chunk_data = {"content": text_chunk}
+                yield f"event: chunk\ndata: {json.dumps(chunk_data, ensure_ascii=False)}\n\n"
                 
-                elif event_type == "chunk":
-                    data = {"content": event.get("content", "")}
-                    yield f"event: chunk\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
-                    # Задержка между чанками для обхода сетевой буферизации
-                    if settings.STREAM_CHUNK_DELAY > 0:
-                        await asyncio.sleep(settings.STREAM_CHUNK_DELAY)
-                
-                elif event_type == "done":
-                    yield f"event: done\ndata: {{}}\n\n"
+                if settings.STREAM_CHUNK_DELAY > 0:
+                    await asyncio.sleep(settings.STREAM_CHUNK_DELAY)
+            
+            # 4. Завершаем
+            t_total = time.time() - t_start
+            logger.info(f"⏱️ TIMING: TOTAL = {t_total:.2f}s")
+            yield f"event: done\ndata: {{}}\n\n"
         
         except Exception as e:
             logger.error(f"❌ Chat stream error: {e}")
@@ -240,10 +263,19 @@ async def chat_with_file(
     
     try:
         pipeline = get_pipeline()
-        result = pipeline.generate_answer(
+        ctx = pipeline.prepare_context(
             query=message,
             conversation_id=conversation_id
         )
+        
+        # Генерируем ответ через LLM
+        answer = generate_response(
+            prompt=ctx.prompt,
+            system_prompt=ctx.system_prompt
+        )
+        
+        if not answer:
+            answer = "Извините, не удалось сгенерировать ответ. Попробуйте позже."
         
         # Формируем base_url для ссылок
         if settings.PUBLIC_URL:
@@ -252,9 +284,9 @@ async def chat_with_file(
             base_url = str(req.base_url).rstrip("/")
         
         return ChatResponse(
-            answer=result["answer"],
-            conversation_id=result["conversation_id"],
-            sources=[_build_source_info(c, base_url) for c in result["chunks"]],
+            answer=answer,
+            conversation_id=ctx.conversation_id,
+            sources=[_build_source_info(c, base_url) for c in ctx.chunks],
             attachment=attachment_info
         )
         

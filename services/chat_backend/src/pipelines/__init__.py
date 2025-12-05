@@ -15,7 +15,7 @@ from repository import ChatRepository
 from embedders import build_embedder
 from vector_searchers import build_searcher
 
-from .base import BasePipeline
+from .base import BasePipeline, RAGContext
 from .simple import SimpleRAGPipeline
 
 logger = get_logger("chat_backend.pipelines")
@@ -76,6 +76,7 @@ def get_pipeline() -> BasePipeline:
 
 __all__ = [
     "BasePipeline",
+    "RAGContext",
     "SimpleRAGPipeline", 
     "PIPELINES",
     "build_pipeline",
