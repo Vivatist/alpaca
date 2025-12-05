@@ -183,7 +183,7 @@ async def chat_stream(request: ChatRequest, req: Request) -> StreamingResponse:
             "X-Accel-Buffering": "no",  # Отключаем буферизацию nginx
         }
     )
-
+ 
 
 @router.post("/with-file", response_model=ChatResponse)
 async def chat_with_file(
