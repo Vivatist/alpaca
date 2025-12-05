@@ -211,6 +211,73 @@ async def chat_stream(request: ChatRequest, req: Request) -> StreamingResponse:
             "X-Accel-Buffering": "no",  # Отключаем буферизацию nginx
         }
     )
+
+
+@router.post("/agent/stream")
+async def agent_stream(request: ChatRequest, req: Request) -> StreamingResponse:
+    """
+    Агентский чат с потоковым ответом (SSE).
+    
+    В отличие от /stream, агент сам решает когда использовать поиск документов.
+    Контекст НЕ передаётся в промпте — агент вызывает инструмент search_documents.
+    
+    Формат событий:
+    - `event: chunk` — часть ответа агента
+    - `event: done` — завершение генерации
+    - `event: error` — ошибка
+    """
+    logger.info(f"📨 Agent stream request: {request.message[:50]}...")
+    
+    async def event_generator() -> AsyncGenerator[str, None]:
+        try:
+            from llm.langchain_agent import generate_response_stream as agent_stream_fn
+            
+            t_start = time.time()
+            first_chunk = True
+            
+            # Системный промпт для агента
+            system_prompt = """Ты — полезный ассистент компании ALPACA. 
+У тебя есть инструмент search_documents для поиска информации в документах компании.
+
+Правила:
+1. Если вопрос требует информации из документов — используй search_documents
+2. Если вопрос общий или не требует поиска — отвечай напрямую
+3. НЕ выдумывай информацию о документах — ищи через инструмент
+4. Отвечай на русском языке, кратко и по делу"""
+            
+            for text_chunk in agent_stream_fn(
+                prompt=request.message,
+                system_prompt=system_prompt
+            ):
+                if first_chunk:
+                    t_first_token = time.time() - t_start
+                    logger.info(f"⏱️ TIMING: Agent TTFT = {t_first_token:.2f}s")
+                    first_chunk = False
+                
+                chunk_data = {"content": text_chunk}
+                yield f"event: chunk\ndata: {json.dumps(chunk_data, ensure_ascii=False)}\n\n"
+                
+                if settings.STREAM_CHUNK_DELAY > 0:
+                    await asyncio.sleep(settings.STREAM_CHUNK_DELAY)
+            
+            t_total = time.time() - t_start
+            logger.info(f"⏱️ TIMING: Agent TOTAL = {t_total:.2f}s")
+            yield f"event: done\ndata: {{}}\n\n"
+        
+        except Exception as e:
+            logger.error(f"❌ Agent stream error: {e}")
+            error_data = {"error": str(e)}
+            yield f"event: error\ndata: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
  
 
 @router.post("/with-file", response_model=ChatResponse)

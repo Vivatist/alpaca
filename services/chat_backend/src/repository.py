@@ -115,3 +115,40 @@ class ChatRepository:
                     f"SELECT COUNT(DISTINCT metadata->>'file_hash') FROM {self.chunks_table}"
                 )
                 return cur.fetchone()[0]
+    
+    def get_chunks_by_file_path(self, file_path: str) -> List[Dict[str, Any]]:
+        """
+        Получить все чанки документа по пути к файлу.
+        
+        Args:
+            file_path: Путь к файлу (metadata->>'file_path')
+            
+        Returns:
+            Список чанков с контентом и метаданными
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                    cur.execute(
+                        f"""
+                        SELECT content, metadata
+                        FROM {self.chunks_table}
+                        WHERE metadata->>'file_path' = %s
+                        ORDER BY (metadata->>'chunk_index')::int
+                        """,
+                        (file_path,),
+                    )
+                    
+                    results = []
+                    for row in cur.fetchall():
+                        results.append({
+                            "content": row["content"],
+                            "metadata": row["metadata"],
+                        })
+                    
+                    logger.info(f"Found {len(results)} chunks for file: {file_path}")
+                    return results
+                    
+        except Exception as exc:
+            logger.error(f"Get chunks by file_path failed: {exc}")
+            return []

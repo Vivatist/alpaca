@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     OLLAMA_LLM_MODEL: str
     OLLAMA_EMBEDDING_MODEL: str
     
+    # LLM Backend: ollama (default) | langchain_agent (experimental)
+    LLM_BACKEND: str = "ollama"
+    
     # RAG Settings
     RAG_TOP_K: int
     RAG_SIMILARITY_THRESHOLD: float

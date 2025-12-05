@@ -217,6 +217,11 @@ services:
       - RAG_SIMILARITY_THRESHOLD=0.3
       - PIPELINE_TYPE=simple
       
+      # === LLM BACKEND ===
+      # ollama - обычный RAG (по умолчанию)
+      # langchain_agent - агентский RAG с инструментами
+      - LLM_BACKEND=langchain_agent
+      
       # === STREAMING SETTINGS ===
       - STREAM_CHUNK_DELAY=0.02  # Задержка между чанками в секундах (0 = без задержки)
       
