@@ -93,7 +93,7 @@ services:
       - EXCLUDED_PATTERNS=~*,.*
       - PRE_LAUNCH_TESTS=true  # Тесты при запуске
     healthcheck:
-      test: ["CMD", "pgrep", "-f", "python"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -114,17 +114,162 @@ services:
       - DATABASE_URL=postgresql://postgres:IFEmDfNac7SuIZsEdCFG3LC2rejPyupEHZkdYe3kS+k=@172.17.0.1:54322/postgres
       - TZ=Europe/Moscow
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
 
+  # Ingest Service - обработка документов
+  ingest:
+    build:
+      context: ..
+      dockerfile: services/ingest/Dockerfile
+    image: alpaca-ingest:latest
+    restart: always
+    networks:
+      - alpaca_network
+    volumes:
+      - /home/alpaca/monitored_folder:/monitored_folder:ro
+      - /home/alpaca/tmp_md:/tmp_md
+    environment:
+      # === CREDENTIALS ===
+      - DATABASE_URL=postgresql://postgres:IFEmDfNac7SuIZsEdCFG3LC2rejPyupEHZkdYe3kS+k=@172.17.0.1:54322/postgres
+      
+      # === SYSTEM SETTINGS ===
+      - TZ=Europe/Moscow
+      - LOG_LEVEL=INFO
+      
+      # === SERVICE URLs ===
+      - FILEWATCHER_URL=http://filewatcher:8081
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - UNSTRUCTURED_API_URL=http://unstructured:8000/general/v0/general
+      
+      # === MODEL SETTINGS ===
+      - OLLAMA_EMBEDDING_MODEL=bge-m3
+      - OLLAMA_LLM_MODEL=qwen2.5:32b
+      
+      # === WORKER SETTINGS ===
+      - WORKER_POLL_INTERVAL=5
+      - WORKER_MAX_CONCURRENT_FILES=5
+      - WORKER_MAX_CONCURRENT_PARSING=2
+      - WORKER_MAX_CONCURRENT_EMBEDDING=3
+      
+      # === PIPELINE SETTINGS ===
+      - ENABLE_CLEANER=true
+      - CLEANER_PIPELINE=["simple","stamps"]
+      - CHUNKER_BACKEND=smart # options: simple, smart
+      - CHUNK_SIZE=1000
+      - CHUNK_OVERLAP=200
+      - ENABLE_METAEXTRACTOR=true
+      - METAEXTRACTOR_PIPELINE=["base","llm"]
+      - LLM_METAEXTRACTOR_PREVIEW_LENGTH=2000
+      
+      # === PATHS ===
+      - MONITORED_PATH=/monitored_folder
+      - TMP_MD_PATH=/tmp_md
+    depends_on:
+      - filewatcher
+      - ollama
+      - unstructured
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "python"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Chat Backend - REST API для чата с RAG
+  chat-backend:
+    build:
+      context: chat_backend
+      dockerfile: Dockerfile
+    image: alpaca-chat-backend:latest
+    restart: always
+    networks:
+      - alpaca_network
+    ports:
+      - "8082:8000"
+    volumes:
+      - /home/alpaca/monitored_folder:/monitored_folder:ro  # Для скачивания документов
+    environment:
+      # === CREDENTIALS ===
+      - DATABASE_URL=postgresql://postgres:IFEmDfNac7SuIZsEdCFG3LC2rejPyupEHZkdYe3kS+k=@172.17.0.1:54322/postgres
+      
+      # === SYSTEM SETTINGS ===
+      - TZ=Europe/Moscow
+      - LOG_LEVEL=INFO
+      - ENVIRONMENT=production
+      - ROOT_PATH=/chat
+      - PUBLIC_URL=https://api.alpaca-smart.com:8443/chat
+      - APP_NAME=ALPACA Chat Backend
+      - VERSION=1.0.0
+      
+      # === SERVICE URLs ===
+      - OLLAMA_BASE_URL=http://ollama:11434
+      
+      # === MODEL SETTINGS ===
+      - OLLAMA_EMBEDDING_MODEL=bge-m3
+      - OLLAMA_LLM_MODEL=qwen2.5:32b
+      
+      # === RAG SETTINGS ===
+      - RAG_TOP_K=5
+      - RAG_SIMILARITY_THRESHOLD=0.3
+      - PIPELINE_TYPE=simple
+      
+      # === LLM BACKEND ===
+      # ollama - обычный RAG (по умолчанию)
+      # langchain_agent - агентский RAG с инструментами
+      - LLM_BACKEND=langchain_agent
+      
+      # === STREAMING SETTINGS ===
+      - STREAM_CHUNK_DELAY=0.02  # Задержка между чанками в секундах (0 = без задержки)
+      
+      # === FILE SETTINGS ===
+      - MONITORED_PATH=/monitored_folder
+    depends_on:
+      - ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Chat Backend Dev Container (для разработки)
+  chat-backend-dev:
+    build:
+      context: chat_backend
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./chat_backend/src:/app/src:cached
+      - ./chat_backend/tests:/app/tests:cached
+      - chat-backend-pip-cache:/home/developer/.cache/pip
+    environment:
+      - DATABASE_URL=postgresql://postgres:IFEmDfNac7SuIZsEdCFG3LC2rejPyupEHZkdYe3kS+k=@172.17.0.1:54322/postgres
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_LLM_MODEL=qwen2.5:32b
+      - OLLAMA_EMBEDDING_MODEL=bge-m3
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+    ports:
+      - "8083:8000"
+    networks:
+      - alpaca_network
+    depends_on:
+      - ollama
+    profiles:
+      - dev  # Запускается только с --profile dev
+
 volumes:
   unstructured_data:
   ollama_storage:
+  chat-backend-pip-cache:
 
 networks:
   alpaca_network:
+    # Используем существующую сеть или создаём новую
+    # name: задаёт фиксированное имя (без префикса проекта)
     name: alpaca_network
     driver: bridge
+    # external: false (по умолчанию) — создаёт сеть если не существует

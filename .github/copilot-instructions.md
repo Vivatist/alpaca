@@ -5,40 +5,49 @@
 ALPACA — это **RAG (Retrieval Augmented Generation) система обработки документов** с распределённой микросервисной архитектурой:
 
 ```
-monitored_folder/ → FileWatcher → PostgreSQL+pgvector ← Worker → Ollama (GPU)
+monitored_folder/ → FileWatcher → PostgreSQL+pgvector ← Ingest → Ollama (GPU)
                     (Сканер+API)    (files + chunks)    (Пайплайн) (LLM+Эмбеддинги)
+                                          ↓
+                                    Chat Backend → Ollama
+                                    (RAG API)
 ```
 
-### Основные компоненты
+### Docker-сервисы (services/docker-compose.yml)
 
-1. **Supabase (Self-hosted)** - PostgreSQL с расширением pgvector, отдельная установка в `~/supabase/docker`
-2. **File Watcher** - Docker-сервис, сканирующий `monitored_folder`, отслеживает состояние файлов в таблице `files`, предоставляет REST API который возвращает ОДИН файл для обработки. **Изолированный микросервис** — не зависит от core/.
-3. **Worker** - Python-процесс (`main.py`), обрабатывающий очередь: парсинг → клининг → чанкинг → эмбеддинг
-4. **Ollama** - Docker-сервис с поддержкой GPU, запускающий `qwen2.5:32b` (LLM) и `bge-m3` (эмбеддинги)
-5. **Unstructured API** - Docker-сервис для парсинга документов (DOCX, PDF, TXT) - используется не для всех типов файлов
-6. **Admin Backend** - Docker-сервис с REST API для мониторинга и управления. **Изолированный микросервис** — не зависит от core/.
+| Сервис | Порт | Описание |
+|--------|------|----------|
+| **filewatcher** | 8081 | Сканирует `monitored_folder`, REST API для очереди файлов |
+| **ingest** | - | Пайплайн обработки: парсинг → чанкинг → эмбеддинг |
+| **chat-backend** | 8082 | RAG API для чата, поиск по векторам + генерация ответов |
+| **admin-backend** | 8080 | Мониторинг и управление системой |
+| **ollama** | 11434 | LLM (qwen2.5:32b) и эмбеддинги (bge-m3) на GPU |
+| **unstructured** | 9000 | Парсинг документов с OCR |
 
-### Python-слои внутри репозитория
+**Supabase** (PostgreSQL + pgvector) — отдельная установка в `~/supabase/docker`, порт 54322.
 
-- `core/domain/*` — контракты (type aliases), dataclass-модели, перечисления статусов. Содержит **только интерфейсы** без реализаций:
-  - `core/domain/document_processing/parsers/` — `Parser = Callable[[FileSnapshot], str]`
-  - `core/domain/document_processing/chunkers/` — `Chunker = Callable[[FileSnapshot], list[str]]`
-  - `core/domain/document_processing/cleaners/` — `Cleaner = Callable[[FileSnapshot], str]`
-  - `core/domain/document_processing/embedders/` — `Embedder = Callable[[str, list[str], str], int]`
-  - `core/domain/files/` — `FileRepository` Protocol, `FileSnapshot`, `SyncStatus` enum
-- `core/application/*` — **реализации** use-case'ов и компонентов пайплайна:
-  - `core/application/document_processing/parsers/` — WordParser, PDFParser, TXTParser, PPTXParser, XLSParser
-  - `core/application/document_processing/chunkers/` — `custom_chunker.py` (порционная стратегия по 1000 символов)
-  - `core/application/document_processing/cleaners/` — `simple_cleaner.py` (нормализация пробелов, Unicode, control chars)
-  - `core/application/document_processing/embedders/` — `custom_embedding.py`, `langchain_embedding.py`
-  - `core/application/processing/` — `IngestDocument`, `ProcessFileEvent` use-case'ы
-  - `core/application/files/` — `FileService`, `ResetStuckFiles`, `DequeueNextFile`
-  - `core/application/bootstrap.py` — сборка зависимостей для Worker'а
-- `core/infrastructure/*` — адаптеры к внешним системам:
-  - `core/infrastructure/database/postgres.py` — `PostgresFileRepository` (Supabase/pgvector)
-- `utils/*` — инфраструктурные помощники (логирование, `Worker`-раннер)
-- `app/*` — исторические реализации. Не добавляйте новую логику, при необходимости мигрируйте в `core/application`
-- `docs/architecture_roadmap.md` — актуальное описание планов по снижению связанности
+### Структура сервисов
+
+```
+services/
+├── docker-compose.yml      # Все сервисы
+├── file_watcher/           # Изолированный микросервис
+│   └── src/
+├── ingest/                 # Пайплайн обработки документов
+│   └── src/
+│       ├── parsers/        # Word, PDF, PPTX, XLS, TXT
+│       ├── cleaners/       # simple, stamps (pipeline)
+│       ├── chunkers/       # simple, smart
+│       ├── embedders/      # ollama
+│       ├── metaextractors/ # base, llm (pipeline)
+│       └── pipeline/       # Оркестрация
+├── chat_backend/           # RAG API
+│   └── src/
+│       ├── pipelines/      # simple (расширяемый)
+│       ├── embedders/      # ollama
+│       ├── vector_searchers/ # pgvector
+│       └── llm/            # ollama
+└── admin_backend/          # Мониторинг
+    └── src/
 
 ### Схема базы данных
 
@@ -48,60 +57,131 @@ monitored_folder/ → FileWatcher → PostgreSQL+pgvector ← Worker → Ollama 
 - `last_checked`: временная метка последнего обновления статуса
 
 **Таблица `chunks`** (векторное хранилище с pgvector):
-- `content` (текст), `metadata` (JSONB: file_hash, file_path, chunk_index, total_chunks)
-- `embedding` (vector(1024) для модели bge-m3)
-- Индексируется по file_hash, file_path и HNSW-индексу для векторного поиска
+- `id` (serial primary key)
+- `content` (text) — текст чанка
+- `embedding` (vector(1024)) — вектор для bge-m3
+- `metadata` (JSONB) — структурированные метаданные (см. ниже)
+- Индексы: HNSW по embedding, GIN по metadata
 
-### Пайплайн обработки
+**Структура metadata чанка:**
+```json
+{
+  // === Идентификация ===
+  "file_hash": "sha256...",           // SHA256 исходного файла
+  "file_path": "folder/doc.docx",     // Путь относительно monitored_folder
+  "chunk_index": 5,                   // Индекс чанка (0-based)
+  "total_chunks": 42,                 // Всего чанков в документе
+  
+  // === Файловые метаданные (base_extractor) ===
+  "extension": "docx",                // Расширение файла
+  "modified_at": "2023-04-10T10:37:28", // Дата модификации файла ISO
+  
+  // === Семантические метаданные (llm_extractor) ===
+  "title": "Договор подряда №123",    // Заголовок документа
+  "summary": "Краткое описание...",   // 1-2 предложения
+  "keywords": ["договор", "подряд"],  // До 5 ключевых слов
+  "category": "Договор подряда",      // Категория (см. список ниже)
+  "entities": [                       // До 5 сущностей
+    {"type": "person", "name": "Иванов И.И.", "role": "Директор"},
+    {"type": "company", "name": "ООО Рога", "role": "Заказчик"}
+  ]
+}
+```
+
+**Категории документов** (поле `category`):
+1. Договор подряда
+2. Договор купли-продажи
+3. Трудовой договор
+4. Протокол, меморандум
+5. Доверенность
+6. Акт выполненных работ
+7. Счет-фактура, счет
+8. Техническая документация
+9. Презентация
+10. Письмо
+11. Бухгалтерская документация
+12. Инструкция, регламент
+13. Статья, публикация, книга
+14. Прочее
+
+### Пайплайн обработки (Ingest Service)
 
 ```
-1. FileWatcher сканирует monitored_folder → обновляет таблицу files полем status_sync
-2. Worker опрашивает GET /api/next-file и получает следующий файл для обработки (приоритет: deleted > updated > added)
-3. Worker немедленно помечает файл как 'processed' для предотвращения дублирования
-4. Пайплайн: parsing() → chunking() → cleaning() → embedding() → БД
+1. FileWatcher сканирует monitored_folder → обновляет таблицу files
+2. Ingest опрашивает GET /api/next-file (приоритет: deleted > updated > added)
+3. Ingest помечает файл как 'processed' для предотвращения дублирования
+4. Пайплайн: parsing → cleaning → chunking → metaextraction → embedding → БД
 5. При успехе: status_sync='ok', при ошибке: status_sync='error'
 ```
 
-**Поток статусов**: `added`/`updated`/`deleted` → `processed` (заблокирован) → `ok`/`error` (финальный)
+**Поток статусов**: `added`/`updated`/`deleted` → `processed` → `ok`/`error`
 
-`ProcessFileEvent` (`core/application/processing/use_cases.py`) решает, что делать с каждым файлом: удалить связанные чанки для `deleted`, сбросить чанки и переобработать `updated`, либо инициировать полноценный пайплайн для `added`. Основной пайплайн реализован в `IngestDocument`:
+### Конфигурация пайплайнов (docker-compose.yml)
 
-- резолвит парсер через `core/domain/document_processing/parsers/registry.py` (doc/docx мапятся на `WordParser`, остальные форматы — на соответствующие классы);
-- ограничивает parсинг и эмбеддинг семафорами (`Semaphore(settings.WORKER_MAX_CONCURRENT_*)`), чтобы не перегружать CPU/GPU;
-- вызывает `chunk_document` (реэкспорт `core/application/document_processing/chunking/custom_chunker.py`), который сейчас использует простую порционную стратегию по 1000 символов;
-- пишет эмбеддинги через `embed_chunks`, по умолчанию указывающий на `custom_embedding` (HTTP-запрос в Ollama с записью чанков в pgvector). Альтернативная реализация `langchain_embedding` уже доступна и может быть подключена сменой алиаса либо дополнительной настройкой.
+**Ingest Service:**
+```yaml
+environment:
+  # Cleaner pipeline - последовательная обработка
+  - ENABLE_CLEANER=true
+  - CLEANER_PIPELINE=["simple","stamps"]
+  
+  # Chunker - выбор одного
+  - CHUNKER_BACKEND=smart  # simple | smart
+  - CHUNK_SIZE=1000
+  - CHUNK_OVERLAP=200
+  
+  # MetaExtractor pipeline - последовательная обработка
+  - ENABLE_METAEXTRACTOR=true
+  - METAEXTRACTOR_PIPELINE=["base","llm"]
+  - LLM_METAEXTRACTOR_PREVIEW_LENGTH=2000
+```
 
-`FileService` инкапсулирует операции с БД (маркировка статусов, сохранение raw_text, удаление чанков) и работу с временными `.md` файлами. `utils.worker.Worker` управляет пулом потоков и опрашивает FileWatcher API, помечая элементы как `processed` до передачи их в use-case.
+**Chat Backend:**
+```yaml
+environment:
+  - PIPELINE_TYPE=simple  # Тип RAG pipeline
+  - RAG_TOP_K=5
+  - RAG_SIMILARITY_THRESHOLD=0.3
+```
+
+### Registry-паттерн для компонентов
+
+Каждый модуль (`cleaners/`, `chunkers/`, `metaextractors/`, `pipelines/`) использует единый паттерн:
+
+```python
+# __init__.py
+COMPONENTS = {"name": component_func}  # Реестр
+def build_component() -> Component:    # Фабрика из settings
+def get_component_pipeline(names: List[str]) -> Component:  # Для pipeline
+```
+
+**Добавление нового компонента:**
+1. Создать файл `my_component.py` с функцией
+2. Зарегистрировать в `__init__.py` → `COMPONENTS`
+3. Добавить в ENV (docker-compose.yml)
 
 ## Система конфигурации
 
-**Важно**: Значения по умолчанию описаны в `settings.py`, секреты и пароли держите только в `.env`. Актуальные планы по развитию конфигурации фиксируются в `docs/architecture_roadmap.md`.
+**Принцип**: Все настройки задаются через ENV в `docker-compose.yml`. Файлы `settings.py` в сервисах только валидируют и типизируют ENV-переменные через pydantic-settings.
 
-### Принципы
+### Обязательные ENV-переменные
 
-- **`settings.py`** - Вся конфигурация приложения со значениями по умолчанию (пути, интервалы, лимиты, флаги функций, несекретные URL)
-- **`.env`** - ТОЛЬКО учётные данные (DATABASE_URL с паролем, API-ключи, секреты)
-- Никогда не размещайте несекретную конфигурацию в `.env` (держите её минимальной и безопасной)
+Каждый сервис требует свой набор ENV. Без них сервис не запустится:
 
-### Ключевые настройки
+```yaml
+# Общие для всех
+DATABASE_URL: postgresql://...  # Supabase PostgreSQL
+OLLAMA_BASE_URL: http://ollama:11434
 
-```python
-# Структура settings.py
-DATABASE_URL: str  # Из .env (содержит пароль)
-MONITORED_PATH: str = "/home/alpaca/monitored_folder"
-OLLAMA_BASE_URL: str = "http://localhost:11434"
-OLLAMA_LLM_MODEL: str = "qwen2.5:32b"
-OLLAMA_EMBEDDING_MODEL: str = "bge-m3"
+# Ingest-специфичные
+FILEWATCHER_URL: http://filewatcher:8081
+CLEANER_PIPELINE: ["simple","stamps"]
+METAEXTRACTOR_PIPELINE: ["base","llm"]
+CHUNKER_BACKEND: smart
 
-# Worker настройки
-WORKER_POLL_INTERVAL: int = 5  # Интервал опроса очереди
-WORKER_MAX_CONCURRENT_FILES: int = 5  # Макс. файлов параллельно
-WORKER_MAX_CONCURRENT_PARSING: int = 2  # Макс. операций парсинга
-WORKER_MAX_CONCURRENT_EMBEDDING: int = 3  # Макс. операций эмбеддинга
-WORKER_MAX_CONCURRENT_LLM: int = 2  # Макс. LLM-запросов
-
-RUN_TESTS_ON_START: bool = True  # Флаг для автотестирования
-TEST_SUITE: str = "all"  # "unit", "integration", "all"
+# Chat Backend-специфичные  
+PIPELINE_TYPE: simple
+RAG_TOP_K: 5
 ```
 
 ## Рабочие процессы разработки
@@ -112,12 +192,9 @@ TEST_SUITE: str = "all"  # "unit", "integration", "all"
 # 1. Запустить Supabase (отдельно, работает на порту 54322)
 cd ~/supabase/docker && docker compose up -d
 
-# 2. Запустить сервисы ALPACA
+# 2. Запустить сервисы ALPACA (все в Docker)
 cd ~/alpaca/services && docker compose up -d
-# Запускает: unstructured (9000), ollama (11434), filewatcher (8081), admin-backend (8080)
-
-# 3. Запустить worker (отдельный Python-процесс)
-cd ~/alpaca && source venv/bin/activate && python main.py
+# Запускает: filewatcher, ingest, chat-backend, admin-backend, ollama, unstructured
 ```
 
 ### Порты сервисов
@@ -127,6 +204,7 @@ cd ~/alpaca && source venv/bin/activate && python main.py
 - **Ollama**: http://localhost:11434
 - **Unstructured**: http://localhost:9000
 - **FileWatcher API**: http://localhost:8081
+- **Chat Backend**: http://localhost:8082
 - **Admin Backend**: http://localhost:8080
 
 
@@ -142,18 +220,31 @@ docker exec -it alpaca-ollama-1 nvidia-smi  # Проверить видимос�
 
 ## Паттерны и соглашения кода
 
-### Структура модулей
+### Структура микросервисов
 
-- **`core/domain/files` и `core/domain/document_processing`** — сущности, перечисления статусов, value objects и фасады, которые реэкспортируют registry/chunker/embedder наружу.
-- **`core/application/files`** — `FileService`, ResetStuckFiles, DequeueNextFile и остальные use-case'ы, работающие поверх `FileRepository`.
-- **`core/application/processing`** — `IngestDocument` и `ProcessFileEvent`, оркеструющие parse→chunk→embed и реакции на статусы FileWatcher.
-- **`core/application/document_processing`** — конкретные парсеры (Word/PDF/PPTX/XLS/TXT), chunker и embedders (`custom_embedding`, `langchain_embedding`). Здесь же настраивается alias `embed_chunks`.
-- **`core/infrastructure/database/postgres.py`** — адаптер к Supabase/PostgreSQL, реализующий `FileRepository` и операции над таблицами `files` и `chunks` с pgvector.
-- **`utils/`** — настройка логирования и раннер `Worker`, который управляет потоками и обращается к FileWatcher API.
-- **`app/`** — исторические реализации (старые парсеры/чанкеры/эмбеддеры). Не добавляйте сюда новую логику, а при необходимости подтягивайте код в `core/application`.
-- **`services/`** — Docker-микросервисы (file_watcher, admin_backend, unstructured, ollama) с отдельными requirements. **FileWatcher и Admin Backend полностью изолированы от core/** — имеют собственные реализации работы с PostgreSQL.
-- **`tests/`** — pytest-набор (см. `tests/runner.py` и `conftest.py`), покрывающий chunker, embedder, worker и интеграционный пайплайн.
-- **`scripts/`** — shell-утилиты для управления сервисами и Supabase (`scripts/start_services.sh`, `scripts/setup_supabase/*`).
+Каждый сервис в `services/` — **изолированный** и содержит:
+- `src/settings.py` — pydantic-settings, валидирует ENV
+- `src/contracts.py` — типы и протоколы
+- `src/repository.py` — работа с PostgreSQL
+- `src/main.py` — точка входа, FastAPI или worker loop
+- `requirements.txt` — зависимости сервиса
+- `Dockerfile` — образ сервиса
+
+**Ingest Service** (`services/ingest/src/`):
+- `parsers/` — Word, PDF, PPTX, XLS, TXT парсеры
+- `cleaners/` — simple, stamps (pipeline)
+- `chunkers/` — simple, smart
+- `metaextractors/` — base, llm (pipeline)
+- `embedders/` — ollama
+- `pipeline/` — оркестрация
+- `worker.py` — poll loop для FileWatcher API
+
+**Chat Backend** (`services/chat_backend/src/`):
+- `pipelines/` — simple RAG pipeline (расширяемый)
+- `embedders/` — ollama
+- `vector_searchers/` — pgvector
+- `llm/` — ollama generate
+- `api/` — FastAPI роуты
 
 ### Паттерн логирования
 
@@ -274,26 +365,173 @@ elements = response.json()  # Список элементов документа
 ## Особенности проекта
 
 1. **Supabase отдельно** - Находится в `~/supabase/docker`, не является частью основного docker-compose.yml
-2. **Worker не в контейнере** - Запускается как отдельный Python-процесс с venv
-3. **Порт 54322, а не 5432** - Supabase PostgreSQL использует нестандартный порт во избежание конфликтов
+2. **Порт 54322, а не 5432** - Supabase PostgreSQL использует нестандартный порт во избежание конфликтов
+3. **Все сервисы в Docker** - Включая Ingest (бывший Worker)
 4. **Временные распарсенные файлы** - Сохраняются в `/home/alpaca/tmp_md` как .md для отладки/проверки
 5. **Блокировка статусом** - Статус `processed` предотвращает состояние гонки при обработке очереди
 6. **Русский язык** - Комментарии, логи, документация смешивают русский и английский; код/API на английском
-7. **Изолированные микросервисы** - FileWatcher и Admin Backend не зависят от core/, имеют собственные репозитории для работы с БД
+7. **Изолированные микросервисы** - Все сервисы независимы, имеют собственные settings/repository
+
+## Внешний доступ к API (Интернет)
+
+### Архитектура доступа
+
+Локальная машина находится за NAT без белого IP. Внешний доступ организован через **reverse SSH tunnel** на VDS:
+
+```
+Интернет → VDS (95.217.205.233:8443/HTTPS) → SSH туннель → Локальная машина → Docker-сервисы
+```
+
+- **VDS**: Hetzner, Ubuntu, IP: 95.217.205.233
+- **Домен**: `api.alpaca-smart.com` (DNS A-запись на VDS)
+- **SSL**: Let's Encrypt сертификат, HTTPS на порту 8443
+- **SSH туннель**: autossh reverse tunnel через порт 2222
+
+### Конфигурация nginx на VDS
+
+Файл `/etc/nginx/sites-available/api.alpaca-smart.com`:
+```nginx
+server {
+    listen 8443 ssl;
+    server_name api.alpaca-smart.com;
+    
+    ssl_certificate /etc/letsencrypt/live/api.alpaca-smart.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.alpaca-smart.com/privkey.pem;
+    
+    # Chat Backend
+    location /chat/ {
+        proxy_pass http://localhost:8082/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+    
+    # Admin Backend  
+    location /admin/ {
+        proxy_pass http://localhost:8080/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+    
+    # Fallback
+    location / {
+        proxy_pass http://localhost:8080/;
+    }
+}
+```
+
+### SSH туннель (autossh)
+
+Файл `/etc/systemd/system/autossh-tunnel.service` на локальной машине:
+```ini
+[Service]
+ExecStart=/usr/bin/autossh -M 0 -N \
+    -o "ServerAliveInterval 30" \
+    -o "ServerAliveCountMax 3" \
+    -R 2223:localhost:22 \
+    -R 8080:localhost:8080 \
+    -R 8082:localhost:8082 \
+    vds
+```
+
+Управление:
+```bash
+sudo systemctl status autossh-tunnel   # Проверить статус
+sudo systemctl restart autossh-tunnel  # Перезапустить
+journalctl -u autossh-tunnel -f        # Логи
+```
+
+### Проброс портов через туннель
+
+| Локальный порт | VDS порт | Сервис |
+|---------------|----------|--------|
+| 22 | 2223 | SSH (для доступа к локальной машине) |
+| 8080 | 8080 | Admin Backend |
+| 8082 | 8082 | Chat Backend |
+
+### URL-адреса API
+
+- **Admin Backend**: `https://api.alpaca-smart.com:8443/admin/`
+  - Health: `/admin/health`
+  - Docs: `/admin/docs`
+- **Chat Backend**: `https://api.alpaca-smart.com:8443/chat/`
+  - Health: `/chat/health`
+  - Docs: `/chat/docs`
+
+### ROOT_PATH для Swagger
+
+При работе за reverse proxy с путевой маршрутизацией (path-based routing), FastAPI требует `root_path` для корректной генерации URL в Swagger UI:
+
+```python
+# В main.py сервиса
+app = FastAPI(
+    title="Service Name",
+    root_path=os.getenv("ROOT_PATH", "")
+)
+```
+
+```yaml
+# В docker-compose.yml
+environment:
+  - ROOT_PATH=/chat  # или /admin
+```
+
+### Известные проблемы с сетью
+
+**Проблема**: Некоторые порты (не 8080) могут не работать через SSH туннель из определённых сетей. TCP-соединение устанавливается, но HTTP-ответы не возвращаются.
+
+**Симптомы**:
+- `curl` зависает после установки соединения
+- Работает с мобильной сети, не работает из домашней
+- На VDS `curl localhost:порт` работает
+
+**Диагностика**:
+```bash
+# На VDS - проверить что туннель работает
+curl -v http://localhost:8082/health
+
+# На локальной машине - проверить Docker
+curl http://localhost:8082/health
+
+# Проверить туннель
+ssh vds "netstat -tlnp | grep 808"
+```
+
+**Временное решение (если порт не работает напрямую)**:
+
+1. Добавить локальный nginx как прокси:
+```nginx
+# /etc/nginx/sites-available/chat-backend
+server {
+    listen 8082;
+    location / {
+        proxy_pass http://127.0.0.1:18082;
+    }
+}
+```
+
+2. Изменить порт Docker на локальный:
+```yaml
+ports:
+  - "127.0.0.1:18082:8000"  # Только localhost
+```
+
+3. nginx слушает 8082, проксирует на 18082 (Docker)
+
+**Текущий статус**: Проблема обойдена использованием единого HTTPS-порта 8443 с path-based routing на VDS. Все сервисы доступны через этот порт.
 
 ## Изоляция микросервисов
 
-**FileWatcher** и **Admin Backend** — полностью изолированные Docker-сервисы:
+**Все сервисы** — полностью изолированные Docker-контейнеры:
 
-- Не копируют `core/`, `utils/`, `settings.py` в образ
-- Содержат собственные реализации работы с PostgreSQL:
-  - `services/file_watcher/src/repository.py` — FileWatcherRepository
-  - `services/admin_backend/src/database.py` — Database с connection pool
-- Могут развёртываться и обновляться независимо от Worker'а
+- Каждый имеет собственные `settings.py`, `repository.py`, `requirements.txt`
+- Не зависят от `core/`, `utils/`, корневого `settings.py`
+- Могут развёртываться и обновляться независимо
 
-**Важно при изменениях:**
-- Изменения схемы БД требуют обновления **трёх** мест: `core/infrastructure/database/postgres.py`, `services/file_watcher/src/repository.py`, `services/admin_backend/src/database.py`
-- При добавлении новых полей в таблицы — обновите SQL во всех репозиториях
+**При изменении схемы БД** обновите SQL во всех репозиториях:
+- `services/file_watcher/src/repository.py`
+- `services/ingest/src/repository.py`
+- `services/chat_backend/src/repository.py`
+- `services/admin_backend/src/database.py`
 
 ## Архитектурная дорожная карта
 
@@ -333,12 +571,11 @@ python tests/runner.py --suite all -v
 
 ## При внесении изменений
 
-- **Добавление настроек**: Дефолты держим в `settings.py`, секреты — только в `.env`; при изменении архитектурных флагов обновляйте `docs/architecture_roadmap.md`
-- **Изменения БД**: Обновите оба файла схем в `scripts/setup_supabase/` (schema_files.sql, schema_chunks.sql)
-- **Новые зависимости**: Добавьте в `requirements.txt` в корне проекта
+- **Добавление настроек**: Только через ENV в `docker-compose.yml`, валидация в `settings.py` сервиса
+- **Изменения БД**: Обновите файлы схем в `scripts/setup_supabase/` и repository во всех сервисах
+- **Новые зависимости**: Добавьте в `requirements.txt` конкретного сервиса
 - **Изменения Docker-сервисов**: Отредактируйте `services/docker-compose.yml`
-- **Изменения тестов**: Запустите `python tests/runner.py --suite unit` перед коммитом
-- **Изменения пайплайна**: Обновите как `main.py`, так и соответствующие модули app
+- **Новый компонент пайплайна**: Создайте файл, зарегистрируйте в `__init__.py`, добавьте ENV
 
 ## Общение рекомендации
 - Отвечайте на русском языке, если не указано иное

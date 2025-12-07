@@ -1,0 +1,49 @@
+{
+  "name": "ALPACA Chat Backend",
+  "build": {
+    "dockerfile": "../Dockerfile.dev",
+    "context": ".."
+  },
+  "workspaceFolder": "/app",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/app,type=bind,consistency=cached",
+  
+  "forwardPorts": [8000],
+  
+  "containerEnv": {
+    "HTTP_PROXY": "socks5://172.17.0.1:10809",
+    "HTTPS_PROXY": "socks5://172.17.0.1:10809",
+    "ALL_PROXY": "socks5://172.17.0.1:10809",
+    "NO_PROXY": "localhost,127.0.0.1,db,ollama,172.18.0.0/16"
+  },
+  
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "ms-python.debugpy",
+        "redhat.vscode-yaml"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.analysis.extraPaths": ["/app/src"],
+        "python.testing.pytestEnabled": true,
+        "python.testing.pytestArgs": ["tests"],
+        "editor.formatOnSave": true,
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff"
+        }
+      }
+    }
+  },
+  
+  "postCreateCommand": "pip install -r requirements-dev.txt 2>/dev/null || true",
+  "remoteUser": "developer",
+  
+  "runArgs": [
+    "--env-file", ".env.example",
+    "--network", "alpaca_network",
+    "--add-host", "host.docker.internal:172.17.0.1"
+  ]
+}
