@@ -62,7 +62,7 @@ services:
       - /home/alpaca/monitored_folder:/monitored_folder:ro
     environment:
       # === CREDENTIALS ===
-      - DATABASE_URL=postgresql://postgres:IFEmDfNac7SuIZsEdCFG3LC2rejPyupEHZkdYe3kS+k=@172.17.0.1:54322/postgres
+      - DATABASE_URL=${DATABASE_URL}
       
       # === SYSTEM SETTINGS ===
       - TZ=Europe/Moscow
@@ -97,7 +97,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - DATABASE_URL=postgresql://postgres:IFEmDfNac7SuIZsEdCFG3LC2rejPyupEHZkdYe3kS+k=@172.17.0.1:54322/postgres
+      - DATABASE_URL=${DATABASE_URL}
       - TZ=Europe/Moscow
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=5)"]
@@ -120,7 +120,7 @@ services:
       - /home/alpaca/tmp_md:/tmp_md
     environment:
       # === CREDENTIALS ===
-      - DATABASE_URL=postgresql://postgres:IFEmDfNac7SuIZsEdCFG3LC2rejPyupEHZkdYe3kS+k=@172.17.0.1:54322/postgres
+      - DATABASE_URL=${DATABASE_URL}
       
       # === SYSTEM SETTINGS ===
       - TZ=Europe/Moscow
@@ -177,7 +177,7 @@ services:
       - "8083:8000"
     environment:
       # === CREDENTIALS ===
-      - DATABASE_URL=postgresql://postgres:IFEmDfNac7SuIZsEdCFG3LC2rejPyupEHZkdYe3kS+k=@172.17.0.1:54322/postgres
+      - DATABASE_URL=${DATABASE_URL}
       
       # === SYSTEM SETTINGS ===
       - TZ=Europe/Moscow
@@ -214,7 +214,7 @@ services:
       - /home/alpaca/monitored_folder:/monitored_folder:ro  # Для скачивания документов
     environment:
       # === CREDENTIALS ===
-      - DATABASE_URL=postgresql://postgres:IFEmDfNac7SuIZsEdCFG3LC2rejPyupEHZkdYe3kS+k=@172.17.0.1:54322/postgres
+      - DATABASE_URL=${DATABASE_URL}
       
       # === SYSTEM SETTINGS ===
       - TZ=Europe/Moscow
@@ -269,7 +269,7 @@ services:
       - ./chat_backend/tests:/app/tests:cached
       - chat-backend-pip-cache:/home/developer/.cache/pip
     environment:
-      - DATABASE_URL=postgresql://postgres:IFEmDfNac7SuIZsEdCFG3LC2rejPyupEHZkdYe3kS+k=@172.17.0.1:54322/postgres
+      - DATABASE_URL=${DATABASE_URL}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - OLLAMA_LLM_MODEL=qwen2.5:32b
       - OLLAMA_EMBEDDING_MODEL=bge-m3

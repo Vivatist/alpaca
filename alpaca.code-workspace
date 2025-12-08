@@ -3,22 +3,6 @@
 		{
 			"name": "alpaca",
 			"path": "."
-		},
-		{
-			"name": "frontend",
-			"path": "../frontend"
-		},
-		{
-			"name": "monitored_folder",
-			"path": "../monitored_folder"
-		},
-		{
-			"name": "tmp",
-			"path": "../tmp"
-		},
-		{
-			"name": "tmp_md",
-			"path": "../tmp_md"
 		}
 	],
 	"settings": {}

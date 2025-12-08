@@ -42,21 +42,27 @@ if [ ! -f ".env" ]; then
     echo "📝 Создание .env..."
     cp .env.example .env
     
-    # Генерация безопасных секретов
-    POSTGRES_PASSWORD=$(openssl rand -base64 32)
-    JWT_SECRET=$(openssl rand -base64 32)
+    # Генерация безопасных секретов БЕЗ спецсимволов (/, +, =) для корректного URL-парсинга
+    POSTGRES_PASSWORD=$(openssl rand -hex 24)
+    JWT_SECRET=$(openssl rand -hex 24)
+    DASHBOARD_PASSWORD=$(openssl rand -hex 12)
     
     # Обновление переменных
     sed -i "s|POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$POSTGRES_PASSWORD|g" .env
     sed -i "s|JWT_SECRET=.*|JWT_SECRET=$JWT_SECRET|g" .env
+    sed -i "s|DASHBOARD_PASSWORD=.*|DASHBOARD_PASSWORD=$DASHBOARD_PASSWORD|g" .env
+    
+    # Конвертация .env в Unix-формат (удаление CRLF) для совместимости с Elixir
+    sed -i 's/\r$//' .env
     
     echo "✅ Секреты сгенерированы"
 else
     echo "✅ .env уже существует"
 fi
 
-# Загрузка пароля из .env
-source .env
+# Извлечение паролей из .env (безопасный способ)
+POSTGRES_PASSWORD=$(grep "^POSTGRES_PASSWORD=" .env | cut -d'=' -f2)
+DASHBOARD_PASSWORD=$(grep "^DASHBOARD_PASSWORD=" .env | cut -d'=' -f2)
 
 # Копирование docker-compose.override.yml (порт 54322 + сеть alpaca_network)
 if [ ! -f "$SUPABASE_DOCKER/docker-compose.override.yml" ]; then
@@ -70,6 +76,12 @@ fi
 # Создание Docker сети если не существует
 docker network inspect alpaca_network >/dev/null 2>&1 || docker network create alpaca_network
 echo "✅ Сеть alpaca_network готова"
+
+# Конвертация конфигов pooler в Unix-формат (CRLF ломает Elixir парсер)
+if [ -f "$SUPABASE_DOCKER/volumes/pooler/pooler.exs" ]; then
+    sed -i 's/\r$//' "$SUPABASE_DOCKER/volumes/pooler/pooler.exs"
+    echo "✅ Конфиг pooler конвертирован в Unix-формат"
+fi
 
 echo ""
 echo "🗄️  Запуск Supabase..."
@@ -109,7 +121,10 @@ echo "🌐 Сеть: alpaca_network"
 echo "🔐 Пароль PostgreSQL: $POSTGRES_PASSWORD"
 echo "🔌 PostgreSQL: localhost:54322"
 echo "🗄️  Таблицы: chunks, files"
+echo ""
 echo "🌐 Dashboard: http://localhost:8000"
+echo "   Username: supabase"
+echo "   Password: $DASHBOARD_PASSWORD"
 echo ""
 echo "DATABASE_URL для docker-compose.yml сервисов:"
 echo "  postgresql://postgres:$POSTGRES_PASSWORD@db:5432/postgres"
