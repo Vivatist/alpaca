@@ -255,10 +255,12 @@ services:
       - PIPELINE_TYPE=simple
       
       # === LLM BACKEND ===
-      # ollama - обычный RAG (по умолчанию)
-      # langchain_agent - агентский RAG с инструментами
-      - LLM_BACKEND=langchain_agent
+      # CHAT_BACKEND: simple (RAG+Ollama) | agent (LangChain+MCP)
+      - CHAT_BACKEND=simple
       - MCP_SERVER_URL=http://mcp-server:8000
+      
+      # Deprecated (use CHAT_BACKEND instead)
+      - LLM_BACKEND=ollama
       
       # === STREAMING SETTINGS ===
       - STREAM_CHUNK_DELAY=0.02  # Задержка между чанками в секундах (0 = без задержки)

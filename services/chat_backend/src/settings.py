@@ -31,10 +31,13 @@ class Settings(BaseSettings):
     OLLAMA_LLM_MODEL: str
     OLLAMA_EMBEDDING_MODEL: str
     
-    # LLM Backend: ollama (default) | langchain_agent (experimental)
+    # LLM Backend (deprecated, use CHAT_BACKEND)
     LLM_BACKEND: str = "ollama"
     
-    # MCP Server URL для LangChain агента (опционально)
+    # Chat Backend: simple (RAG+Ollama) | agent (LangChain+MCP)
+    CHAT_BACKEND: str = "simple"
+    
+    # MCP Server URL для agent бэкенда
     MCP_SERVER_URL: str = "http://localhost:8083"
     
     # RAG Settings
