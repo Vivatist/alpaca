@@ -15,10 +15,6 @@
 		{
 			"name": "tmp_md",
 			"path": "../tmp_md"
-		},
-		{
-			"name": "alpaca-n8n",
-			"path": "../alpaca-n8n"
 		}
 	],
 	"settings": {}

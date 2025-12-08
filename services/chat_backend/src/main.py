@@ -15,21 +15,6 @@ from api import router as api_router
 logger = get_logger("chat_backend")
 
 
-def _init_agent_search():
-    """Регистрирует функцию поиска для LangChain агента."""
-    try:
-        from llm import get_backend_name
-        if get_backend_name() == "langchain_agent":
-            from pipelines import get_pipeline
-            from llm.langchain_agent import set_search_function
-            
-            pipeline = get_pipeline()
-            set_search_function(pipeline.searcher.search)
-            logger.info("✅ Agent search function initialized")
-    except Exception as e:
-        logger.warning(f"Could not init agent search: {e}")
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifecycle: startup и shutdown."""
@@ -38,8 +23,8 @@ async def lifespan(app: FastAPI):
     logger.info(f"📡 Ollama: {settings.OLLAMA_BASE_URL}")
     logger.info(f"🗄️ Database: {settings.DATABASE_URL[:50]}...")
     
-    # Инициализируем поиск для агента
-    _init_agent_search()
+    # LangChain агент теперь использует MCP-сервер напрямую
+    # Никакой инициализации поиска не требуется
     
     yield
     logger.info("👋 Chat Backend shutting down...")

@@ -4,18 +4,19 @@ LangChain Agent RAG - агентский RAG со стримингом.
 Использует LangChain для создания агента с инструментами.
 Агент сам решает когда использовать поиск документов.
 
-Режимы работы:
-1. С внедрённой функцией поиска (set_search_function) - для интеграции с pipeline
-2. С MCP-сервером (MCP_SERVER_URL env) - для автономной работы
+Работает через MCP-сервер (Model Context Protocol) для поиска документов.
+MCP_SERVER_URL должен быть указан в настройках или переменных окружения.
 
 Для переключения между обычным RAG и агентским:
 1. В settings добавить LLM_BACKEND=langchain_agent
-2. Или использовать напрямую: from llm.langchain_agent import generate_response_stream
+2. Указать MCP_SERVER_URL (по умолчанию http://localhost:8083)
 """
 
 import os
-from typing import Optional, Iterator, List, Dict, Any, Callable
+from typing import Optional, Iterator, List, Dict, Any
 from dataclasses import dataclass
+
+import httpx
 
 from logging_config import get_logger
 from settings import settings
@@ -54,64 +55,66 @@ class AgentConfig:
     def __post_init__(self):
         self.model = self.model or getattr(settings, 'OLLAMA_LLM_MODEL', 'qwen2.5:32b')
         self.base_url = self.base_url or getattr(settings, 'OLLAMA_BASE_URL', 'http://ollama:11434')
-        self.mcp_server_url = self.mcp_server_url or os.getenv('MCP_SERVER_URL')
+        # MCP-сервер: из settings, ENV или localhost по умолчанию
+        self.mcp_server_url = (
+            self.mcp_server_url 
+            or getattr(settings, 'MCP_SERVER_URL', None)
+            or os.getenv('MCP_SERVER_URL', 'http://localhost:8083')
+        )
 
 
-# Тип для функции поиска (инъекция зависимости)
-SearchFunction = Callable[[str], List[Dict[str, Any]]]
-
-# Глобальная функция поиска (устанавливается извне)
-_search_function: Optional[SearchFunction] = None
-
-
-def set_search_function(fn: SearchFunction):
+def _search_via_mcp(query: str, mcp_url: str, top_k: int = 5) -> List[Dict[str, Any]]:
     """
-    Устанавливает функцию поиска для агента.
-    
-    Вызывается из pipeline при инициализации.
+    Поиск документов через MCP-сервер.
     
     Args:
-        fn: Функция поиска, принимает query и возвращает список чанков
+        query: Поисковый запрос
+        mcp_url: URL MCP-сервера
+        top_k: Количество результатов
+        
+    Returns:
+        Список чанков с content, metadata, similarity
     """
-    global _search_function
-    _search_function = fn
-    logger.info("Search function registered for agent")
-
-
-def _search_via_mcp(query: str, mcp_url: str) -> List[Dict[str, Any]]:
-    """Поиск через MCP-сервер."""
-    import httpx
-    
     try:
         with httpx.Client(timeout=30.0) as client:
             response = client.post(
                 f"{mcp_url}/tools/search_documents",
-                json={"query": query, "top_k": 5}
+                json={"query": query, "top_k": top_k}
             )
-            if response.status_code == 200:
-                data = response.json()
-                # Преобразуем формат MCP в формат chunks
-                return [
-                    {
-                        "content": c["content"],
-                        "metadata": {
-                            "file_path": c["file_path"],
-                            "title": c.get("title"),
-                            "summary": c.get("summary"),
-                            "category": c.get("category"),
-                            "chunk_index": c.get("chunk_index", 0),
-                        },
-                        "similarity": c.get("similarity", 0),
-                    }
-                    for c in data.get("chunks", [])
-                ]
+            response.raise_for_status()
+            data = response.json()
+            
+            # Преобразуем формат MCP DocumentChunk в внутренний формат
+            chunks = []
+            for c in data.get("chunks", []):
+                chunks.append({
+                    "content": c.get("content", ""),
+                    "metadata": {
+                        "file_path": c.get("file_path", ""),
+                        "file_name": c.get("file_name", ""),
+                        "title": c.get("title"),
+                        "summary": c.get("summary"),
+                        "category": c.get("category"),
+                        "chunk_index": c.get("chunk_index", 0),
+                    },
+                    "similarity": c.get("similarity", 0),
+                })
+            
+            logger.debug(f"MCP search '{query[:30]}...' → {len(chunks)} chunks")
+            return chunks
+            
+    except httpx.HTTPStatusError as e:
+        logger.error(f"MCP HTTP error: {e.response.status_code} - {e.response.text}")
+    except httpx.RequestError as e:
+        logger.error(f"MCP request error: {e}")
     except Exception as e:
         logger.error(f"MCP search error: {e}")
+    
     return []
 
 
-def _create_search_tool(config: AgentConfig = None):
-    """Создаёт инструмент поиска для агента."""
+def _create_search_tool(config: AgentConfig):
+    """Создаёт инструмент поиска для агента через MCP."""
     from langchain_core.tools import tool
     
     @tool
@@ -127,32 +130,24 @@ def _create_search_tool(config: AgentConfig = None):
         Returns:
             Найденные фрагменты документов с метаданными
         """
-        chunks = []
+        if not config.mcp_server_url:
+            return "Ошибка: MCP_SERVER_URL не настроен"
         
-        # Приоритет: внедрённая функция > MCP-сервер
-        if _search_function is not None:
-            try:
-                chunks = _search_function(query)
-            except Exception as e:
-                logger.error(f"Search function error: {e}")
-        elif config and config.mcp_server_url:
-            chunks = _search_via_mcp(query, config.mcp_server_url)
-        else:
-            return "Ошибка: функция поиска не настроена и MCP-сервер не указан"
+        chunks = _search_via_mcp(query, config.mcp_server_url, top_k=5)
         
         if not chunks:
             return "Документы по запросу не найдены"
         
-        # Форматируем результаты
+        # Форматируем результаты для LLM
         results = []
         for i, chunk in enumerate(chunks, 1):
             metadata = chunk.get("metadata", {})
             file_path = metadata.get("file_path", "неизвестный источник")
-            title = metadata.get("title", "")
+            title = metadata.get("title") or metadata.get("file_name") or file_path
             content = chunk.get("content", "")[:500]  # Ограничиваем длину
             similarity = chunk.get("similarity", 0)
             
-            result = f"[Документ {i}] {title or file_path} (релевантность: {similarity:.2f})\n{content}"
+            result = f"[Документ {i}] {title} (релевантность: {similarity:.2f})\n{content}"
             results.append(result)
         
         logger.info(f"🔍 Agent search: '{query[:30]}...' → {len(results)} results")
@@ -277,6 +272,5 @@ def generate_response_stream(
 __all__ = [
     "generate_response",
     "generate_response_stream",
-    "set_search_function",
     "AgentConfig",
 ]

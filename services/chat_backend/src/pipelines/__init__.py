@@ -61,22 +61,10 @@ def build_pipeline(
     pipeline_class = PIPELINES[backend]
     pipeline = pipeline_class(searcher=searcher, repository=repository)
     
-    # Регистрируем функцию поиска для LangChain агента (если используется)
-    _register_search_for_agent(searcher)
+    # LangChain агент теперь использует MCP-сервер напрямую
+    # Регистрация функции поиска больше не нужна
     
     return pipeline
-
-
-def _register_search_for_agent(searcher):
-    """Регистрирует функцию поиска для LangChain агента если он используется."""
-    try:
-        from llm import get_backend_name
-        if get_backend_name() == "langchain_agent":
-            from llm.langchain_agent import set_search_function
-            set_search_function(searcher.search)
-            logger.info("Search function registered for LangChain agent")
-    except ImportError:
-        pass  # LangChain не установлен
 
 
 # Singleton instance

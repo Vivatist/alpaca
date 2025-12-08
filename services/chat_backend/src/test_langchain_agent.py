@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """
-Тестовый скрипт для проверки LangChain Agent RAG.
+Тестовый скрипт для проверки LangChain Agent RAG через MCP-сервер.
+
+Требования:
+1. MCP-сервер должен быть запущен (http://localhost:8083 или MCP_SERVER_URL)
+2. Ollama должен быть доступен
 
 Запуск:
 1. Установить зависимости: pip install -r requirements-langchain.txt
-2. Запустить: python test_langchain_agent.py
+2. Запустить MCP-сервер: python mcp_server.py
+3. Запустить тест: python test_langchain_agent.py
 
 Для тестирования внутри Docker:
-docker exec -it alpaca-chat-backend-1 pip install langchain-ollama langgraph langchain-core
 docker exec -it alpaca-chat-backend-1 python /app/src/test_langchain_agent.py
 """
 
@@ -22,48 +26,23 @@ class MockSettings:
     OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     OLLAMA_LLM_MODEL = os.getenv("OLLAMA_LLM_MODEL", "qwen2.5:32b")
     LLM_BACKEND = "langchain_agent"
+    MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://localhost:8083")
 
 # Патчим settings
 import settings as settings_module
 settings_module.settings = MockSettings()
 
 
-def mock_search(query: str):
-    """Мок функции поиска для тестирования."""
-    print(f"🔍 Mock search called with: {query}")
-    return [
-        {
-            "content": "ALPACA — это RAG система для работы с документами компании. "
-                      "Она позволяет искать информацию в документах и отвечать на вопросы.",
-            "metadata": {
-                "file_path": "docs/README.md",
-                "title": "ALPACA RAG System",
-                "chunk_index": 0,
-            },
-            "similarity": 0.95,
-        },
-        {
-            "content": "Система использует Ollama для генерации эмбеддингов и ответов. "
-                      "Документы хранятся в PostgreSQL с расширением pgvector.",
-            "metadata": {
-                "file_path": "docs/architecture.md", 
-                "title": "Architecture",
-                "chunk_index": 1,
-            },
-            "similarity": 0.85,
-        },
-    ]
-
-
 def test_sync():
-    """Тест синхронной генерации."""
+    """Тест синхронной генерации (использует MCP-сервер)."""
     print("\n" + "="*60)
-    print("TEST: Синхронная генерация")
+    print("TEST: Синхронная генерация (через MCP)")
     print("="*60)
     
-    from llm.langchain_agent import generate_response, set_search_function
+    from llm.langchain_agent import generate_response
     
-    set_search_function(mock_search)
+    # Агент теперь использует MCP-сервер для поиска
+    # Убедитесь что MCP_SERVER_URL указан или MCP-сервер запущен на localhost:8083
     
     response = generate_response(
         prompt="Что такое ALPACA?",
@@ -74,14 +53,14 @@ def test_sync():
 
 
 def test_stream():
-    """Тест потоковой генерации."""
+    """Тест потоковой генерации (использует MCP-сервер)."""
     print("\n" + "="*60)
-    print("TEST: Потоковая генерация")
+    print("TEST: Потоковая генерация (через MCP)")
     print("="*60)
     
-    from llm.langchain_agent import generate_response_stream, set_search_function
+    from llm.langchain_agent import generate_response_stream
     
-    set_search_function(mock_search)
+    # Агент теперь использует MCP-сервер для поиска
     
     print("\nОтвет (streaming):")
     for chunk in generate_response_stream(
