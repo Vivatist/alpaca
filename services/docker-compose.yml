@@ -179,6 +179,43 @@ services:
       retries: 3
       start_period: 30s
 
+  # MCP Server - Model Context Protocol для поиска документов
+  mcp-server:
+    build:
+      context: mcp_server
+      dockerfile: Dockerfile
+    image: alpaca-mcp-server:latest
+    restart: always
+    networks:
+      - alpaca_network
+    ports:
+      - "8083:8000"
+    environment:
+      # === CREDENTIALS ===
+      - DATABASE_URL=postgresql://postgres:IFEmDfNac7SuIZsEdCFG3LC2rejPyupEHZkdYe3kS+k=@172.17.0.1:54322/postgres
+      
+      # === SYSTEM SETTINGS ===
+      - TZ=Europe/Moscow
+      - LOG_LEVEL=INFO
+      
+      # === SERVICE URLs ===
+      - OLLAMA_BASE_URL=http://ollama:11434
+      
+      # === MODEL SETTINGS ===
+      - OLLAMA_EMBEDDING_MODEL=bge-m3
+      
+      # === RAG SETTINGS ===
+      - RAG_TOP_K=5
+      - RAG_SIMILARITY_THRESHOLD=0.3
+    depends_on:
+      - ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
   # Chat Backend - REST API для чата с RAG
   chat-backend:
     build:
@@ -221,6 +258,7 @@ services:
       # ollama - обычный RAG (по умолчанию)
       # langchain_agent - агентский RAG с инструментами
       - LLM_BACKEND=langchain_agent
+      - MCP_SERVER_URL=http://mcp-server:8000
       
       # === STREAMING SETTINGS ===
       - STREAM_CHUNK_DELAY=0.02  # Задержка между чанками в секундах (0 = без задержки)
@@ -229,6 +267,7 @@ services:
       - MONITORED_PATH=/monitored_folder
     depends_on:
       - ollama
+      - mcp-server
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
