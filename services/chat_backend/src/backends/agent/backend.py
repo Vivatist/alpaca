@@ -4,7 +4,6 @@ AgentChatBackend — основной класс бэкенда.
 LangChain Agent + MCP Server для автономного поиска.
 """
 from typing import Iterator
-from functools import partial
 
 from logging_config import get_logger
 from settings import settings
@@ -57,7 +56,9 @@ class AgentChatBackend(ChatBackend):
     def _create_search_func(self):
         """Создать функцию поиска через MCP."""
         mcp_url = _get_mcp_url()
-        return partial(search_via_mcp, mcp_url=mcp_url)
+        def search_func(query: str, top_k: int = 5):
+            return search_via_mcp(query, top_k=top_k, mcp_url=mcp_url)
+        return search_func
     
     def stream(
         self,

@@ -14,8 +14,8 @@ logger = get_logger("chat_backend.agent.mcp")
 
 def search_via_mcp(
     query: str,
-    mcp_url: str,
     top_k: int = 5,
+    mcp_url: str = "",
     timeout: float = 30.0
 ) -> List[Dict[str, Any]]:
     """
@@ -23,13 +23,15 @@ def search_via_mcp(
     
     Args:
         query: Поисковый запрос
-        mcp_url: URL MCP-сервера
         top_k: Количество результатов
+        mcp_url: URL MCP-сервера
         timeout: Таймаут запроса
         
     Returns:
         Список чанков с content, metadata, similarity
     """
+    if not mcp_url:
+        raise ValueError("mcp_url is required")
     try:
         with httpx.Client(timeout=timeout) as client:
             response = client.post(

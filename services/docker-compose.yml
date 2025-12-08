@@ -256,7 +256,7 @@ services:
       
       # === LLM BACKEND ===
       # CHAT_BACKEND: simple (RAG+Ollama) | agent (LangChain+MCP)
-      - CHAT_BACKEND=simple
+      - CHAT_BACKEND=agent
       - MCP_SERVER_URL=http://mcp-server:8000
       
       # Deprecated (use CHAT_BACKEND instead)
