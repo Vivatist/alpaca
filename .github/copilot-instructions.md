@@ -17,10 +17,11 @@ monitored_folder/ → FileWatcher → PostgreSQL+pgvector ← Ingest → Ollama 
 | Сервис | Порт | Описание |
 |--------|------|----------|
 | **filewatcher** | 8081 | Сканирует `monitored_folder`, REST API для очереди файлов |
-| **ingest** | - | Пайплайн обработки: парсинг → чанкинг → эмбеддинг |
+| **ingest** | — | Пайплайн обработки: парсинг → чанкинг → эмбеддинг |
 | **chat-backend** | 8082 | RAG API для чата, поиск по векторам + генерация ответов |
+| **mcp-server** | 8083 | Model Context Protocol сервер для внешних LLM-агентов |
 | **admin-backend** | 8080 | Мониторинг и управление системой |
-| **ollama** | 11434 | LLM (qwen2.5:32b) и эмбеддинги (bge-m3) на GPU |
+| **ollama** | 11434 | LLM (qwen2.5:32b) и эмбеддинги (bge-m3) на GPU (вынесен в отдельный compose) |
 | **unstructured** | 9000 | Парсинг документов с OCR |
 
 **Supabase** (PostgreSQL + pgvector) — отдельная установка в `~/supabase/docker`, порт 54322.
@@ -42,10 +43,14 @@ services/
 │       └── pipeline/       # Оркестрация
 ├── chat_backend/           # RAG API
 │   └── src/
-│       ├── pipelines/      # simple (расширяемый)
-│       ├── embedders/      # ollama
-│       ├── vector_searchers/ # pgvector
-│       └── llm/            # ollama
+│       ├── backends/       # simple (RAG+Ollama), agent (LangChain+MCP)
+│       ├── api/            # FastAPI роуты
+│       └── llm/            # ollama generate
+├── mcp_server/             # Model Context Protocol
+│   └── src/
+│       ├── embedder.py     # ollama embeddings
+│       ├── vector_searcher.py # pgvector
+│       └── main.py         # FastAPI MCP endpoint
 └── admin_backend/          # Мониторинг
     └── src/
 
@@ -139,9 +144,11 @@ environment:
 **Chat Backend:**
 ```yaml
 environment:
-  - PIPELINE_TYPE=simple  # Тип RAG pipeline
+  - CHAT_BACKEND=agent  # simple (RAG+Ollama) | agent (LangChain+MCP)
+  - PIPELINE_TYPE=simple  # Тип RAG pipeline для simple backend
   - RAG_TOP_K=5
   - RAG_SIMILARITY_THRESHOLD=0.3
+  - MCP_SERVER_URL=http://mcp-server:8000  # Для agent backend
 ```
 
 ### Registry-паттерн для компонентов
@@ -180,8 +187,10 @@ METAEXTRACTOR_PIPELINE: ["base","llm"]
 CHUNKER_BACKEND: smart
 
 # Chat Backend-специфичные  
+CHAT_BACKEND: agent  # simple | agent
 PIPELINE_TYPE: simple
 RAG_TOP_K: 5
+MCP_SERVER_URL: http://mcp-server:8000
 ```
 
 ## Рабочие процессы разработки
@@ -192,9 +201,13 @@ RAG_TOP_K: 5
 # 1. Запустить Supabase (отдельно, работает на порту 54322)
 cd ~/supabase/docker && docker compose up -d
 
-# 2. Запустить сервисы ALPACA (все в Docker)
+# 2. Запустить Ollama (если локально с GPU)
+cd ~/alpaca/services && docker compose -f docker-compose.yml -f ../scripts/setup_ollama/docker-compose.ollama.yml up -d ollama
+# Или указать внешний: export OLLAMA_BASE_URL=http://server-ip:11434
+
+# 3. Запустить сервисы ALPACA
 cd ~/alpaca/services && docker compose up -d
-# Запускает: filewatcher, ingest, chat-backend, admin-backend, ollama, unstructured
+# Запускает: filewatcher, ingest, chat-backend, mcp-server, admin-backend, unstructured
 ```
 
 ### Порты сервисов
@@ -205,6 +218,7 @@ cd ~/alpaca/services && docker compose up -d
 - **Unstructured**: http://localhost:9000
 - **FileWatcher API**: http://localhost:8081
 - **Chat Backend**: http://localhost:8082
+- **MCP Server**: http://localhost:8083
 - **Admin Backend**: http://localhost:8080
 
 
@@ -240,18 +254,24 @@ docker exec -it alpaca-ollama-1 nvidia-smi  # Проверить видимос�
 - `worker.py` — poll loop для FileWatcher API
 
 **Chat Backend** (`services/chat_backend/src/`):
-- `pipelines/` — simple RAG pipeline (расширяемый)
-- `embedders/` — ollama
-- `vector_searchers/` — pgvector
-- `llm/` — ollama generate
+- `backends/` — Registry с реализациями:
+  - `simple/` — RAG pipeline + Ollama (embedder, searcher, pipeline, ollama)
+  - `agent/` — LangChain Agent + MCP Server (langchain, mcp)
+  - `protocol.py` — интерфейс ChatBackend
 - `api/` — FastAPI роуты
+- `llm/` — ollama generate (deprecated, используется backends/simple/ollama.py)
+
+**MCP Server** (`services/mcp_server/src/`):
+- `embedder.py` — ollama embeddings
+- `vector_searcher.py` — pgvector поиск
+- `main.py` — FastAPI + MCP tools (search_documents)
 
 ### Паттерн логирования
 
 ```python
-from utils.logging import setup_logging, get_logger
+from logging_config import setup_logging, get_logger
 
-setup_logging()  # Вызвать один раз при входе в модуль
+setup_logging()  # Вызвать один раз при старте сервиса (в main.py)
 logger = get_logger("alpaca.component_name")
 
 logger.info(f"✅ Успех | file={path} count={n}")
@@ -531,20 +551,16 @@ ports:
 - `services/file_watcher/src/repository.py`
 - `services/ingest/src/repository.py`
 - `services/chat_backend/src/repository.py`
+- `services/mcp_server/src/repository.py`
 - `services/admin_backend/src/database.py`
 
-## Архитектурная дорожная карта
+## Развитие проекта
 
-`docs/architecture_roadmap.md` фиксирует текущий план по снижению связанности:
+Текущий статус архитектуры:
 
-1. **✅ Изоляция микросервисов** — FileWatcher и Admin Backend полностью изолированы от core/, имеют собственные репозитории.
-2. **Bootstrap зависимостей** — вынести сборку сервисов из `main.py` в модуль bootstrap (пока в работе; worker всё ещё конфигурируется вручную).
-3. **Чёткие границы domain/application** — домен экспонирует только контракты, а привязки реализаций происходят в bootstrap.
-4. **Конфигурируемый embedder** — переключение между `custom_embedding` и `langchain_embedding` без правок кода.
-5. **Совместимость и тесты** — удаление устаревших API после миграции тестов на новые use-case'ы.
-6. **Документация** — README по слоям, актуальные инструкции по настройкам и bootstrap.
-
-При планировании изменений держите эти шаги в голове: новые фичи должны приближать проект к этим целям и сопровождаться правками roadmap при необходимости.
+1. **✅ Изоляция микросервисов** — все сервисы полностью изолированы, имеют собственные репозитории
+2. **✅ Registry-паттерн** — компоненты пайплайна переключаются через ENV
+3. **✅ Chat backends** — реализованы simple (RAG) и agent (LangChain+MCP)
 
 ## Полезные команды
 
@@ -565,8 +581,10 @@ psql $DATABASE_URL -c "SELECT status_sync, COUNT(*) FROM files GROUP BY status_s
 # Проверить чанки
 psql $DATABASE_URL -c "SELECT COUNT(*), COUNT(DISTINCT metadata->>'file_hash') FROM chunks;"
 
-# Запустить тесты
-python tests/runner.py --suite all -v
+# Запустить тесты сервиса
+cd services/ingest && python -m pytest tests/ -v
+cd services/chat_backend && python -m pytest tests/ -v
+cd services/file_watcher && python run_tests.sh
 ```
 
 ## При внесении изменений

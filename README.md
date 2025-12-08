@@ -1,104 +1,141 @@
 
 # ALPACA RAG
 
-> **Версия:** После рефакторинга упрощения (январь 2025)
-
-Система обработки документов с RAG (Retrieval Augmented Generation).
-
-## 📚 Документация
-
-- **[ARCHITECTURE_SIMPLE.md](docs/ARCHITECTURE_SIMPLE.md)** — актуальное описание архитектуры после упрощения
-- **[REFACTORING_REPORT.md](docs/REFACTORING_REPORT.md)** — отчёт об упрощении (метрики, причины, результаты)
-- **[architecture_roadmap.md](docs/architecture_roadmap.md)** — история развития архитектуры
-
-## Быстрый старт
-
-### 1. Установка Supabase
-
-Supabase устанавливается **отдельно** от основного проекта.
-
-📖 Подробная инструкция: [SUPABASE_SETUP.md](SUPABASE_SETUP.md)
-
-**Быстрая установка (Self-Hosted):**
-
-```bash
-cd ~/
-git clone --depth 1 https://github.com/supabase/supabase
-cd supabase/docker
-cp .env.example .env
-# Отредактируйте .env (установите пароли и секреты)
-docker compose up -d
-```
-
-Supabase будет доступен на http://localhost:8000
-
-### 2. Запуск сервисов проекта
-
-```bash
-cd ~/alpaca
-
-# Настройте переменные окружения
-cp .env.example .env
-# Отредактируйте .env и укажите DATABASE_URL от Supabase
-
-# Запуск Docker сервисов
-cd services
-docker compose up -d
-```
-
-Это запустит:
-- **Ollama** (http://localhost:11434) - LLM qwen2.5:32b + embeddings bge-m3 (GPU)
-- **Unstructured** (http://localhost:9000) - парсинг документов
-- **File Watcher** (http://localhost:8081) - мониторинг файлов + API
-- **Admin Backend** (http://localhost:8080) - REST API для управления
-
-### 3. Проверка
-
-```bash
-# Проверка Ollama
-curl http://localhost:11434/api/tags
-
-# Проверка Unstructured
-curl http://localhost:9000/general/v0/general
-
-# Проверка подключения к Supabase
-source venv/bin/activate
-python -c "from settings import settings; print(settings.DATABASE_URL)"
-```
+RAG-система обработки документов с микросервисной архитектурой.
 
 ## Архитектура
 
-- **Supabase** - PostgreSQL + pgvector (отдельная установка)
-- **Ollama** - LLM и embeddings (Docker + GPU)
-- **Unstructured** - парсинг документов (Docker)
-- **File Watcher** - мониторинг файлов с REST API (Docker)
-- **Admin Backend** - REST API для управления (Docker)
-- **Worker** - обработка очереди файлов (Python процесс)
-
-## Поддерживаемые форматы документов
-
-- **DOC/DOCX** — MarkItDown + python-docx + OCR изображений
-- **PDF** — PyMuPDF + локальный/Unstructured OCR
-- **PPT/PPTX** — python-pptx с конвертацией `.ppt -> .pptx` + Unstructured fallback
-- **XLS/XLSX** — openpyxl с автораспознаванием шапок, `.xls -> .xlsx` через LibreOffice
-- **TXT** — автоопределение кодировки и нормализация Markdown
-
-## Запуск Worker
-
-```bash
-# В отдельном терминале
-source venv/bin/activate
-python main.py
+```
+monitored_folder/ → FileWatcher → PostgreSQL+pgvector ← Ingest → Ollama (GPU)
+                    (Сканер+API)    (files + chunks)    (Пайплайн) (LLM+Эмбеддинги)
+                                          ↓
+                                    Chat Backend → Ollama
+                                    (RAG API)
 ```
 
-## Остановка сервисов
+### Сервисы
+
+| Сервис | Порт | Описание |
+|--------|------|----------|
+| **filewatcher** | 8081 | Сканирует `monitored_folder`, API очереди файлов |
+| **ingest** | — | Пайплайн: парсинг → очистка → чанкинг → метаданные → эмбеддинг |
+| **chat-backend** | 8082 | RAG API: поиск по векторам + генерация ответов |
+| **mcp-server** | 8083 | Model Context Protocol для внешних LLM-агентов |
+| **admin-backend** | 8080 | Мониторинг системы |
+| **unstructured** | 9000 | Парсинг документов с OCR |
+| **ollama** | 11434 | LLM (qwen2.5:32b) и эмбеддинги (bge-m3) на GPU |
+
+**Supabase** (PostgreSQL + pgvector) устанавливается отдельно в `~/supabase/docker`, порт **54322**.
+
+### Поток обработки документов
+
+1. **FileWatcher** сканирует `monitored_folder` → обновляет таблицу `files` (статусы: `added`/`updated`/`deleted`)
+2. **Ingest** запрашивает `GET /api/next-file` у FileWatcher → помечает файл как `processed`
+3. Пайплайн: **parsing** → **cleaning** → **chunking** → **metaextraction** → **embedding**
+4. Чанки с векторами сохраняются в таблицу `chunks` → статус файла меняется на `ok` или `error`
+
+### База данных
+
+**Таблица `files`**: отслеживание файлов
+- `file_path`, `file_hash` (SHA256), `status_sync` (`ok`/`added`/`updated`/`deleted`/`processed`/`error`)
+
+**Таблица `chunks`**: векторное хранилище (pgvector)
+- `content` (текст), `embedding` (vector 1024), `metadata` (JSONB: file_hash, file_path, title, summary, keywords, category, entities)
+
+## Быстрый старт
+
+### 1. Supabase (отдельно)
 
 ```bash
-# Остановка Docker контейнеров
-cd services
-docker compose down
-
-# Остановка Supabase (в его директории)
 cd ~/supabase/docker
+docker compose up -d
+# Dashboard: http://localhost:8000, PostgreSQL: localhost:54322
+```
+
+### 2. Ollama (если локально с GPU)
+
+```bash
+cd ~/alpaca/services
+docker compose -f docker-compose.yml -f ../scripts/setup_ollama/docker-compose.ollama.yml up -d ollama
+```
+
+Или укажите внешний Ollama: `export OLLAMA_BASE_URL=http://server-ip:11434`
+
+### 3. Сервисы
+
+```bash
+cd ~/alpaca/services
+docker compose up -d
+```
+
+### Проверка
+
+```bash
+curl http://localhost:8081/health   # FileWatcher
+curl http://localhost:8082/health   # Chat Backend
+curl http://localhost:11434/api/tags # Ollama
+```
+
+## Структура проекта
+
+```
+services/
+├── docker-compose.yml        # Все сервисы
+├── file_watcher/src/         # Сканер файлов + REST API
+├── ingest/src/
+│   ├── parsers/              # Word, PDF, PPTX, XLS, TXT
+│   ├── cleaners/             # simple, stamps
+│   ├── chunkers/             # simple, smart
+│   ├── metaextractors/       # base, llm
+│   ├── embedders/            # ollama
+│   └── pipeline/             # Оркестрация
+├── chat_backend/src/
+│   ├── pipelines/            # RAG pipeline
+│   ├── vector_searchers/     # pgvector
+│   └── llm/                  # ollama
+├── mcp_server/src/           # MCP протокол
+└── admin_backend/src/        # Мониторинг
+```
+
+## Конфигурация
+
+Все настройки через ENV в `docker-compose.yml`. Ключевые:
+
+```yaml
+# Ingest
+CLEANER_PIPELINE: ["simple","stamps"]
+CHUNKER_BACKEND: smart
+METAEXTRACTOR_PIPELINE: ["base","llm"]
+
+# Chat Backend
+PIPELINE_TYPE: simple
+RAG_TOP_K: 5
+CHAT_BACKEND: agent  # simple | agent
+```
+
+## Внешний доступ
+
+API доступен через reverse SSH tunnel на VDS:
+- **Chat**: `https://api.alpaca-smart.com:8443/chat/`
+- **Admin**: `https://api.alpaca-smart.com:8443/admin/`
+
+## Полезные команды
+
+```bash
+# Логи сервиса
+docker compose logs -f ingest
+
+# Статистика файлов
+psql $DATABASE_URL -c "SELECT status_sync, COUNT(*) FROM files GROUP BY status_sync;"
+
+# Количество чанков
+psql $DATABASE_URL -c "SELECT COUNT(*) FROM chunks;"
+
+# Остановка
 docker compose down
 ```
+
+## Документация
+
+- [.github/copilot-instructions.md](.github/copilot-instructions.md) — полное техническое описание для AI-ассистентов
+- [docs/TODO.md](docs/TODO.md) — текущие задачи
