@@ -17,7 +17,7 @@ from typing import Dict, Type, Optional
 from logging_config import get_logger
 from settings import settings
 
-from .protocol import ChatBackend, StreamEvent, SourceInfo, ChatResult
+from .protocol import ChatBackend, StreamEvent, SourceInfo
 from .simple import SimpleChatBackend
 from .agent import AgentChatBackend
 
@@ -83,8 +83,7 @@ __all__ = [
     # Protocol
     "ChatBackend",
     "StreamEvent",
-    "SourceInfo", 
-    "ChatResult",
+    "SourceInfo",
     # Implementations
     "SimpleChatBackend",
     "AgentChatBackend",

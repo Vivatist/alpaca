@@ -9,9 +9,9 @@ from urllib.parse import quote
 
 from logging_config import get_logger
 from pipelines import get_pipeline
-from llm import generate_response, generate_response_stream
+from llm import generate_response_stream
 
-from .protocol import ChatBackend, StreamEvent, SourceInfo, ChatResult
+from .protocol import ChatBackend, StreamEvent, SourceInfo
 
 logger = get_logger("chat_backend.backends.simple")
 
@@ -91,37 +91,3 @@ class SimpleChatBackend(ChatBackend):
         except Exception as e:
             logger.error(f"❌ Simple stream error: {e}")
             yield StreamEvent(type="error", data={"error": str(e)})
-    
-    def chat(
-        self,
-        query: str,
-        conversation_id: str | None = None,
-        base_url: str = ""
-    ) -> ChatResult:
-        """
-        Синхронная генерация: search → LLM → result.
-        """
-        logger.info(f"📨 Simple chat: {query[:50]}...")
-        
-        pipeline = get_pipeline()
-        
-        ctx = pipeline.prepare_context(
-            query=query,
-            conversation_id=conversation_id
-        )
-        
-        answer = generate_response(
-            prompt=ctx.prompt,
-            system_prompt=ctx.system_prompt
-        )
-        
-        if not answer:
-            answer = "Извините, не удалось сгенерировать ответ. Попробуйте позже."
-        
-        sources = [self._build_source_info(c, base_url) for c in ctx.chunks]
-        
-        return ChatResult(
-            answer=answer,
-            conversation_id=ctx.conversation_id,
-            sources=sources
-        )

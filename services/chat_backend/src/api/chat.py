@@ -21,32 +21,12 @@ logger = get_logger("chat_backend.api.chat")
 router = APIRouter(prefix="/chat", tags=["Chat"], redirect_slashes=True)
 
 
-# === Request/Response Models ===
+# === Request Model ===
 
 class ChatRequest(BaseModel):
     """Запрос к чату (JSON)."""
     message: str
     conversation_id: str | None = None
-
-
-class SourceInfo(BaseModel):
-    """Информация об источнике."""
-    file_path: str
-    file_name: str
-    chunk_index: int
-    similarity: float
-    download_url: str
-    title: str | None = None
-    summary: str | None = None
-    category: str | None = None
-    modified_at: str | None = None
-
-
-class ChatResponse(BaseModel):
-    """Ответ чата."""
-    answer: str
-    conversation_id: str
-    sources: list[SourceInfo] = []
 
 
 # === Helpers ===
@@ -65,57 +45,8 @@ def _format_sse_event(event: StreamEvent) -> str:
 
 # === Endpoints ===
 
-@router.post("", response_model=ChatResponse)
-@router.post("/", response_model=ChatResponse, include_in_schema=False)
-async def chat(
-    request: ChatRequest,
-    req: Request,
-    backend: Optional[str] = Query(None, description="Backend: simple | agent")
-) -> ChatResponse:
-    """
-    Отправить сообщение в чат (синхронный ответ).
-    
-    Backend можно указать через:
-    - Query param: ?backend=agent
-    - ENV: CHAT_BACKEND=agent
-    """
-    logger.info(f"📨 Chat request: {request.message[:50]}...")
-    
-    try:
-        chat_backend = get_backend(backend) if backend else get_default_backend()
-        base_url = _get_base_url(req)
-        
-        result = chat_backend.chat(
-            query=request.message,
-            conversation_id=request.conversation_id,
-            base_url=base_url
-        )
-        
-        return ChatResponse(
-            answer=result.answer,
-            conversation_id=result.conversation_id,
-            sources=[
-                SourceInfo(
-                    file_path=s.file_path,
-                    file_name=s.file_name,
-                    chunk_index=s.chunk_index,
-                    similarity=s.similarity,
-                    download_url=s.download_url,
-                    title=s.title,
-                    summary=s.summary,
-                    category=s.category,
-                    modified_at=s.modified_at,
-                )
-                for s in result.sources
-            ]
-        )
-        
-    except Exception as e:
-        logger.error(f"❌ Chat error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/stream")
+@router.post("")
+@router.post("/", include_in_schema=False)
 async def chat_stream(
     request: ChatRequest,
     req: Request,
@@ -179,22 +110,6 @@ async def chat_stream(
             "X-Accel-Buffering": "no",
         }
     )
-
-
-# === Deprecated endpoints (для обратной совместимости) ===
-
-@router.post("/agent/stream", deprecated=True)
-async def agent_stream_deprecated(
-    request: ChatRequest,
-    req: Request
-) -> StreamingResponse:
-    """
-    DEPRECATED: Используйте POST /stream?backend=agent
-    
-    Сохранён для обратной совместимости.
-    """
-    logger.warning("⚠️ Deprecated endpoint /agent/stream called, use /stream?backend=agent")
-    return await chat_stream(request, req, backend="agent")
 
 
 # === Stats ===

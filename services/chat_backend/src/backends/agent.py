@@ -10,7 +10,7 @@ from typing import Iterator
 from logging_config import get_logger
 from settings import settings
 
-from .protocol import ChatBackend, StreamEvent, SourceInfo, ChatResult
+from .protocol import ChatBackend, StreamEvent
 
 logger = get_logger("chat_backend.backends.agent")
 
@@ -141,57 +141,3 @@ class AgentChatBackend(ChatBackend):
         except Exception as e:
             logger.error(f"❌ Agent stream error: {e}")
             yield StreamEvent(type="error", data={"error": str(e)})
-    
-    def chat(
-        self,
-        query: str,
-        conversation_id: str | None = None,
-        base_url: str = ""
-    ) -> ChatResult:
-        """
-        Синхронная генерация через агента.
-        """
-        logger.info(f"📨 Agent chat: {query[:50]}...")
-        
-        if not self._ensure_langchain():
-            return ChatResult(
-                answer="Ошибка: LangChain не установлен",
-                conversation_id=conversation_id or "",
-                sources=[]
-            )
-        
-        try:
-            from langchain_core.messages import HumanMessage, SystemMessage
-            from llm.langchain_agent import _create_agent, AgentConfig
-            
-            config = AgentConfig()
-            agent = _create_agent(config)
-            
-            messages = []
-            if self._system_prompt:
-                messages.append(SystemMessage(content=self._system_prompt))
-            messages.append(HumanMessage(content=query))
-            
-            result = agent.invoke({"messages": messages})
-            
-            final_messages = result.get("messages", [])
-            answer = ""
-            if final_messages:
-                answer = final_messages[-1].content
-            
-            if not answer:
-                answer = "Извините, не удалось сгенерировать ответ."
-            
-            return ChatResult(
-                answer=answer,
-                conversation_id=conversation_id or "",
-                sources=[]  # Агент не возвращает sources в текущей реализации
-            )
-            
-        except Exception as e:
-            logger.error(f"❌ Agent chat error: {e}")
-            return ChatResult(
-                answer=f"Ошибка агента: {e}",
-                conversation_id=conversation_id or "",
-                sources=[]
-            )

@@ -55,20 +55,12 @@ class SourceInfo:
         }
 
 
-@dataclass
-class ChatResult:
-    """Результат синхронного чата."""
-    answer: str
-    conversation_id: str
-    sources: list[SourceInfo] = field(default_factory=list)
-
-
 class ChatBackend(ABC):
     """
     Абстрактный бэкенд чата.
     
     Все реализации (simple, agent и т.д.) наследуются от этого класса
-    и реализуют методы stream() и chat().
+    и реализуют метод stream().
     """
     
     @property
@@ -94,25 +86,5 @@ class ChatBackend(ABC):
             
         Yields:
             StreamEvent: События стрима (metadata, chunk, done, error)
-        """
-        ...
-    
-    @abstractmethod
-    def chat(
-        self,
-        query: str,
-        conversation_id: str | None = None,
-        base_url: str = ""
-    ) -> ChatResult:
-        """
-        Синхронная генерация ответа.
-        
-        Args:
-            query: Вопрос пользователя
-            conversation_id: ID разговора (опционально)
-            base_url: Base URL для формирования ссылок на скачивание
-            
-        Returns:
-            ChatResult: Полный ответ с источниками
         """
         ...
