@@ -5,6 +5,10 @@
 			"path": "."
 		},
 		{
+			"name": "frontend",
+			"path": "../frontend"
+		},
+		{
 			"name": "monitored_folder",
 			"path": "../monitored_folder"
 		},
@@ -15,9 +19,6 @@
 		{
 			"name": "tmp_md",
 			"path": "../tmp_md"
-		},
-		{
-			"path": "../frontend"
 		}
 	],
 	"settings": {}

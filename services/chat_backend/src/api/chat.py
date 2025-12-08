@@ -118,11 +118,11 @@ async def chat_stream(
 async def stats():
     """Статистика базы знаний."""
     try:
-        from pipelines import get_pipeline
-        pipeline = get_pipeline()
+        from repository import ChatRepository
+        repository = ChatRepository(settings.DATABASE_URL)
         return {
-            "total_chunks": pipeline.repository.get_total_chunks_count(),
-            "unique_files": pipeline.repository.get_unique_files_count(),
+            "total_chunks": repository.get_total_chunks_count(),
+            "unique_files": repository.get_unique_files_count(),
         }
     except Exception as e:
         logger.error(f"Stats error: {e}")
