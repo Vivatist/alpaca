@@ -15,6 +15,9 @@
 		{
 			"name": "tmp_md",
 			"path": "../tmp_md"
+		},
+		{
+			"path": "../frontend"
 		}
 	],
 	"settings": {}

@@ -7,10 +7,15 @@ Chat Backends Registry.
 
 Переключение через ENV: CHAT_BACKEND=simple|agent
 
+Структура:
+- backends/simple/ — все зависимости Simple RAG
+- backends/agent/ — все зависимости Agent + MCP
+
 Добавление нового бэкенда:
-1. Создать класс, наследующий ChatBackend
-2. Зарегистрировать в BACKENDS
-3. Добавить в docker-compose.yml
+1. Создать папку backends/mybackend/ с __init__.py и backend.py
+2. Экспортировать класс MyBackend из __init__.py
+3. Зарегистрировать в BACKENDS
+4. Добавить в docker-compose.yml
 """
 from typing import Dict, Type, Optional
 
