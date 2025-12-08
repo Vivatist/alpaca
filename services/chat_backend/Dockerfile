@@ -3,17 +3,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Системные зависимости
+# Системные зависимости (curl для healthcheck)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    git \
-    # Сетевые утилиты
-    iputils-ping \
-    net-tools \
-    dnsutils \
-    traceroute \
-    telnet \
-    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
 # Python зависимости

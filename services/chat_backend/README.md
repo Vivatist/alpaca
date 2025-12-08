@@ -1,17 +1,26 @@
 # Chat Backend Service
 
+REST API для чата с RAG-системой ALPACA. Поддерживает два режима работы: простой RAG и агентский с LangChain.
 
-REST API для чата с RAG-системой ALPACA.
+## Архитектура
 
-## Разработка в контейнере (Dev Container)
+```
+backends/
+├── simple/      # Простой RAG: поиск → промпт → LLM
+│   ├── backend.py
+│   ├── embedder.py
+│   ├── searcher.py
+│   ├── pipeline.py
+│   └── ollama.py
+└── agent/       # Агент LangChain с MCP-инструментом поиска
+    ├── backend.py
+    ├── langchain.py
+    └── mcp.py
+```
 
-### Запуск
+Выбор бэкенда через ENV: `CHAT_BACKEND=simple` или `CHAT_BACKEND=agent`
 
-1. Откройте VS Code в папке `services/chat_backend`
-2. `Ctrl+Shift+P` → "Dev Containers: Reopen in Container"
-3. VS Code пересоберёт контейнер и откроет терминал внутри
-
-### Или вручную
+## Запуск
 
 ```bash
 cd /home/alpaca/alpaca/services
@@ -20,32 +29,41 @@ docker compose up chat-backend -d
 
 ## API Endpoints
 
-- `GET /health` - Health check
-- `GET /api/chat/hello` - Hello World
-- `POST /api/chat/` - Отправить сообщение
+- `GET /health` — Health check
+- `GET /api/chat/stats` — Статистика базы (чанки, файлы)
+- `POST /api/chat` — SSE-стриминг ответа
+- `GET /api/files/download` — Скачивание файла по пути
 
-### Пример запроса
+### Пример запроса (SSE streaming)
 
 ```bash
-curl -X POST http://localhost:8000/api/chat/ \
+curl -N http://localhost:8082/api/chat \
   -H "Content-Type: application/json" \
-  -d '{"message": "Что такое RAG?"}'
+  -d '{"message": "Найди договоры аренды"}'
 ```
+
+### SSE события
+
+- `tool_call` — Агент вызывает инструмент (только agent backend)
+- `metadata` — Источники и conversation_id
+- `chunk` — Часть ответа
+- `done` — Завершение
+- `error` — Ошибка
 
 ## Тесты
 
 ```bash
-# В контейнере
-pytest
-
-# Или локально
 cd services/chat_backend
 pytest
 ```
 
-## TODO
+## Конфигурация (ENV)
 
-- [ ] RAG pipeline (embedding → pgvector search → LLM)
-- [ ] История диалогов
-- [ ] Streaming ответов
-- [ ] WebSocket для real-time
+| Переменная | Описание | По умолчанию |
+|------------|----------|--------------|
+| `CHAT_BACKEND` | `simple` или `agent` | `simple` |
+| `RAG_TOP_K` | Количество чанков для контекста | `5` |
+| `RAG_SIMILARITY_THRESHOLD` | Порог релевантности | `0.3` |
+| `OLLAMA_BASE_URL` | URL Ollama | `http://ollama:11434` |
+| `OLLAMA_LLM_MODEL` | Модель LLM | `qwen2.5:32b` |
+| `OLLAMA_EMBEDDING_MODEL` | Модель эмбеддингов | `bge-m3` |
