@@ -1,5 +1,15 @@
 name: alpaca
 
+# ============================================================
+# ALPACA Services (локальные)
+# Ollama должен быть запущен отдельно (см. docker-compose.ollama.yml)
+# 
+# Настройка OLLAMA_BASE_URL:
+#   - Локальный Ollama: export OLLAMA_BASE_URL=http://host.docker.internal:11434
+#   - Удалённый сервер: export OLLAMA_BASE_URL=http://server-ip:11434
+#   - Или создайте .env файл с этой переменной
+# ============================================================
+
 services:
   # Unstructured API для парсинга документов
   unstructured:
@@ -30,37 +40,13 @@ services:
     networks:
       - alpaca_network
 
-  # Ollama для LLM и эмбеддингов
-  ollama:
-    image: ollama/ollama:latest
-    restart: always
-    networks:
-      - alpaca_network
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_storage:/root/.ollama
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-      - OLLAMA_NUM_GPU=1
-      - OLLAMA_GPU_LAYERS=999
-      - OLLAMA_MAX_LOADED_MODELS=2  # Максимальное количество загруженных моделей в память (qwen2.5:32b + bge-m3)
-      - OLLAMA_KEEP_ALIVE=-1  # Держать модель в GPU постоянно (-1 = бесконечно)
-      - OLLAMA_NUM_PARALLEL=2  # Количество параллельных запросов к модели
-      - OLLAMA_MAX_QUEUE=10  # Максимальное количество запросов в очереди
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [compute,utility]
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # ============================================================
+  # ПРИМЕЧАНИЕ: Ollama вынесен в docker-compose.ollama.yml
+  # Для локальной разработки с GPU на этой машине:
+  #   docker compose -f docker-compose.yml -f docker-compose.ollama.yml up -d
+  # Для работы с удалённым Ollama:
+  #   OLLAMA_BASE_URL=http://server-ip:11434 docker compose up -d
+  # ============================================================
 
   # File Watcher для мониторинга файлов
   filewatcher:
@@ -142,7 +128,7 @@ services:
       
       # === SERVICE URLs ===
       - FILEWATCHER_URL=http://filewatcher:8081
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - UNSTRUCTURED_API_URL=http://unstructured:8000/general/v0/general
       
       # === MODEL SETTINGS ===
@@ -170,7 +156,6 @@ services:
       - TMP_MD_PATH=/tmp_md
     depends_on:
       - filewatcher
-      - ollama
       - unstructured
     healthcheck:
       test: ["CMD", "pgrep", "-f", "python"]
@@ -199,7 +184,7 @@ services:
       - LOG_LEVEL=INFO
       
       # === SERVICE URLs ===
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       
       # === MODEL SETTINGS ===
       - OLLAMA_EMBEDDING_MODEL=bge-m3
@@ -207,8 +192,6 @@ services:
       # === RAG SETTINGS ===
       - RAG_TOP_K=5
       - RAG_SIMILARITY_THRESHOLD=0.3
-    depends_on:
-      - ollama
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -243,7 +226,7 @@ services:
       - VERSION=1.0.0
       
       # === SERVICE URLs ===
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       
       # === MODEL SETTINGS ===
       - OLLAMA_EMBEDDING_MODEL=bge-m3
@@ -268,7 +251,6 @@ services:
       # === FILE SETTINGS ===
       - MONITORED_PATH=/monitored_folder
     depends_on:
-      - ollama
       - mcp-server
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -288,7 +270,7 @@ services:
       - chat-backend-pip-cache:/home/developer/.cache/pip
     environment:
       - DATABASE_URL=postgresql://postgres:IFEmDfNac7SuIZsEdCFG3LC2rejPyupEHZkdYe3kS+k=@172.17.0.1:54322/postgres
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - OLLAMA_LLM_MODEL=qwen2.5:32b
       - OLLAMA_EMBEDDING_MODEL=bge-m3
       - LOG_LEVEL=DEBUG
@@ -297,14 +279,11 @@ services:
       - "8083:8000"
     networks:
       - alpaca_network
-    depends_on:
-      - ollama
     profiles:
       - dev  # Запускается только с --profile dev
 
 volumes:
   unstructured_data:
-  ollama_storage:
   chat-backend-pip-cache:
 
 networks:

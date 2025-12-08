@@ -20,7 +20,7 @@ CREATE TABLE public.files (
     last_checked timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     hash text NOT NULL,
     mtime double precision,
-    status_sync public.status_sync,
+    status_sync public.status_sync DEFAULT 'ok',
     raw_text text
 );
 
@@ -47,13 +47,15 @@ ALTER TABLE ONLY public.files
     ADD CONSTRAINT files_path_key UNIQUE (path);
 
 -- Indexes для быстрого поиска
-CREATE INDEX idx_hash ON public.files USING btree (hash);
-CREATE INDEX idx_file_path ON public.files USING btree (file_path);
-CREATE INDEX idx_status_mtime ON public.files USING btree (status_sync, file_mtime DESC);
+CREATE INDEX idx_files_hash ON public.files USING btree (hash);
+CREATE INDEX idx_files_path ON public.files USING btree (path);
+CREATE INDEX idx_files_status_sync ON public.files USING btree (status_sync);
 
-COMMENT ON TABLE public.files IS 'Отслеживает состояние файлов в системе';
-COMMENT ON COLUMN public.files.file_path IS 'Абсолютный путь к файлу';
-COMMENT ON COLUMN public.files.file_hash IS 'SHA256 хеш содержимого файла';
-COMMENT ON COLUMN public.files.file_mtime IS 'Время последней модификации файла (unix timestamp)';
+COMMENT ON TABLE public.files IS 'Отслеживает состояние файлов в monitored_folder';
+COMMENT ON COLUMN public.files.path IS 'Путь к файлу относительно monitored_folder';
+COMMENT ON COLUMN public.files.hash IS 'SHA256 хеш содержимого файла';
+COMMENT ON COLUMN public.files.size IS 'Размер файла в байтах';
+COMMENT ON COLUMN public.files.mtime IS 'Время последней модификации файла (unix timestamp)';
 COMMENT ON COLUMN public.files.status_sync IS 'Статус синхронизации: ok/added/deleted/updated/processed/error';
+COMMENT ON COLUMN public.files.last_checked IS 'Время последней проверки файла';
 COMMENT ON COLUMN public.files.raw_text IS 'Необработанный текст из файла (опционально)';

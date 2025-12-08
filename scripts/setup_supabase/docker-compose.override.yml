@@ -1,0 +1,12 @@
+# Override для Supabase в проекте ALPACA
+# Копировать в ~/supabase/docker/docker-compose.override.yml
+
+services:
+  db:
+    ports:
+      - "54322:5432"  # Нестандартный порт чтобы не конфликтовать с локальным PostgreSQL
+
+networks:
+  default:
+    name: alpaca_network
+    external: true

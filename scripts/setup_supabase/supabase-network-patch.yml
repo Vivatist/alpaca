@@ -1,7 +1,0 @@
-# Патч для подключения Supabase к сети alpaca_network
-# Использование: добавить в конец docker-compose.yml Supabase
-
-networks:
-  default:
-    name: alpaca_network
-    external: true
