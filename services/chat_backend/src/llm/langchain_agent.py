@@ -230,7 +230,7 @@ def generate_response_stream(
     Потоковая генерация ответа через LangChain агента.
     
     Yields:
-        Части ответа по мере генерации, включая шаги рассуждения агента
+        Части ответа по мере генерации (только финальный ответ, без tool calls)
     """
     if not _check_langchain():
         logger.error("LangChain not available")
@@ -238,7 +238,7 @@ def generate_response_stream(
         return
     
     try:
-        from langchain_core.messages import HumanMessage, SystemMessage, AIMessageChunk
+        from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage
         
         config = AgentConfig(temperature=temperature, max_tokens=max_tokens)
         agent = _create_agent(config)
@@ -255,10 +255,17 @@ def generate_response_stream(
             if isinstance(event, tuple) and len(event) >= 1:
                 message = event[0]
                 
-                # AIMessageChunk содержит части ответа
-                if hasattr(message, 'content') and message.content:
-                    # Пропускаем tool calls, стримим только текст
-                    if not hasattr(message, 'tool_calls') or not message.tool_calls:
+                # Пропускаем ToolMessage (результаты инструментов)
+                if isinstance(message, ToolMessage):
+                    continue
+                
+                # Стримим только AIMessage БЕЗ tool_calls (финальный ответ)
+                if isinstance(message, AIMessage):
+                    # Пропускаем если есть tool_calls — это вызов инструмента
+                    if hasattr(message, 'tool_calls') and message.tool_calls:
+                        continue
+                    # Это финальный ответ — стримим
+                    if message.content:
                         yield message.content
         
         logger.info("LangChain agent stream completed")
