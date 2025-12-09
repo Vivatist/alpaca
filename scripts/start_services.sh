@@ -1,9 +1,13 @@
 #!/bin/bash
-# Запуск всех сервисов (Ollama, Unstructured, Prefect, Supabase)
+# Запуск сервисов для локальной разработки (Supabase + ALPACA)
+# Ollama работает на удалённом сервере через Tailscale
 
 set -e
 
-echo "🚀 Запуск всех сервисов..."
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+echo "🚀 Запуск сервисов для разработки..."
 echo ""
 
 # Проверка Docker
@@ -12,12 +16,15 @@ if ! docker ps > /dev/null 2>&1; then
     exit 1
 fi
 
-# Проверка установки Supabase
-SUPABASE_DOCKER="/home/alpaca/supabase/docker"
-if [ ! -d "$SUPABASE_DOCKER" ]; then
-    echo "⚠️  Supabase не установлен"
-    echo "Запуск установки Supabase..."
-    "$(dirname "$0")/setup_supabase.sh"
+# Определение пути Supabase (Windows/Linux)
+if [ -d "$HOME/supabase/docker" ]; then
+    SUPABASE_DOCKER="$HOME/supabase/docker"
+elif [ -d "/c/Users/$USER/supabase/docker" ]; then
+    SUPABASE_DOCKER="/c/Users/$USER/supabase/docker"
+else
+    echo "⚠️  Supabase не найден"
+    echo "Запустите: ./scripts/setup_supabase/setup_supabase.sh"
+    exit 1
 fi
 
 # Запуск Supabase
@@ -27,90 +34,56 @@ docker compose up -d
 echo "✅ Supabase запущен"
 echo ""
 
-# Запуск контейнеров проекта
-echo "📦 Запуск сервисов проекта..."
-cd /home/alpaca/alpaca/docker
+# Запуск сервисов ALPACA
+echo "📦 Запуск сервисов ALPACA..."
+cd "$PROJECT_DIR/services"
 docker compose up -d
+echo "✅ ALPACA сервисы запущены"
 
 echo ""
 echo "✅ Все контейнеры запущены:"
 echo ""
 echo "   🗄️  Supabase:"
 echo "      - Studio UI: http://localhost:8000"
-echo "      - API Gateway: http://localhost:8000"
-echo "      - PostgreSQL: localhost:5432 (direct), localhost:6543 (pooled)"
+echo "      - PostgreSQL: localhost:54322"
 echo ""
-echo "   📦 Сервисы проекта:"
-echo "      - Ollama: http://localhost:11434"
-echo "      - Unstructured: http://localhost:9000"
-echo "      - Prefect UI: http://localhost:4200"
+echo "   📦 ALPACA сервисы:"
+echo "      - Admin Backend: http://localhost:8080"
+echo "      - Chat Backend: http://localhost:8082"
+echo "      - FileWatcher: http://localhost:8081"
+echo "      - MCP Server: http://localhost:8083"
+echo ""
+echo "   🤖 Ollama (удалённый сервер):"
+echo "      - URL: см. OLLAMA_BASE_URL в services/.env"
 echo ""
 
 # Ожидание PostgreSQL
 echo "⏳ Ожидание запуска PostgreSQL..."
-for i in {1..60}; do
+for i in {1..30}; do
     if docker exec supabase-db pg_isready -U postgres > /dev/null 2>&1; then
         echo "✅ PostgreSQL готов"
         break
     fi
-    if [ $i -eq 60 ]; then
-        echo "⚠️  PostgreSQL не запустился за 2 минуты"
+    if [ $i -eq 30 ]; then
+        echo "⚠️  PostgreSQL не запустился за 1 минуту"
     fi
     sleep 2
 done
 
-# Ожидание Ollama
-echo "⏳ Ожидание запуска Ollama..."
-for i in {1..30}; do
-    if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
-        echo "✅ Ollama готов"
-        break
+# Проверка health endpoints
+echo ""
+echo "🔍 Проверка сервисов..."
+sleep 5
+
+for service in "localhost:8080/health:Admin" "localhost:8082/health:Chat" "localhost:8081/health:FileWatcher"; do
+    url=$(echo $service | cut -d: -f1-2)
+    name=$(echo $service | cut -d: -f3)
+    if curl -s "http://$url" > /dev/null 2>&1; then
+        echo "✅ $name Backend готов"
+    else
+        echo "⏳ $name Backend запускается..."
     fi
-    sleep 2
 done
 
-# Ожидание Prefect
-echo "⏳ Ожидание запуска Prefect..."
-for i in {1..30}; do
-    if curl -s http://localhost:4200/api/health > /dev/null 2>&1; then
-        echo "✅ Prefect готов"
-        break
-    fi
-    sleep 2
-done
-
-# Проверка и загрузка моделей
 echo ""
-echo "🤖 Проверка моделей..."
-
-# Модель для embeddings
-if ! curl -s http://localhost:11434/api/tags | grep -q "bge-m3"; then
-    echo "📥 Загрузка bge-m3..."
-    docker exec alpaca-rag-ollama-1 ollama pull bge-m3
-else
-    echo "✅ bge-m3 уже загружена"
-fi
-
-# Модель для LLM
-if ! curl -s http://localhost:11434/api/tags | grep -q "qwen2.5:32b"; then
-    echo "📥 Загрузка qwen2.5:32b (это займет время, ~20GB)..."
-    docker exec alpaca-rag-ollama-1 ollama pull qwen2.5:32b
-else
-    echo "✅ qwen2.5:32b уже загружена"
-fi
-
-# Предзагрузка моделей в память
-echo ""
-echo "🚀 Предзагрузка моделей в GPU..."
-echo "Это держит модели постоянно в памяти для быстрых ответов"
-
-# Загружаем bge-m3 (генерируем тестовый embedding)
-docker exec alpaca-rag-ollama-1 ollama run bge-m3 "test" > /dev/null 2>&1 &
-
-# Загружаем qwen2.5:32b (генерируем тестовый ответ)  
-docker exec alpaca-rag-ollama-1 ollama run qwen2.5:32b "привет" > /dev/null 2>&1 &
-
-echo "✅ Модели загружаются в GPU (работают в фоне)"
-
-echo ""
-echo "✅ Все сервисы готовы!"
+echo "✅ Готово к разработке!"

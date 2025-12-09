@@ -8,11 +8,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Установка Python зависимостей
-COPY requirements.txt .
+COPY services/mcp_server/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Копирование кода
-COPY src/ ./src/
+COPY services/mcp_server/src/ ./src/
 
 # Переменные окружения
 ENV PYTHONUNBUFFERED=1
