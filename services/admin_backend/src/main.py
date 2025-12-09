@@ -15,7 +15,6 @@ from pydantic import BaseModel, Field
 import os
 import sys
 from pathlib import Path
-import docker
 import httpx
 
 # Добавляем корень репозитория при локальном запуске
@@ -143,12 +142,6 @@ class DocumentsStats(BaseModel):
     total_chunks: int = Field(..., description="Общее количество чанков")
     unique_files: int = Field(..., description="Количество уникальных файлов")
     avg_chunks_per_file: float = Field(..., description="Среднее количество чанков на файл")
-
-
-class ServiceConfig(BaseModel):
-    """Конфигурация сервиса"""
-    service_name: str = Field(..., description="Название сервиса")
-    environment: Dict[str, str] = Field(..., description="Переменные окружения")
 
 
 class SystemHealth(BaseModel):
@@ -338,86 +331,40 @@ async def get_documents_stats():
 # Configuration Endpoints
 # ============================================
 
-@app.get("/api/config/file-watcher", response_model=ServiceConfig, tags=["Configuration"])
-async def get_file_watcher_config():
-    """Получить конфигурацию file-watcher сервиса
+@app.get("/api/config", tags=["Configuration"])
+async def get_system_config():
+    """Получить конфигурацию системы
     
-    Возвращает все переменные окружения:
-    - MONITORED_PATH
-    - ALLOWED_EXTENSIONS
-    - SCAN_INTERVAL
-    - FILE_MIN_SIZE
-    - FILE_MAX_SIZE
-    - EXCLUDED_DIRS
-    - EXCLUDED_PATTERNS
+    Возвращает конфигурацию admin-backend и URL внешних сервисов.
+    Значения берутся из переменных окружения контейнера.
     """
-    try:
-        client = docker.from_env()
-        container = client.containers.get('alpaca-file-watcher')
-        
-        # Получаем environment переменные из контейнера
-        env_list = container.attrs['Config']['Env']
-        
-        env_vars = {}
-        for env_str in env_list:
-            if '=' in env_str:
-                key, value = env_str.split('=', 1)
-                # Фильтруем только релевантные переменные
-                if key in [
-                    'MONITORED_PATH', 'ALLOWED_EXTENSIONS', 'SCAN_INTERVAL',
-                    'FILE_MIN_SIZE', 'FILE_MAX_SIZE', 'EXCLUDED_DIRS',
-                    'EXCLUDED_PATTERNS', 'DB_HOST', 'DB_PORT', 'DB_NAME'
-                ]:
-                    env_vars[key] = value
-        
-        return {
-            "service_name": "file-watcher",
-            "environment": env_vars
-        }
-    except docker.errors.NotFound:
-        raise HTTPException(status_code=404, detail="Container 'alpaca-file-watcher' not found")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get config: {str(e)}")
-
-
-@app.get("/api/config/main-loop", response_model=ServiceConfig, tags=["Configuration"])
-async def get_main_loop_config():
-    """Получить конфигурацию main-loop сервиса
+    # Маскируем пароль в DATABASE_URL
+    db_url = os.getenv("DATABASE_URL", "")
+    if "@" in db_url:
+        # postgresql://user:password@host:port/db -> postgresql://user:***@host:port/db
+        parts = db_url.split("@")
+        prefix = parts[0]
+        if ":" in prefix:
+            user_part = prefix.rsplit(":", 1)[0]
+            db_url_masked = f"{user_part}:***@{parts[1]}"
+        else:
+            db_url_masked = db_url
+    else:
+        db_url_masked = db_url
     
-    Возвращает все переменные окружения:
-    - MAX_HEAVY_WORKFLOWS
-    - LOOP_INTERVAL
-
-    - POSTGRES_HOST
-    - POSTGRES_PORT
-    """
-    try:
-        client = docker.from_env()
-        container = client.containers.get('alpaca-main-loop')
-        
-        # Получаем environment переменные из контейнера
-        env_list = container.attrs['Config']['Env']
-        
-        env_vars = {}
-        for env_str in env_list:
-            if '=' in env_str:
-                key, value = env_str.split('=', 1)
-                # Фильтруем только релевантные переменные
-                if key in [
-                    'MAX_HEAVY_WORKFLOWS', 'LOOP_INTERVAL',
-                    'POSTGRES_HOST', 'POSTGRES_PORT', 'POSTGRES_DB',
-                    'POSTGRES_USER'
-                ]:
-                    env_vars[key] = value
-        
-        return {
-            "service_name": "main-loop",
-            "environment": env_vars
+    return {
+        "admin_backend": {
+            "database_url": db_url_masked,
+            "ollama_url": OLLAMA_BASE_URL,
+            "timezone": os.getenv("TZ", "UTC")
+        },
+        "services": {
+            "filewatcher": "http://filewatcher:8081",
+            "chat_backend": "http://chat-backend:8000",
+            "mcp_server": "http://mcp-server:8000",
+            "ollama": OLLAMA_BASE_URL
         }
-    except docker.errors.NotFound:
-        raise HTTPException(status_code=404, detail="Container 'alpaca-main-loop' not found")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get config: {str(e)}")
+    }
 
 
 # ============================================
