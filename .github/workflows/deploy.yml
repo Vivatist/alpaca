@@ -39,6 +39,16 @@ jobs:
           docker compose up -d
           echo "✅ Services restarted"
       
+      - name: Show configuration
+        run: |
+          cd ~/alpaca/services
+          echo "📋 Current .env configuration:"
+          echo "DATABASE_URL=$(grep DATABASE_URL .env | head -1 || echo 'NOT SET')"
+          echo "OLLAMA_BASE_URL=$(grep OLLAMA_BASE_URL .env | head -1 || echo 'NOT SET')"
+          echo ""
+          echo "📊 Container status:"
+          docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "alpaca|supabase" || true
+      
       - name: Cleanup old images
         run: docker image prune -f
       
