@@ -30,13 +30,32 @@ jobs:
           git reset --hard origin/main
           echo "✅ Code updated to $(git rev-parse --short HEAD)"
       
-      - name: Fix DATABASE_URL if needed
+      - name: Check Supabase and fix DATABASE_URL
         run: |
           cd ~/alpaca/services
-          if grep -q "supabase-db" .env 2>/dev/null; then
-            echo "⚠️ Found supabase-db in DATABASE_URL, fixing..."
-            sed -i 's|supabase-db:5432|172.17.0.1:54322|g' .env
-            echo "✅ DATABASE_URL fixed to use 172.17.0.1:54322"
+          
+          # Определяем порт Supabase
+          SUPABASE_PORT=$(docker port supabase-db 5432 2>/dev/null | grep -oE '[0-9]+$' || echo "")
+          
+          if [ -z "$SUPABASE_PORT" ]; then
+            echo "⚠️ supabase-db container not found, checking for postgresql..."
+            SUPABASE_PORT=$(docker ps --format '{{.Ports}}' | grep -oE '0.0.0.0:[0-9]+->5432' | grep -oE ':[0-9]+' | tr -d ':' | head -1)
+          fi
+          
+          echo "📊 Detected Supabase PostgreSQL port: ${SUPABASE_PORT:-NOT FOUND}"
+          
+          # Исправляем DATABASE_URL
+          if [ -n "$SUPABASE_PORT" ] && [ -f .env ]; then
+            # Заменяем supabase-db:5432 на 172.17.0.1:PORT
+            if grep -q "supabase-db" .env; then
+              sed -i "s|supabase-db:5432|172.17.0.1:${SUPABASE_PORT}|g" .env
+              echo "✅ Fixed: supabase-db:5432 → 172.17.0.1:${SUPABASE_PORT}"
+            fi
+            # Исправляем неправильный порт 54322 если нужно
+            if grep -q ":54322" .env && [ "$SUPABASE_PORT" != "54322" ]; then
+              sed -i "s|:54322|:${SUPABASE_PORT}|g" .env
+              echo "✅ Fixed port: 54322 → ${SUPABASE_PORT}"
+            fi
           fi
           
           echo "📋 Current .env configuration:"
