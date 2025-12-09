@@ -1,0 +1,7 @@
+# Оверрайд для сервера - подключение к сети Supabase
+# Использование: docker compose -f docker-compose.yml -f docker-compose.server.yml up -d
+
+networks:
+  alpaca_network:
+    external: true
+    name: supabase_default
