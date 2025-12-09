@@ -1,55 +1,50 @@
 #!/bin/bash
 
-# Скрипт очистки monitored_folder
+# Скрипт очистки monitored_folder и tmp_md
 
-# Получаем путь из settings.py
+set -e
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-MONITORED_DIR=$(cd "$PROJECT_DIR" && source venv/bin/activate && python -c "from settings import settings; print(settings.MONITORED_PATH)")
-TMP_MD_DIR=$(cd "$PROJECT_DIR" && source venv/bin/activate && python - <<'PY'
-from settings import settings
 
-# tmp_md путь пока не вынесен в настройки, поэтому читаем атрибут с запасным значением
-print(getattr(settings, 'TMP_MD_PATH', '/home/alpaca/tmp_md'))
-PY
-)
+# Читаем пути из .env или используем дефолтные
+if [ -f "$PROJECT_DIR/services/.env" ]; then
+    source "$PROJECT_DIR/services/.env" 2>/dev/null || true
+fi
+
+# Пути по умолчанию (относительно проекта)
+MONITORED_DIR="${MONITORED_FOLDER_PATH:-$PROJECT_DIR/monitored_folder}"
+TMP_MD_DIR="${TMP_MD_PATH:-$PROJECT_DIR/tmp_md}"
+
+echo "=== ОЧИСТКА MONITORED FOLDER ==="
+echo ""
+echo "Monitored: $MONITORED_DIR"
+echo "Tmp MD:    $TMP_MD_DIR"
+echo ""
 
 # Проверка существования директории
 if [ ! -d "$MONITORED_DIR" ]; then
-    echo "⚠️  Директория не найдена:"
-    echo "$MONITORED_DIR"
-    echo ""
+    echo "⚠️  Директория не найдена: $MONITORED_DIR"
     read -p "Создать директорию? (y/n): " create_dir
     
     if [ "$create_dir" = "y" ]; then
         mkdir -p "$MONITORED_DIR"
-        if [ $? -eq 0 ]; then
-            echo "✓ Директория создана: $MONITORED_DIR"
-            echo ""
-            echo "Директория пуста, нечего удалять."
-            exit 0
-        else
-            echo "✗ Ошибка при создании директории"
-            exit 1
-        fi
+        echo "✓ Директория создана"
+        exit 0
     else
         echo "Отменено."
         exit 0
     fi
 fi
 
-# Подсчет файлов и директорий перед удалением
-FILE_COUNT=$(find "$MONITORED_DIR" -type f | wc -l)
-DIR_COUNT=$(find "$MONITORED_DIR" -mindepth 1 -type d | wc -l)
+# Подсчет файлов
+FILE_COUNT=$(find "$MONITORED_DIR" -type f 2>/dev/null | wc -l)
+DIR_COUNT=$(find "$MONITORED_DIR" -mindepth 1 -type d 2>/dev/null | wc -l)
 
-echo "=== ОЧИСТКА MONITORED FOLDER ==="
-echo ""
-echo "Директория: $MONITORED_DIR"
 echo "Найдено файлов: $FILE_COUNT"
 echo "Найдено поддиректорий: $DIR_COUNT"
 echo ""
 
-# Запрос подтверждения
 read -p "Удалить все содержимое? (y/n): " confirm
 
 if [ "$confirm" != "y" ]; then
@@ -57,36 +52,17 @@ if [ "$confirm" != "y" ]; then
     exit 0
 fi
 
-# Удаление содержимого (оставляем саму папку)
-echo ""
-echo "Удаление содержимого..."
-rm -rf "$MONITORED_DIR"/*
+# Очистка monitored_folder
+echo "Очистка monitored_folder..."
+rm -rf "$MONITORED_DIR"/* 2>/dev/null || true
+echo "✓ monitored_folder очищена"
 
-if [ $? -eq 0 ]; then
-    echo ""
-    echo "✓ Очистка завершена успешно"
-    echo "Удалено файлов: $FILE_COUNT"
-    echo "Удалено директорий: $DIR_COUNT"
-    echo ""
-    echo "Текущее содержимое:"
-    ls -la "$MONITORED_DIR" | tail -5
-
-    if [ -d "$TMP_MD_DIR" ]; then
-        echo ""
-        echo "Дополнительно очищаем tmp_md: $TMP_MD_DIR"
-        rm -rf "$TMP_MD_DIR"/*
-        if [ $? -eq 0 ]; then
-            echo "✓ tmp_md очищена"
-        else
-            echo "✗ Ошибка при очистке tmp_md"
-            exit 1
-        fi
-    else
-        echo ""
-        echo "⚠️  Директория tmp_md не найдена: $TMP_MD_DIR"
-    fi
-else
-    echo ""
-    echo "✗ Ошибка при удалении"
-    exit 1
+# Очистка tmp_md
+if [ -d "$TMP_MD_DIR" ]; then
+    echo "Очистка tmp_md..."
+    rm -rf "$TMP_MD_DIR"/* 2>/dev/null || true
+    echo "✓ tmp_md очищена"
 fi
+
+echo ""
+echo "✓ Очистка завершена"

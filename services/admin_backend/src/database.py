@@ -154,11 +154,11 @@ class Database:
             with conn.cursor() as cur:
                 query = """
                     SELECT 
-                        file_path,
-                        file_size,
-                        file_hash,
+                        path,
+                        size,
+                        hash,
                         status_sync,
-                        file_mtime,
+                        mtime,
                         last_checked
                     FROM files
                 """
@@ -201,13 +201,13 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT 
-                        file_path,
-                        file_hash,
-                        file_size,
+                        path,
+                        hash,
+                        size,
                         status_sync
                     FROM files
                     WHERE status_sync IN ('added', 'updated', 'deleted')
-                    ORDER BY status_sync, file_path
+                    ORDER BY status_sync, path
                     LIMIT 1000
                 """)
                 
@@ -240,9 +240,9 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT 
-                        file_path,
-                        file_hash,
-                        file_size,
+                        path,
+                        hash,
+                        size,
                         last_checked
                     FROM files
                     WHERE status_sync = 'error'

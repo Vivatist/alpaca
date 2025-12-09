@@ -119,6 +119,9 @@ app.add_middleware(
 # Инициализация БД
 db = Database()
 
+# Ollama URL
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
+
 
 # ============================================
 # Pydantic Models для документации API
@@ -153,6 +156,32 @@ class SystemHealth(BaseModel):
     status: str = Field(..., description="Статус: healthy/degraded/unhealthy")
     services: Dict[str, Any] = Field(..., description="Статус каждого сервиса")
     database: Dict[str, Any] = Field(..., description="Состояние базы данных")
+
+
+class OllamaModel(BaseModel):
+    """Информация о загруженной модели Ollama"""
+    name: str = Field(..., description="Название модели")
+    size_vram_mb: int = Field(..., description="Размер в VRAM (MB)")
+    parameter_size: Optional[str] = Field(None, description="Размер модели (параметры)")
+    quantization: Optional[str] = Field(None, description="Уровень квантизации")
+    family: Optional[str] = Field(None, description="Семейство модели")
+
+
+class OllamaModelsResponse(BaseModel):
+    """Список загруженных моделей Ollama"""
+    models: List[OllamaModel] = Field(..., description="Список загруженных моделей")
+    total_vram_mb: int = Field(..., description="Общий объём VRAM (MB)")
+    ollama_url: str = Field(..., description="URL Ollama сервера")
+
+
+class OllamaSpeedTest(BaseModel):
+    """Результат теста скорости Ollama"""
+    model: str = Field(..., description="Тестируемая модель")
+    prompt_tokens: int = Field(..., description="Токенов в промпте")
+    generated_tokens: int = Field(..., description="Сгенерировано токенов")
+    total_duration_s: float = Field(..., description="Общее время (секунды)")
+    tokens_per_second: float = Field(..., description="Скорость генерации (tok/s)")
+    response_preview: str = Field(..., description="Превью ответа (первые 100 символов)")
 
 
 class FileDetail(BaseModel):
@@ -405,17 +434,198 @@ async def get_dashboard_data():
     - Очередь обработки
     - Файлы с ошибками
     - Статус системы
+    - Статус Ollama и загруженные модели
     """
     try:
-        return {
+        # Базовые данные из БД
+        result = {
             "files": db.get_file_state_stats(),
             "chunks": db.get_documents_stats(),
             "queue": db.get_processing_queue(),
             "errors": db.get_error_files(),
             "health": db.get_database_health()
         }
+        
+        # Добавляем данные Ollama (не блокирует если недоступен)
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                # Загруженные модели
+                ps_response = await client.get(f"{OLLAMA_BASE_URL}/api/ps")
+                ps_data = ps_response.json() if ps_response.status_code == 200 else {}
+                
+                models = []
+                total_vram = 0
+                for m in ps_data.get("models", []):
+                    size_vram = m.get("size_vram", 0)
+                    size_vram_mb = size_vram // (1024 * 1024)
+                    total_vram += size_vram_mb
+                    details = m.get("details", {})
+                    models.append({
+                        "name": m.get("name", "unknown"),
+                        "size_vram_mb": size_vram_mb,
+                        "parameter_size": details.get("parameter_size"),
+                        "quantization": details.get("quantization_level"),
+                        "family": details.get("family")
+                    })
+                
+                # Доступные модели
+                tags_response = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
+                tags_data = tags_response.json() if tags_response.status_code == 200 else {}
+                available_models = [m.get("name") for m in tags_data.get("models", [])]
+                
+                result["ollama"] = {
+                    "status": "healthy",
+                    "url": OLLAMA_BASE_URL,
+                    "loaded_models": models,
+                    "total_vram_mb": total_vram,
+                    "available_models": available_models
+                }
+        except Exception as e:
+            result["ollama"] = {
+                "status": "unhealthy",
+                "url": OLLAMA_BASE_URL,
+                "error": str(e)
+            }
+        
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get dashboard data: {str(e)}")
+
+
+# ============================================
+# Ollama Endpoints
+# ============================================
+
+
+@app.get("/api/ollama/models", response_model=OllamaModelsResponse, tags=["Ollama"])
+async def get_ollama_models():
+    """Получить список загруженных моделей в VRAM
+    
+    Возвращает:
+    - Список моделей с размером в VRAM
+    - Общий объём используемой VRAM
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{OLLAMA_BASE_URL}/api/ps")
+            response.raise_for_status()
+            data = response.json()
+            
+            models = []
+            total_vram = 0
+            
+            for m in data.get("models", []):
+                size_vram = m.get("size_vram", 0)
+                size_vram_mb = size_vram // (1024 * 1024)
+                total_vram += size_vram_mb
+                
+                details = m.get("details", {})
+                models.append(OllamaModel(
+                    name=m.get("name", "unknown"),
+                    size_vram_mb=size_vram_mb,
+                    parameter_size=details.get("parameter_size"),
+                    quantization=details.get("quantization_level"),
+                    family=details.get("family")
+                ))
+            
+            return OllamaModelsResponse(
+                models=models,
+                total_vram_mb=total_vram,
+                ollama_url=OLLAMA_BASE_URL
+            )
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Cannot connect to Ollama: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get models: {str(e)}")
+
+
+@app.get("/api/ollama/speed-test", response_model=OllamaSpeedTest, tags=["Ollama"])
+async def test_ollama_speed(
+    model: str = Query("qwen2.5:32b", description="Модель для тестирования"),
+    num_predict: int = Query(50, ge=1, le=200, description="Количество токенов для генерации")
+):
+    """Тест скорости генерации LLM
+    
+    Выполняет тестовый запрос к Ollama и измеряет:
+    - Время генерации
+    - Скорость в токенах/секунду
+    
+    Нормальная скорость для RTX 3090:
+    - qwen2.5:32b: 30-40 tok/s
+    - Если < 5 tok/s — модель работает на CPU!
+    """
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            payload = {
+                "model": model,
+                "prompt": "Count from 1 to 20: 1, 2, 3,",
+                "stream": False,
+                "options": {"num_predict": num_predict}
+            }
+            
+            response = await client.post(
+                f"{OLLAMA_BASE_URL}/api/generate",
+                json=payload
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            eval_count = data.get("eval_count", 0)
+            eval_duration = data.get("eval_duration", 1)  # наносекунды
+            total_duration = data.get("total_duration", 1)  # наносекунды
+            prompt_eval_count = data.get("prompt_eval_count", 0)
+            
+            # Конвертируем наносекунды в секунды
+            eval_duration_s = eval_duration / 1e9
+            total_duration_s = total_duration / 1e9
+            
+            tokens_per_second = eval_count / eval_duration_s if eval_duration_s > 0 else 0
+            
+            return OllamaSpeedTest(
+                model=model,
+                prompt_tokens=prompt_eval_count,
+                generated_tokens=eval_count,
+                total_duration_s=round(total_duration_s, 2),
+                tokens_per_second=round(tokens_per_second, 1),
+                response_preview=data.get("response", "")[:100]
+            )
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail=f"Ollama timeout after 120s. Model may need to load.")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Cannot connect to Ollama: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Speed test failed: {str(e)}")
+
+
+@app.get("/api/ollama/health", tags=["Ollama"])
+async def check_ollama_health():
+    """Проверка доступности Ollama
+    
+    Возвращает:
+    - Статус подключения
+    - Список доступных моделей
+    - URL сервера
+    """
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
+            response.raise_for_status()
+            data = response.json()
+            
+            models = [m.get("name") for m in data.get("models", [])]
+            
+            return {
+                "status": "healthy",
+                "ollama_url": OLLAMA_BASE_URL,
+                "available_models": models,
+                "model_count": len(models)
+            }
+    except httpx.RequestError as e:
+        return {
+            "status": "unhealthy",
+            "ollama_url": OLLAMA_BASE_URL,
+            "error": str(e)
+        }
 
 
 # ============================================

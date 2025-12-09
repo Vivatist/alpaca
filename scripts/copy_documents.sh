@@ -1,63 +1,63 @@
 #!/bin/bash
 
-# Скрипт копирования корпоративных документов в monitored_folder
+# Скрипт копирования тестовых документов в monitored_folder
 
-SOURCE_DIR="$HOME/old_Alpaca/data/volume_documents/ЮРИСТ (МАША)/Корпоративные документы (Уставные, Учредительные, прочее)"
+set -e
 
-# Получаем путь из settings.py
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-DEST_DIR=$(cd "$PROJECT_DIR" && source venv/bin/activate && python -c "from settings import settings; print(settings.MONITORED_PATH)")
+
+# Читаем пути из .env или используем дефолтные
+if [ -f "$PROJECT_DIR/services/.env" ]; then
+    source "$PROJECT_DIR/services/.env" 2>/dev/null || true
+fi
+
+# Путь назначения (относительно проекта)
+DEST_DIR="${MONITORED_FOLDER_PATH:-$PROJECT_DIR/monitored_folder}"
+
+# Источник можно передать как аргумент или использовать дефолтный
+SOURCE_DIR="${1:-}"
+
+if [ -z "$SOURCE_DIR" ]; then
+    echo "Использование: $0 <путь_к_документам>"
+    echo ""
+    echo "Пример:"
+    echo "  $0 ~/Documents/test_files"
+    echo "  $0 /path/to/corporate/documents"
+    echo ""
+    echo "Целевая папка: $DEST_DIR"
+    exit 1
+fi
 
 # Проверка существования исходной директории
 if [ ! -d "$SOURCE_DIR" ]; then
-    echo "ОШИБКА: Исходная директория не найдена:"
-    echo "$SOURCE_DIR"
+    echo "✗ Исходная директория не найдена: $SOURCE_DIR"
     exit 1
 fi
 
-# Проверка существования целевой директории
+# Создание целевой директории если не существует
 if [ ! -d "$DEST_DIR" ]; then
-    echo "⚠️  Целевая директория не найдена:"
-    echo "$DEST_DIR"
-    echo ""
-    read -p "Создать директорию? (yes/no): " create_dir
-    
-    if [ "$create_dir" = "yes" ]; then
-        mkdir -p "$DEST_DIR"
-        if [ $? -eq 0 ]; then
-            echo "✓ Директория создана: $DEST_DIR"
-            echo ""
-        else
-            echo "✗ Ошибка при создании директории"
-            exit 1
-        fi
-    else
-        echo "Отменено."
-        exit 0
-    fi
+    mkdir -p "$DEST_DIR"
+    echo "✓ Создана директория: $DEST_DIR"
 fi
 
-# Копирование файлов
-echo "Копирование файлов из:"
-echo "$SOURCE_DIR"
-echo "в:"
-echo "$DEST_DIR"
+# Подсчет файлов
+FILE_COUNT=$(find "$SOURCE_DIR" -type f | wc -l)
+
+echo "=== КОПИРОВАНИЕ ДОКУМЕНТОВ ==="
+echo ""
+echo "Из: $SOURCE_DIR"
+echo "В:  $DEST_DIR"
+echo "Файлов: $FILE_COUNT"
 echo ""
 
-# Подсчет файлов перед копированием
-FILE_COUNT=$(find "$SOURCE_DIR" -type f | wc -l)
-DIR_COUNT=$(find "$SOURCE_DIR" -type d | wc -l)
+read -p "Продолжить? (y/n): " confirm
+if [ "$confirm" != "y" ]; then
+    echo "Отменено."
+    exit 0
+fi
 
 cp -rv "$SOURCE_DIR/"* "$DEST_DIR/"
 
-if [ $? -eq 0 ]; then
-    echo ""
-    echo "✓ Копирование завершено успешно"
-    echo "Скопировано файлов: $FILE_COUNT"
-    echo "Скопировано директорий: $((DIR_COUNT - 1))"
-else
-    echo ""
-    echo "✗ Ошибка при копировании"
-    exit 1
-fi
+echo ""
+echo "✓ Копирование завершено"
