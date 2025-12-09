@@ -47,14 +47,51 @@ jobs:
           echo "⏳ Waiting for services to start..."
           sleep 15
           
+          FAILED=0
+          
           echo "🔍 Checking admin-backend..."
-          curl -sf http://localhost:8080/health && echo " ✅ OK" || echo " ❌ FAILED"
+          if curl -sf http://localhost:8080/health > /tmp/health_admin.json 2>&1; then
+            echo " ✅ OK"
+          else
+            echo " ❌ FAILED"
+            docker logs alpaca-admin-backend-1 --tail 20 2>&1 || true
+            FAILED=1
+          fi
           
           echo "🔍 Checking chat-backend..."
-          curl -sf http://localhost:8082/health && echo " ✅ OK" || echo " ❌ FAILED"
+          if curl -sf http://localhost:8082/health > /tmp/health_chat.json 2>&1; then
+            echo " ✅ OK"
+          else
+            echo " ❌ FAILED"
+            docker logs alpaca-chat-backend-1 --tail 20 2>&1 || true
+            FAILED=1
+          fi
           
           echo "🔍 Checking filewatcher..."
-          curl -sf http://localhost:8081/health && echo " ✅ OK" || echo " ❌ FAILED"
+          if curl -sf http://localhost:8081/health > /tmp/health_fw.json 2>&1; then
+            echo " ✅ OK"
+          else
+            echo " ❌ FAILED"
+            docker logs alpaca-filewatcher-1 --tail 20 2>&1 || true
+            FAILED=1
+          fi
           
           echo "🔍 Checking mcp-server..."
-          curl -sf http://localhost:8083/docs && echo " ✅ OK" || echo " ❌ FAILED"
+          if curl -sf http://localhost:8083/docs > /dev/null 2>&1; then
+            echo " ✅ OK"
+          else
+            echo " ❌ FAILED"
+            docker logs alpaca-mcp-server-1 --tail 20 2>&1 || true
+            FAILED=1
+          fi
+          
+          echo ""
+          echo "📊 Container status:"
+          docker ps --format "table {{.Names}}\t{{.Status}}" | grep alpaca || true
+          
+          if [ $FAILED -eq 1 ]; then
+            echo "⚠️ Some services failed health check"
+            exit 1
+          fi
+          
+          echo "✅ All services healthy!"
