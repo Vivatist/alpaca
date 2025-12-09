@@ -158,3 +158,47 @@ docker compose down
 docker ps
 ```
 
+## CI/CD и деплой
+
+### Автоматический деплой (GitHub Actions)
+
+При push в `main` автоматически запускается workflow:
+
+1. **Определение изменений** — проверяется какие сервисы изменились
+2. **Build** — сборка Docker-образов изменённых сервисов
+3. **Push** — загрузка образов в GitHub Container Registry (`ghcr.io`)
+4. **Deploy** — обновление на сервере через self-hosted runner
+
+**Триггеры:**
+- Push в `main` с изменениями в `services/`
+- Ручной запуск через GitHub Actions UI
+
+### Ручной деплой конкретного сервиса
+
+В GitHub → Actions → "Build and Deploy" → Run workflow:
+- Выбрать сервис: `all` / `admin-backend` / `ingest` / `chat-backend` / `mcp-server` / `filewatcher`
+
+### Self-hosted runner
+
+Деплой выполняется на GPU-сервере через self-hosted runner `alpaca-phantom`.
+
+**Проверка статуса runner:**
+GitHub → Settings → Actions → Runners
+
+**Если runner офлайн** — на сервере:
+```bash
+cd ~/actions-runner
+./run.sh  # или sudo systemctl restart actions-runner
+```
+
+### Внешний доступ к API
+
+После деплоя API доступен через VDS:
+
+| Сервис | URL |
+|--------|-----|
+| Admin Backend | `https://api.alpaca-smart.com:8443/admin/` |
+| Chat Backend | `https://api.alpaca-smart.com:8443/chat/` |
+
+Архитектура: `Интернет → VDS (nginx) → SSH tunnel → GPU Server`
+
