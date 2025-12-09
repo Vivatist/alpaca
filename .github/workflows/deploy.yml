@@ -2,201 +2,59 @@
 # 
 # Триггер: push в main
 # Действия:
-#   1. Build Docker images
-#   2. Push в GitHub Container Registry (ghcr.io)
-#   3. Deploy на сервер через self-hosted runner
+#   1. Git pull на сервере
+#   2. Пересборка и перезапуск всех контейнеров
 #
 # Требования:
-#   1. Self-hosted runner на сервере (см. docs/DEPLOYMENT.md)
-#   2. Настроенный Docker на сервере
-#   3. .env файл на сервере с секретами
+#   1. Self-hosted runner на сервере
+#   2. .env файл в ~/alpaca/services с секретами
 
-name: Build and Deploy
+name: Deploy to Server
 
 on:
   push:
     branches: [main]
-    paths:
-      # Только при изменениях в сервисах
-      - 'services/**'
-      - 'docker-compose.yml'
-      - '.github/workflows/deploy.yml'
   
   # Ручной запуск
   workflow_dispatch:
-    inputs:
-      service:
-        description: 'Service to deploy (all/admin-backend/ingest/filewatcher/chat-backend/mcp-server)'
-        required: false
-        default: 'all'
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/alpaca
 
 jobs:
-  # ============================================
-  # Job 1: Определяем какие сервисы изменились
-  # ============================================
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      admin-backend: ${{ steps.filter.outputs.admin-backend }}
-      ingest: ${{ steps.filter.outputs.ingest }}
-      filewatcher: ${{ steps.filter.outputs.filewatcher }}
-      chat-backend: ${{ steps.filter.outputs.chat-backend }}
-      mcp-server: ${{ steps.filter.outputs.mcp-server }}
-      any: ${{ steps.filter.outputs.any }}
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            admin-backend:
-              - 'services/admin_backend/**'
-            ingest:
-              - 'services/ingest/**'
-            filewatcher:
-              - 'services/file_watcher/**'
-            chat-backend:
-              - 'services/chat_backend/**'
-            mcp-server:
-              - 'services/mcp_server/**'
-            any:
-              - 'services/**'
-
-  # ============================================
-  # Job 2: Build и Push Docker images
-  # ============================================
-  build:
-    needs: changes
-    if: needs.changes.outputs.any == 'true' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    
-    permissions:
-      contents: read
-      packages: write
-    
-    strategy:
-      matrix:
-        include:
-          - service: admin-backend
-            context: .
-            dockerfile: services/admin_backend/Dockerfile
-            changed: ${{ needs.changes.outputs.admin-backend }}
-          - service: ingest
-            context: .
-            dockerfile: services/ingest/Dockerfile
-            changed: ${{ needs.changes.outputs.ingest }}
-          - service: filewatcher
-            context: .
-            dockerfile: services/file_watcher/Dockerfile
-            changed: ${{ needs.changes.outputs.filewatcher }}
-          - service: chat-backend
-            context: .
-            dockerfile: services/chat_backend/Dockerfile
-            changed: ${{ needs.changes.outputs.chat-backend }}
-          - service: mcp-server
-            context: .
-            dockerfile: services/mcp_server/Dockerfile
-            changed: ${{ needs.changes.outputs.mcp-server }}
-    
-    steps:
-      - name: Skip if not changed
-        if: matrix.changed != 'true' && github.event.inputs.service != 'all' && github.event.inputs.service != matrix.service
-        run: echo "Skipping ${{ matrix.service }} - no changes"
-      
-      - uses: actions/checkout@v4
-        if: matrix.changed == 'true' || github.event.inputs.service == 'all' || github.event.inputs.service == matrix.service
-      
-      - name: Set up Docker Buildx
-        if: matrix.changed == 'true' || github.event.inputs.service == 'all' || github.event.inputs.service == matrix.service
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Login to GitHub Container Registry
-        if: matrix.changed == 'true' || github.event.inputs.service == 'all' || github.event.inputs.service == matrix.service
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Extract metadata
-        if: matrix.changed == 'true' || github.event.inputs.service == 'all' || github.event.inputs.service == matrix.service
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}
-          tags: |
-            type=sha,prefix=
-            type=raw,value=latest
-      
-      - name: Build and push
-        if: matrix.changed == 'true' || github.event.inputs.service == 'all' || github.event.inputs.service == matrix.service
-        uses: docker/build-push-action@v5
-        with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  # ============================================
-  # Job 3: Deploy на сервер
-  # ============================================
   deploy:
-    needs: [changes, build]
-    if: always() && (needs.build.result == 'success' || needs.build.result == 'skipped')
-    runs-on: self-hosted  # Требует self-hosted runner на сервере!
+    runs-on: self-hosted
     
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Login to GitHub Container Registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-      
-      - name: Pull updated images
-        working-directory: ./services
+      - name: Pull latest code
         run: |
-          # Определяем какие сервисы обновлять
-          SERVICES=""
-          
-          if [[ "${{ github.event.inputs.service }}" == "all" ]] || [[ "${{ needs.changes.outputs.any }}" == "true" ]]; then
-            if [[ "${{ needs.changes.outputs.admin-backend }}" == "true" ]] || [[ "${{ github.event.inputs.service }}" == "all" ]]; then
-              SERVICES="$SERVICES admin-backend"
-            fi
-            if [[ "${{ needs.changes.outputs.ingest }}" == "true" ]] || [[ "${{ github.event.inputs.service }}" == "all" ]]; then
-              SERVICES="$SERVICES ingest"
-            fi
-            if [[ "${{ needs.changes.outputs.filewatcher }}" == "true" ]] || [[ "${{ github.event.inputs.service }}" == "all" ]]; then
-              SERVICES="$SERVICES filewatcher"
-            fi
-            if [[ "${{ needs.changes.outputs.chat-backend }}" == "true" ]] || [[ "${{ github.event.inputs.service }}" == "all" ]]; then
-              SERVICES="$SERVICES chat-backend"
-            fi
-            if [[ "${{ needs.changes.outputs.mcp-server }}" == "true" ]] || [[ "${{ github.event.inputs.service }}" == "all" ]]; then
-              SERVICES="$SERVICES mcp-server"
-            fi
-          fi
-          
-          if [[ -n "$SERVICES" ]]; then
-            echo "Deploying services:$SERVICES"
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull $SERVICES
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d $SERVICES
-          else
-            echo "No services to deploy"
-          fi
+          cd ~/alpaca
+          git fetch origin main
+          git reset --hard origin/main
+          echo "✅ Code updated to $(git rev-parse --short HEAD)"
+      
+      - name: Rebuild and restart services
+        run: |
+          cd ~/alpaca/services
+          echo "🔄 Rebuilding containers..."
+          docker compose down
+          docker compose build --no-cache
+          docker compose up -d
+          echo "✅ Services restarted"
       
       - name: Cleanup old images
         run: docker image prune -f
       
       - name: Health check
         run: |
-          sleep 10
-          curl -f http://localhost:8080/health || echo "Admin backend health check failed"
-          curl -f http://localhost:8082/health || echo "Chat backend health check failed"
+          echo "⏳ Waiting for services to start..."
+          sleep 15
+          
+          echo "🔍 Checking admin-backend..."
+          curl -sf http://localhost:8080/health && echo " ✅ OK" || echo " ❌ FAILED"
+          
+          echo "🔍 Checking chat-backend..."
+          curl -sf http://localhost:8082/health && echo " ✅ OK" || echo " ❌ FAILED"
+          
+          echo "🔍 Checking filewatcher..."
+          curl -sf http://localhost:8081/health && echo " ✅ OK" || echo " ❌ FAILED"
+          
+          echo "🔍 Checking mcp-server..."
+          curl -sf http://localhost:8083/docs && echo " ✅ OK" || echo " ❌ FAILED"
