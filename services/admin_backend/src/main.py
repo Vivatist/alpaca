@@ -628,6 +628,81 @@ async def check_ollama_health():
         }
 
 
+@app.get("/api/ollama/status", tags=["Ollama"])
+async def get_ollama_status():
+    """Детальный статус Ollama с метриками производительности
+    
+    Возвращает:
+    - Загруженные модели с context_length и временем истечения
+    - Latency API (индикатор нагрузки)
+    - Версия Ollama
+    
+    Примечание: Ollama API не предоставляет CPU/GPU utilization напрямую.
+    Для мониторинга GPU используйте nvidia-smi на хосте.
+    """
+    import time
+    
+    result = {
+        "ollama_url": OLLAMA_BASE_URL,
+        "status": "unknown",
+        "version": None,
+        "latency_ms": None,
+        "loaded_models": [],
+        "total_vram_mb": 0
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # Измеряем latency
+            start = time.time()
+            version_response = await client.get(f"{OLLAMA_BASE_URL}/api/version")
+            latency_ms = int((time.time() - start) * 1000)
+            result["latency_ms"] = latency_ms
+            
+            if version_response.status_code == 200:
+                result["version"] = version_response.json().get("version")
+            
+            # Получаем загруженные модели с детальной информацией
+            ps_response = await client.get(f"{OLLAMA_BASE_URL}/api/ps")
+            if ps_response.status_code == 200:
+                ps_data = ps_response.json()
+                
+                for m in ps_data.get("models", []):
+                    size_vram = m.get("size_vram", 0)
+                    size_vram_mb = size_vram // (1024 * 1024)
+                    result["total_vram_mb"] += size_vram_mb
+                    
+                    details = m.get("details", {})
+                    
+                    # Парсим expires_at для показа времени до выгрузки
+                    expires_at = m.get("expires_at", "")
+                    
+                    result["loaded_models"].append({
+                        "name": m.get("name", "unknown"),
+                        "size_vram_mb": size_vram_mb,
+                        "context_length": m.get("context_length"),
+                        "parameter_size": details.get("parameter_size"),
+                        "quantization": details.get("quantization_level"),
+                        "family": details.get("family"),
+                        "expires_at": expires_at
+                    })
+            
+            result["status"] = "healthy"
+            
+            # Добавляем рекомендацию по низкой скорости
+            if latency_ms > 500:
+                result["warning"] = f"High latency ({latency_ms}ms) may indicate heavy load"
+            
+    except httpx.RequestError as e:
+        result["status"] = "unhealthy"
+        result["error"] = str(e)
+    except Exception as e:
+        result["status"] = "error"
+        result["error"] = str(e)
+    
+    return result
+
+
 # ============================================
 # Error Handler
 # ============================================
