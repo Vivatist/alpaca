@@ -30,6 +30,18 @@ jobs:
           git reset --hard origin/main
           echo "✅ Code updated to $(git rev-parse --short HEAD)"
       
+      - name: Fix DATABASE_URL if needed
+        run: |
+          cd ~/alpaca/services
+          if grep -q "supabase-db" .env 2>/dev/null; then
+            echo "⚠️ Found supabase-db in DATABASE_URL, fixing..."
+            sed -i 's|supabase-db:5432|172.17.0.1:54322|g' .env
+            echo "✅ DATABASE_URL fixed to use 172.17.0.1:54322"
+          fi
+          
+          echo "📋 Current .env configuration:"
+          grep -E "^(DATABASE_URL|OLLAMA_BASE_URL)=" .env | sed 's/:[^:@]*@/:***@/' || echo "No .env found"
+      
       - name: Rebuild and restart services
         run: |
           cd ~/alpaca/services
@@ -39,13 +51,8 @@ jobs:
           docker compose up -d
           echo "✅ Services restarted"
       
-      - name: Show configuration
+      - name: Show container status
         run: |
-          cd ~/alpaca/services
-          echo "📋 Current .env configuration:"
-          echo "DATABASE_URL=$(grep DATABASE_URL .env | head -1 || echo 'NOT SET')"
-          echo "OLLAMA_BASE_URL=$(grep OLLAMA_BASE_URL .env | head -1 || echo 'NOT SET')"
-          echo ""
           echo "📊 Container status:"
           docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "alpaca|supabase" || true
       
