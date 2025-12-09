@@ -1,0 +1,26 @@
+# Production overrides для docker-compose.yml
+# Используется на сервере для деплоя из GitHub Container Registry
+#
+# Использование:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  admin-backend:
+    image: ghcr.io/vivatist/alpaca-admin-backend:latest
+    build: !reset null
+    
+  ingest:
+    image: ghcr.io/vivatist/alpaca-ingest:latest
+    build: !reset null
+    
+  filewatcher:
+    image: ghcr.io/vivatist/alpaca-filewatcher:latest
+    build: !reset null
+    
+  chat-backend:
+    image: ghcr.io/vivatist/alpaca-chat-backend:latest
+    build: !reset null
+    
+  mcp-server:
+    image: ghcr.io/vivatist/alpaca-mcp-server:latest
+    build: !reset null
