@@ -147,6 +147,12 @@ curl http://localhost:8080/api/dashboard
 ## Полезные команды
 
 ```bash
+# Все команды выполняются из папки services/
+cd services
+
+# Запуск всех сервисов
+docker compose up -d
+
 # Логи сервиса
 docker compose logs -f chat-backend
 
