@@ -34,27 +34,33 @@ jobs:
         run: |
           cd ~/alpaca/services
           
-          # Определяем порт Supabase
+          echo "📊 Supabase containers:"
+          docker ps --format "table {{.Names}}\t{{.Ports}}" | grep -i supabase || true
+          
+          # Ищем порт PostgreSQL (supabase-db контейнер, порт 5432)
           SUPABASE_PORT=$(docker port supabase-db 5432 2>/dev/null | grep -oE '[0-9]+$' || echo "")
           
           if [ -z "$SUPABASE_PORT" ]; then
-            echo "⚠️ supabase-db container not found, checking for postgresql..."
-            SUPABASE_PORT=$(docker ps --format '{{.Ports}}' | grep -oE '0.0.0.0:[0-9]+->5432' | grep -oE ':[0-9]+' | tr -d ':' | head -1)
+            echo "⚠️ supabase-db port mapping not found directly"
+            # Попробуем найти через docker ps
+            SUPABASE_PORT=$(docker ps --format '{{.Names}} {{.Ports}}' | grep supabase-db | grep -oE '0\.0\.0\.0:[0-9]+->5432' | grep -oE ':[0-9]+' | tr -d ':' | head -1)
           fi
           
-          echo "📊 Detected Supabase PostgreSQL port: ${SUPABASE_PORT:-NOT FOUND}"
+          echo "📊 Detected PostgreSQL port: ${SUPABASE_PORT:-NOT FOUND}"
+          
+          # Если порт не найден, используем 54322 (стандарт для Supabase)
+          if [ -z "$SUPABASE_PORT" ]; then
+            SUPABASE_PORT="54322"
+            echo "⚠️ Using default port: $SUPABASE_PORT"
+          fi
           
           # Исправляем DATABASE_URL
-          if [ -n "$SUPABASE_PORT" ] && [ -f .env ]; then
-            # Заменяем supabase-db:5432 на 172.17.0.1:PORT
-            if grep -q "supabase-db" .env; then
-              sed -i "s|supabase-db:5432|172.17.0.1:${SUPABASE_PORT}|g" .env
-              echo "✅ Fixed: supabase-db:5432 → 172.17.0.1:${SUPABASE_PORT}"
-            fi
-            # Исправляем неправильный порт 54322 если нужно
-            if grep -q ":54322" .env && [ "$SUPABASE_PORT" != "54322" ]; then
-              sed -i "s|:54322|:${SUPABASE_PORT}|g" .env
-              echo "✅ Fixed port: 54322 → ${SUPABASE_PORT}"
+          if [ -f .env ]; then
+            # Заменяем любой неправильный хост/порт
+            if grep -qE "(supabase-db|:5432[^0-9])" .env; then
+              sed -i "s|@supabase-db:5432|@172.17.0.1:${SUPABASE_PORT}|g" .env
+              sed -i "s|@172.17.0.1:5432/|@172.17.0.1:${SUPABASE_PORT}/|g" .env
+              echo "✅ Fixed DATABASE_URL to use 172.17.0.1:${SUPABASE_PORT}"
             fi
           fi
           
