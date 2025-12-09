@@ -14,17 +14,46 @@
 
 - Docker Desktop
 - Git
-- Tailscale (для доступа к удалённой Ollama)
 - VS Code (рекомендуется)
 
-## 1. Клонирование репозитория
+## 1. Подключение к сети разработки (Tailscale)
+
+Ollama работает на удалённом сервере с GPU. Для доступа к нему используется VPN-сеть Tailscale.
+
+### Установка Tailscale
+
+1. Скачайте и установите Tailscale: https://tailscale.com/download
+2. Запустите и авторизуйтесь через Google/GitHub
+
+### Принятие инвайта
+
+Получите ссылку-инвайт от администратора проекта и перейдите по ней. После принятия ваше устройство появится в сети `alpaca`.
+
+### Проверка доступности Ollama
+
+```bash
+# Проверить подключение к Tailscale
+tailscale status
+
+# Проверить доступность Ollama на сервере
+curl http://100.68.201.91:11434/api/tags
+```
+
+Ожидаемый ответ — список моделей:
+```json
+{"models":[{"name":"qwen2.5:32b",...},{"name":"bge-m3:latest",...}]}
+```
+
+> **Если не работает**: убедитесь, что Tailscale подключён (иконка в трее зелёная) и вы приняли инвайт в сеть.
+
+## 2. Клонирование репозитория
 
 ```bash
 git clone https://github.com/Vivatist/alpaca.git
 cd alpaca
 ```
 
-## 2. Установка Supabase
+## 3. Установка Supabase
 
 ```bash
 cd alpaca/scripts/setup_supabase
@@ -47,7 +76,7 @@ chmod +x setup_supabase.sh
 - User: `supabase`
 - Password: см. `DASHBOARD_PASSWORD` в `~/supabase/docker/.env`
 
-## 3. Настройка окружения
+## 4. Настройка окружения
 
 Создать/отредактировать `services/.env`:
 
@@ -63,17 +92,19 @@ OLLAMA_BASE_URL=http://100.68.201.91:11434
 
 > **Примечание**: `172.17.0.1` — IP хоста из Docker-контейнера (bridge gateway)
 
-## 4. Отслеживаемая папка
+## 5. Отслеживаемая папка
 
-FileWatcher сканирует папку с документами для индексации. По умолчанию: `~/monitored_folder`
+FileWatcher сканирует папку с документами для индексации. По умолчанию: `alpaca/monitored_folder` (рядом с `services/`).
 
 ```bash
-# Создать папку
-mkdir -p ~/monitored_folder
+# Создать папку (из корня репозитория)
+mkdir -p monitored_folder
 
 # Скопировать тестовые документы (опционально)
-cp -r /path/to/your/documents/* ~/monitored_folder/
+cp -r /path/to/your/documents/* monitored_folder/
 ```
+
+> **Примечание**: Если папка не существует, Docker создаст её автоматически при запуске, но лучше создать заранее.
 
 Путь можно изменить в `docker-compose.yml`:
 ```yaml
@@ -81,14 +112,14 @@ volumes:
   - ~/monitored_folder:/monitored_folder
 ```
 
-## 5. Запуск сервисов
+## 6. Запуск сервисов
 
 ```bash
 cd alpaca/services
 docker compose up -d
 ```
 
-## 6. Проверка
+## 7. Проверка
 
 ```bash
 # Health checks
