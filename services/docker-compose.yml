@@ -59,7 +59,7 @@ services:
     ports:
       - "8081:8081"
     volumes:
-      - /home/alpaca/monitored_folder:/monitored_folder:ro
+      - ${MONITORED_FOLDER_PATH:-../monitored_folder}:/monitored_folder:ro
     environment:
       # === CREDENTIALS ===
       - DATABASE_URL=${DATABASE_URL}
@@ -116,8 +116,8 @@ services:
     networks:
       - alpaca_network
     volumes:
-      - /home/alpaca/monitored_folder:/monitored_folder:ro
-      - /home/alpaca/tmp_md:/tmp_md
+      - ${MONITORED_FOLDER_PATH:-../monitored_folder}:/monitored_folder:ro
+      - ${TMP_MD_PATH:-../tmp_md}:/tmp_md
     environment:
       # === CREDENTIALS ===
       - DATABASE_URL=${DATABASE_URL}
@@ -211,7 +211,7 @@ services:
     ports:
       - "8082:8000"
     volumes:
-      - /home/alpaca/monitored_folder:/monitored_folder:ro  # Для скачивания документов
+      - ${MONITORED_FOLDER_PATH:-../monitored_folder}:/monitored_folder:ro  # Для скачивания документов
     environment:
       # === CREDENTIALS ===
       - DATABASE_URL=${DATABASE_URL}
@@ -288,8 +288,6 @@ volumes:
 
 networks:
   alpaca_network:
-    # Используем существующую сеть или создаём новую
-    # name: задаёт фиксированное имя (без префикса проекта)
+    # Используем существующую сеть (создаётся Supabase или вручную)
+    external: true
     name: alpaca_network
-    driver: bridge
-    # external: false (по умолчанию) — создаёт сеть если не существует

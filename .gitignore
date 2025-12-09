@@ -1,6 +1,8 @@
 # Application specific
 *.pid
 figures/
+tmp_md/
+monitored_folder/
 
 
 # Python
