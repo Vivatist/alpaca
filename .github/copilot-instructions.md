@@ -24,7 +24,9 @@ monitored_folder/ → FileWatcher → PostgreSQL+pgvector ← Ingest → Ollama 
 | **ollama** | 11434 | LLM (qwen2.5:32b) и эмбеддинги (bge-m3) на GPU (вынесен в отдельный compose) |
 | **unstructured** | 9000 | Парсинг документов с OCR |
 
-**Supabase** (PostgreSQL + pgvector) — отдельная установка в `~/supabase/docker`, порт 54322.
+**Supabase** (PostgreSQL + pgvector) — отдельная установка:
+- **Локально (Windows)**: `C:\supabase\docker`, порт 54322
+- **На сервере**: `~/supabase/docker`, порт 5432 (внутренний, без внешнего маппинга)
 
 ### Структура сервисов
 
@@ -169,7 +171,25 @@ def get_component_pipeline(names: List[str]) -> Component:  # Для pipeline
 
 ## Система конфигурации
 
-**Принцип**: Все настройки задаются через ENV в `docker-compose.yml`. Файлы `settings.py` в сервисах только валидируют и типизируют ENV-переменные через pydantic-settings.
+**Принцип**: Все настройки задаются через ENV в `docker-compose.yml` или `.env` файл. Файлы `settings.py` в сервисах только валидируют и типизируют ENV-переменные через pydantic-settings.
+
+### Файл .env (services/.env)
+
+Создаётся вручную на каждой машине, **НЕ коммитится в git**:
+
+```bash
+# Локально (Windows) — Supabase на порту 54322
+DATABASE_URL=postgresql://postgres:your-password@host.docker.internal:54322/postgres
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+
+# На сервере — Supabase через Docker network
+DATABASE_URL=postgresql://postgres:your-password@supabase-db:5432/postgres
+OLLAMA_BASE_URL=http://172.17.0.1:11434
+
+# Paths
+MONITORED_FOLDER_PATH=/path/to/monitored_folder
+TMP_MD_PATH=/path/to/tmp_md
+```
 
 ### Обязательные ENV-переменные
 
@@ -194,6 +214,47 @@ MCP_SERVER_URL: http://mcp-server:8000
 ```
 
 ## Рабочие процессы разработки
+
+### Окружения
+
+| Окружение | Машина | Supabase | Ollama | Доступ |
+|-----------|--------|----------|--------|--------|
+| **Локальное** | Windows (Andrey) | `host.docker.internal:54322` | `host.docker.internal:11434` | localhost |
+| **Сервер** | alpaca-phantom (Linux) | `supabase-db:5432` (Docker network) | `172.17.0.1:11434` | SSH |
+
+### SSH доступ к серверу
+
+```bash
+# Подключение (хост alpaca-phantom настроен в ~/.ssh/config)
+ssh alpaca@alpaca-phantom
+
+# Выполнить команду удалённо
+ssh alpaca@alpaca-phantom "docker ps"
+ssh alpaca@alpaca-phantom "cd ~/alpaca/services && docker compose logs -f filewatcher"
+```
+
+**~/.ssh/config**:
+```
+Host alpaca-phantom
+    HostName 100.68.201.91  # Tailscale IP (или 95.217.205.233 внешний)
+    User alpaca
+    IdentityFile ~/.ssh/id_rsa
+```
+
+### Сетевая конфигурация на сервере
+
+На сервере Supabase и ALPACA работают в **разных Docker Compose проектах**. Для связи:
+
+1. **supabase-db** не имеет внешнего порта (только внутренний 5432/tcp)
+2. **supabase-pooler** занимает порт 0.0.0.0:5432 (это НЕ прямой PostgreSQL!)
+3. **Решение**: Контейнер `supabase-db` подключается к сети `alpaca_alpaca_network`
+
+```bash
+# Подключить supabase-db к сети ALPACA (выполняется при деплое)
+docker network connect alpaca_alpaca_network supabase-db
+```
+
+После этого контейнеры ALPACA могут обращаться к БД по имени `supabase-db:5432`.
 
 ### Запуск сервисов
 
@@ -561,6 +622,27 @@ ports:
 1. **✅ Изоляция микросервисов** — все сервисы полностью изолированы, имеют собственные репозитории
 2. **✅ Registry-паттерн** — компоненты пайплайна переключаются через ENV
 3. **✅ Chat backends** — реализованы simple (RAG) и agent (LangChain+MCP)
+
+## CI/CD
+
+### GitHub Actions (.github/workflows/deploy.yml)
+
+При push в `main` автоматически:
+1. SSH на сервер `alpaca@alpaca-phantom`
+2. `git pull` обновляет код
+3. `docker compose build --no-cache` пересобирает образы
+4. `docker compose up -d` перезапускает контейнеры
+5. `docker network connect alpaca_alpaca_network supabase-db` — подключает БД к сети
+6. Health checks всех сервисов
+
+**Секреты GitHub** (Settings → Secrets):
+- `SSH_PRIVATE_KEY` — приватный ключ для доступа к серверу
+- `SSH_KNOWN_HOSTS` — fingerprint сервера
+
+**Ручной деплой**:
+```bash
+ssh alpaca@alpaca-phantom "cd ~/alpaca && git pull && cd services && docker compose up -d --build"
+```
 
 ## Полезные команды
 
