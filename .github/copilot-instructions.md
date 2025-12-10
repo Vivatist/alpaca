@@ -327,6 +327,8 @@ docker exec -it alpaca-ollama-1 nvidia-smi  # Проверить видимос�
 - `vector_searcher.py` — pgvector поиск
 - `main.py` — FastAPI + MCP tools (search_documents)
 
+> **Добавление нового Chat Backend**: см. `services/chat_backend/src/backends/HOW_TO_ADD_BACKEND.md`
+
 ### Паттерн логирования
 
 ```python
