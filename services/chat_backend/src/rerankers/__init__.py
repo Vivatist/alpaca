@@ -13,9 +13,10 @@ from typing import Type
 
 from logging_config import get_logger
 
-from .protocol import Reranker, RerankItem, RerankResult
+from .protocol import Reranker, RerankItem, RerankResult, results_to_items
 from .none import NoneReranker
 from .date import DateReranker
+from .extension import ExtensionReranker
 
 logger = get_logger("chat_backend.rerankers")
 
@@ -25,6 +26,7 @@ logger = get_logger("chat_backend.rerankers")
 RERANKERS: dict[str, Type[Reranker]] = {
     "none": NoneReranker,
     "date": DateReranker,
+    "extension": ExtensionReranker,
 }
 
 
@@ -72,8 +74,10 @@ __all__ = [
     "Reranker",
     "RerankItem",
     "RerankResult",
+    "results_to_items",
     "NoneReranker",
     "DateReranker",
+    "ExtensionReranker",
     "RERANKERS",
     "get_reranker",
     "build_reranker_from_settings",

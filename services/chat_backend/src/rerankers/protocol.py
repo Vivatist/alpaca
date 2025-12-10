@@ -21,6 +21,31 @@ class RerankResult:
     metadata: Dict[str, Any]
     similarity: float  # Оригинальный score
     rerank_score: float  # Новый score после реранкинга
+    
+    def to_item(self) -> RerankItem:
+        """
+        Конвертировать в RerankItem для передачи следующему реранкеру.
+        
+        rerank_score становится новым similarity, позволяя
+        соединять реранкеры в цепочку.
+        """
+        return RerankItem(
+            content=self.content,
+            metadata=self.metadata,
+            similarity=self.rerank_score  # Передаём rerank_score как новый similarity
+        )
+
+
+def results_to_items(results: List[RerankResult]) -> List[RerankItem]:
+    """
+    Конвертировать список RerankResult в список RerankItem.
+    
+    Используется для соединения реранкеров в цепочку:
+    
+        results1 = reranker1.rerank(query, items)
+        results2 = reranker2.rerank(query, results_to_items(results1))
+    """
+    return [r.to_item() for r in results]
 
 
 class Reranker(ABC):

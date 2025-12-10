@@ -234,7 +234,7 @@ services:
       - OLLAMA_LLM_MODEL=qwen2.5:32b
       
       # === RAG SETTINGS ===
-      - RAG_TOP_K=5
+      - RAG_TOP_K=10
       - RAG_SIMILARITY_THRESHOLD=0.3
       - PIPELINE_TYPE=simple
       

@@ -34,15 +34,18 @@ class MyReranker(Reranker):
     """
     
     # Параметры реранкера — значения по умолчанию здесь
-    DEFAULT_WEIGHT = 0.5
+    DEFAULT_TOP_K = 5      # Отсечение: вернуть только top 5
+    DEFAULT_WEIGHT = 0.5   # Вес параметра
     
-    def __init__(self, weight: float = DEFAULT_WEIGHT):
+    def __init__(self, weight: float | None = None, top_k: int | None = None):
         """
         Args:
-            weight: Вес параметра (значение по умолчанию в классе)
+            weight: Вес параметра. None = DEFAULT_WEIGHT
+            top_k: Максимум результатов. None = DEFAULT_TOP_K
         """
-        self.weight = weight
-        logger.info(f"✅ MyReranker initialized | weight={self.weight}")
+        self.weight = weight if weight is not None else self.DEFAULT_WEIGHT
+        self.top_k = top_k if top_k is not None else self.DEFAULT_TOP_K
+        logger.info(f"✅ MyReranker initialized | weight={self.weight} top_k={self.top_k}")
     
     @property
     def name(self) -> str:
@@ -60,7 +63,7 @@ class MyReranker(Reranker):
         Args:
             query: Запрос пользователя (может использоваться для семантического реранкинга)
             items: Список элементов для реранкинга
-            top_k: Ограничение количества результатов (None = все)
+            top_k: Ограничение из вызова (приоритет над self.top_k)
             
         Returns:
             Список RerankResult, отсортированный по rerank_score (убывание)
@@ -83,18 +86,19 @@ class MyReranker(Reranker):
         # Сортируем по rerank_score (убывание)
         results.sort(key=lambda x: x.rerank_score, reverse=True)
         
-        # Ограничиваем top_k
-        if top_k is not None:
-            results = results[:top_k]
+        # Ограничиваем top_k (self.top_k если не передан)
+        effective_top_k = top_k if top_k is not None else self.top_k
+        if effective_top_k is not None:
+            results = results[:effective_top_k]
         
-        logger.debug(f"🔄 MyReranker: {len(items)} → {len(results)} items")
+        logger.debug(f"🔄 MyReranker: {len(items)} → {len(results)} items | top_k={effective_top_k}")
         
         return results
     
     def _calculate_score(self, query: str, item: RerankItem) -> float:
         """Вычислить rerank_score для элемента."""
         # Ваша логика здесь
-        return item.similarity * self.my_param
+        return item.similarity * self.weight
 ```
 
 ## 3. Зарегистрировать в реестре (`__init__.py`)
@@ -147,16 +151,56 @@ class RerankResult:
     metadata: Dict[str, Any]  # Метаданные
     similarity: float      # Оригинальный score
     rerank_score: float    # Новый score после реранкинга (0-1)
+    
+    def to_item(self) -> RerankItem:
+        """Конвертировать в RerankItem для передачи следующему реранкеру."""
+        ...
 ```
+
+### results_to_items (хелпер для цепочки)
+
+```python
+from rerankers import results_to_items
+
+# Конвертирует List[RerankResult] → List[RerankItem]
+# rerank_score становится новым similarity
+items2 = results_to_items(results1)
+```
+
+---
+
+## Соединение реранкеров в цепочку
+
+Реранкеры можно соединять последовательно. Используйте `results_to_items()`:
+
+```python
+from rerankers import DateReranker, ExtensionReranker, results_to_items
+
+# 1. Сначала сортировка по дате (без отсечения)
+date_reranker = DateReranker()  # top_k=None
+date_results = date_reranker.rerank(query, items)
+
+# 2. Затем фильтрация по расширению (с отсечением)
+ext_reranker = ExtensionReranker()  # top_k=5
+final_results = ext_reranker.rerank(query, results_to_items(date_results))
+
+# final_results: отсортированы по дате → отфильтрованы по расширению → top 5
+```
+
+**Важно**: `rerank_score` первого реранкера становится `similarity` для второго.
 
 ---
 
 ## Существующие реранкеры
 
-| Реранкер | ENV | Описание |
-|----------|-----|----------|
-| `none` | `RERANKER_TYPE=none` | Pass-through, без изменений (rerank_score = similarity) |
-| `date` | `RERANKER_TYPE=date` | Сортировка по дате модификации (RERANKER_WEIGHT) |
+| Реранкер | ENV | DEFAULT_TOP_K | Описание |
+|----------|-----|---------------|----------|
+| `none` | `RERANKER_TYPE=none` | None | Pass-through, без изменений |
+| `date` | `RERANKER_TYPE=date` | None | Сортировка по дате (weight=0.5) |
+| `extension` | `RERANKER_TYPE=extension` | 5 | Приоритет по типу документа (weight=0.3) |
+
+**Примечание**: `DEFAULT_TOP_K=None` означает без отсечения (все результаты).
+Для реранкеров с отсечением установите `DEFAULT_TOP_K=5` (или другое значение).
 
 ---
 
@@ -168,14 +212,18 @@ class RerankResult:
 class CrossEncoderReranker(Reranker):
     """Реранкинг через cross-encoder модель."""
     
-    def __init__(self, model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"):
+    DEFAULT_TOP_K = 5  # Отсечение после реранкинга
+    
+    def __init__(self, model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2", top_k: int | None = None):
         from sentence_transformers import CrossEncoder
         self.model = CrossEncoder(model_name)
+        self.top_k = top_k if top_k is not None else self.DEFAULT_TOP_K
     
     def rerank(self, query: str, items: List[RerankItem], top_k: int | None = None):
         pairs = [(query, item.content) for item in items]
         scores = self.model.predict(pairs)
         # ... формируем RerankResult с новыми scores
+        # ... отсекаем по effective_top_k
 ```
 
 ### Комбинированный реранкер

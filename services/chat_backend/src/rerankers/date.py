@@ -20,19 +20,24 @@ class DateReranker(Reranker):
     Сортирует результаты по полю metadata.modified_at (ISO 8601).
     Более свежие документы идут первыми.
     
-    Параметры:
-    - weight: Вес даты в итоговом score (0-1). 
-              1.0 = только дата, 0.0 = только similarity
+    Параметры класса:
+    - DEFAULT_TOP_K: None (без отсечения, возвращает все)
+    - DEFAULT_WEIGHT: 0.5 (баланс similarity и даты)
     """
     
-    def __init__(self, weight: float = 0.5):
+    # Настройки реранкера (изменять здесь, НЕ через ENV)
+    DEFAULT_TOP_K = None  # Без отсечения
+    DEFAULT_WEIGHT = 0.2  # Баланс similarity (0.8) и date (0.2)
+    
+    def __init__(self, weight: float | None = None, top_k: int | None = None):
         """
         Args:
-            weight: Вес даты в итоговом score (0-1).
-                   Итоговый score = similarity * (1 - weight) + date_score * weight
+            weight: Вес даты в итоговом score (0-1). None = DEFAULT_WEIGHT
+            top_k: Максимум результатов. None = DEFAULT_TOP_K (без отсечения)
         """
-        self.weight = max(0.0, min(1.0, weight))
-        logger.info(f"✅ DateReranker initialized | weight={self.weight}")
+        self.weight = max(0.0, min(1.0, weight if weight is not None else self.DEFAULT_WEIGHT))
+        self.top_k = top_k if top_k is not None else self.DEFAULT_TOP_K
+        logger.info(f"✅ DateReranker initialized | weight={self.weight} top_k={self.top_k}")
     
     @property
     def name(self) -> str:
@@ -123,13 +128,14 @@ class DateReranker(Reranker):
         # 4. Сортируем по rerank_score (убывание)
         results.sort(key=lambda x: x.rerank_score, reverse=True)
         
-        # 5. Ограничиваем top_k
-        if top_k is not None:
-            results = results[:top_k]
+        # 5. Ограничиваем top_k (используем self.top_k если не передан)
+        effective_top_k = top_k if top_k is not None else self.top_k
+        if effective_top_k is not None:
+            results = results[:effective_top_k]
         
         logger.debug(
             f"🔄 DateReranker: {len(items)} → {len(results)} items | "
-            f"weight={self.weight}"
+            f"weight={self.weight} top_k={effective_top_k}"
         )
         
         return results
