@@ -7,6 +7,7 @@ LLM экстрактор: анализ содержимого через Ollama.
 - keywords: ключевые слова (до 5)
 - entities: сущности - люди и компании (до 5)
 - category: категория документа
+- document_date: дата документа (перезаписывает modified_at если найдена)
 """
 
 import os
@@ -201,7 +202,9 @@ def _parse_document_date(date_str: str) -> str | None:
     Поддерживает форматы:
     - YYYY-MM-DD (ISO)
     - DD.MM.YYYY (русский)
+    - DD.MM.YY (короткий год)
     - DD/MM/YYYY
+    - DD-MM-YYYY
     
     Returns:
         Дата в формате YYYY-MM-DDTHH:MM:SS.ffffff или None
@@ -210,11 +213,15 @@ def _parse_document_date(date_str: str) -> str | None:
     
     date_str = date_str.strip()
     
-    # Форматы для парсинга
+    # Форматы для парсинга (в порядке приоритета)
     formats = [
-        "%Y-%m-%d",      # 2023-04-10
-        "%d.%m.%Y",      # 10.04.2023
+        "%Y-%m-%d",      # 2023-04-10 (ISO)
+        "%d.%m.%Y",      # 10.04.2023 (русский)
+        "%d.%m.%y",      # 10.04.23 (короткий год)
         "%d/%m/%Y",      # 10/04/2023
+        "%d/%m/%y",      # 10/04/23
+        "%d-%m-%Y",      # 10-04-2023
+        "%d-%m-%y",      # 10-04-23
         "%Y/%m/%d",      # 2023/04/10
     ]
     
