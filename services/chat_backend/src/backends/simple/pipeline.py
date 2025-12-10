@@ -1,7 +1,7 @@
 """
 RAG Pipeline для Simple Backend.
 
-Подготавливает контекст для LLM: поиск → форматирование промпта.
+Подготавливает контекст для LLM: поиск → реранкинг → форматирование промпта.
 """
 import uuid
 from dataclasses import dataclass, field
@@ -20,6 +20,16 @@ class Searcher(Protocol):
         ...
 
 
+class RerankerProtocol(Protocol):
+    """Протокол реранкера."""
+    @property
+    def name(self) -> str:
+        ...
+    
+    def rerank(self, query: str, items: List[Any], top_k: int | None = None) -> List[Any]:
+        ...
+
+
 @dataclass
 class RAGContext:
     """Контекст для RAG-генерации."""
@@ -33,7 +43,7 @@ class RAGContext:
 
 class SimpleRAGPipeline:
     """
-    Простой RAG пайплайн: поиск → форматирование → контекст.
+    Простой RAG пайплайн: поиск → реранкинг → форматирование → контекст.
     
     Не генерирует ответ, только подготавливает промпт с контекстом.
     """
@@ -54,9 +64,11 @@ class SimpleRAGPipeline:
     def __init__(
         self,
         searcher: Searcher,
+        reranker: Optional[RerankerProtocol] = None,
         system_prompt: Optional[str] = None
     ):
         self.searcher = searcher
+        self.reranker = reranker
         self.system_prompt = system_prompt or self.DEFAULT_SYSTEM_PROMPT
     
     def prepare_context(
@@ -88,21 +100,53 @@ class SimpleRAGPipeline:
                 "similarity": r.similarity,
             })
         
-        # 3. Форматируем контекст
+        # 3. Реранкинг (если включён)
+        if self.reranker and chunks:
+            from rerankers import RerankItem
+            
+            rerank_items = [
+                RerankItem(
+                    content=c["content"],
+                    metadata=c["metadata"],
+                    similarity=c["similarity"]
+                )
+                for c in chunks
+            ]
+            
+            reranked = self.reranker.rerank(query, rerank_items)
+            
+            # Обновляем chunks с новым порядком и rerank_score
+            chunks = [
+                {
+                    "content": r.content,
+                    "metadata": r.metadata,
+                    "similarity": r.similarity,
+                    "rerank_score": r.rerank_score,
+                }
+                for r in reranked
+            ]
+            
+            logger.debug(
+                f"🔄 Reranked: {len(rerank_items)} → {len(chunks)} chunks | "
+                f"reranker={self.reranker.name}"
+            )
+        
+        # 4. Форматируем контекст
         if chunks:
             context_parts = []
             for i, chunk in enumerate(chunks, 1):
                 meta = chunk.get("metadata", {})
                 title = meta.get("title") or meta.get("file_name") or meta.get("file_path", "")
                 content = chunk.get("content", "")
-                similarity = chunk.get("similarity", 0)
-                context_parts.append(f"[{i}] {title} ({similarity:.2f})\n{content}")
+                # Используем rerank_score если есть, иначе similarity
+                score = chunk.get("rerank_score", chunk.get("similarity", 0))
+                context_parts.append(f"[{i}] {title} ({score:.2f})\n{content}")
             
             context_text = "\n\n".join(context_parts)
         else:
             context_text = "(документы не найдены)"
         
-        # 4. Формируем промпт
+        # 5. Формируем промпт
         prompt = self.CONTEXT_TEMPLATE.format(context=context_text, query=query)
         
         logger.debug(f"Prepared context: {len(chunks)} chunks, {len(prompt)} chars")

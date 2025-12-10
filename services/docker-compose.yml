@@ -238,6 +238,10 @@ services:
       - RAG_SIMILARITY_THRESHOLD=0.3
       - PIPELINE_TYPE=simple
       
+      # === RERANKER SETTINGS ===
+      # RERANKER_TYPE: none (без реранкинга) | date (по дате модификации)
+      - RERANKER_TYPE=date
+      
       # === LLM BACKEND ===
       # CHAT_BACKEND: simple (RAG+Ollama) | agent (LangChain+MCP)
       - CHAT_BACKEND=agent
