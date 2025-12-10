@@ -136,16 +136,20 @@ class RagAgent:
         
         filters = self._extract_filters(user_query)
         
-        # 2. Embedding
+        # 2. Обогащаем query для semantic search
+        # Entity и keywords добавляются в query для embedding (не SQL!)
+        enriched_query = self._enrich_query(user_query, filters)
+        
+        # 3. Embedding обогащённого запроса
         embedding = self.vector_store.get_embedding(
-            user_query, self.ollama_url, self.embedding_model
+            enriched_query, self.ollama_url, self.embedding_model
         )
         
         if not embedding:
             yield "Ошибка: не удалось обработать запрос"
             return
         
-        # 3. Search
+        # 4. Search (SQL фильтры: только category и date)
         results, debug_info = robust_search(
             vector_store=self.vector_store,
             embedding=embedding,
@@ -158,12 +162,38 @@ class RagAgent:
             yield "К сожалению, по вашему запросу документы не найдены."
             return
         
-        # 4. Stream generate
+        # 5. Stream generate
         if stream_callback:
             stream_callback("💭 Формирую ответ...")
         
         yield from self._stream_generate(user_query, results)
     
+    def _enrich_query(self, query: str, filters: ExtractedFilters) -> str:
+        """
+        Обогатить query для semantic search.
+        
+        Entity и keywords добавляются к запросу для embedding.
+        Это позволяет семантически найти "Акпан", "АкпанОМ", "АКПАН".
+        
+        Args:
+            query: Исходный запрос пользователя
+            filters: Извлечённые фильтры
+            
+        Returns:
+            Обогащённый запрос
+        """
+        parts = [query]
+        
+        if filters.entity:
+            parts.append(filters.entity)
+        
+        if filters.keywords:
+            parts.extend(filters.keywords[:3])  # Макс 3 keywords
+        
+        enriched = " ".join(parts)
+        logger.debug(f"Enriched query: {enriched}")
+        return enriched
+
     def _extract_filters(self, query: str) -> ExtractedFilters:
         """
         Извлечь фильтры из запроса через LLM.
@@ -172,7 +202,7 @@ class RagAgent:
             query: Запрос пользователя
             
         Returns:
-            ExtractedFilters с category, company, person, etc.
+            ExtractedFilters с category, entity, keywords, etc.
         """
         import requests
         
@@ -222,8 +252,7 @@ class RagAgent:
             
             return ExtractedFilters(
                 category=category,
-                company=data.get("company"),
-                person=data.get("person"),
+                entity=data.get("entity"),  # Единое поле для company/person
                 keywords=data.get("keywords"),
                 date_from=data.get("date_from"),
                 date_to=data.get("date_to"),

@@ -188,12 +188,75 @@ class VectorStoreAdapter:
             logger.error(f"Structured search failed: {e}")
             return []
     
+    def search_by_entity_like(
+        self,
+        entity: str,
+        limit: int = 10
+    ) -> List[SearchHit]:
+        """
+        Поиск по entity через SQL LIKE (fallback для semantic search).
+        
+        Ищет entity в:
+        1. metadata->entities (JSONB array) — name поле
+        2. content (полнотекстовый LIKE)
+        
+        Используется когда semantic search не нашёл точных совпадений.
+        
+        Args:
+            entity: Название компании или ФИО
+            limit: Максимум результатов
+            
+        Returns:
+            Список SearchHit
+        """
+        if not entity:
+            return []
+        
+        query = f"""
+            SELECT content, metadata
+            FROM {self.table_name}
+            WHERE 
+                EXISTS (
+                    SELECT 1 FROM jsonb_array_elements(metadata->'entities') e
+                    WHERE LOWER(e->>'name') LIKE LOWER(%s)
+                )
+                OR LOWER(content) LIKE LOWER(%s)
+            ORDER BY (metadata->>'modified_at') DESC NULLS LAST
+            LIMIT %s
+        """
+        
+        like_pattern = f"%{entity}%"
+        
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                    cur.execute(query, [like_pattern, like_pattern, limit])
+                    
+                    results = []
+                    for row in cur.fetchall():
+                        results.append(SearchHit(
+                            content=row["content"],
+                            metadata=MetadataModel.from_dict(row["metadata"]),
+                            base_score=STRUCTURED_SEARCH_BASE_SCORE,
+                        ))
+                    
+                    logger.debug(f"Entity LIKE search: {len(results)} results | entity={entity}")
+                    return results
+                    
+        except Exception as e:
+            logger.error(f"Entity LIKE search failed: {e}")
+            return []
+    
     def _build_filter_clauses(
         self,
         filters: SearchFilter
     ) -> tuple[List[str], List[Any]]:
         """
         Построить WHERE условия и параметры из фильтров.
+        
+        ВАЖНО: entity НЕ используется как SQL фильтр!
+        Entity добавляется в query для semantic search (embedding).
+        Это позволяет найти "Акпан", "АкпанОМ", "АКПАН" и т.д.
         
         Args:
             filters: Фильтры поиска
@@ -204,41 +267,20 @@ class VectorStoreAdapter:
         clauses = []
         params = []
         
-        # Category - точное совпадение
+        # Category - точное совпадение (SQL фильтр)
         if filters.category:
             clauses.append("metadata->>'category' = %s")
             params.append(filters.category)
         
-        # Company - поиск в entities (JSONB contains)
-        if filters.company:
-            clauses.append("""
-                EXISTS (
-                    SELECT 1 FROM jsonb_array_elements(metadata->'entities') e
-                    WHERE e->>'type' = 'company' 
-                    AND LOWER(e->>'name') LIKE LOWER(%s)
-                )
-            """)
-            params.append(f"%{filters.company}%")
+        # Entity — НЕ SQL фильтр! Используется для обогащения embedding query.
+        # Закомментировано намеренно — entity ищется семантически через embedding.
+        # if filters.entity:
+        #     clauses.append(...)
         
-        # Person - поиск в entities
-        if filters.person:
-            clauses.append("""
-                EXISTS (
-                    SELECT 1 FROM jsonb_array_elements(metadata->'entities') e
-                    WHERE e->>'type' = 'person' 
-                    AND LOWER(e->>'name') LIKE LOWER(%s)
-                )
-            """)
-            params.append(f"%{filters.person}%")
-        
-        # Keywords - поиск через LIKE в content
-        if filters.keywords:
-            keyword_conditions = []
-            for kw in filters.keywords[:5]:  # Максимум 5 keywords
-                keyword_conditions.append("LOWER(content) LIKE LOWER(%s)")
-                params.append(f"%{kw}%")
-            if keyword_conditions:
-                clauses.append(f"({' OR '.join(keyword_conditions)})")
+        # Keywords — НЕ SQL фильтр! Тоже добавляется в embedding query.
+        # Закомментировано — keywords ищутся семантически.
+        # if filters.keywords:
+        #     ...
         
         # Date range
         if filters.date_from:

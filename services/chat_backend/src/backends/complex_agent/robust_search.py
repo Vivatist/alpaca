@@ -1,10 +1,14 @@
 """
 Robust Search — итеративный поиск с ослаблением фильтров.
 
-Стратегия:
-1. Итерация 1: Все фильтры (strict)
-2. Итерация 2: Ослабление фильтров (убираем keywords → company/person → category)
-3. Итерация 3: Fallback — только semantic search без фильтров
+Архитектура поиска:
+- Entity и keywords → добавляются в embedding query (семантический поиск)
+- Category и date → SQL фильтры (точное совпадение / диапазон)
+
+Стратегия ослабления SQL фильтров:
+1. Итерация 1: Все SQL фильтры (category, date)
+2. Итерация 2: Расширяем даты / убираем category
+3. Итерация 3: Fallback — только semantic search
 
 На каждой итерации вызывается stream_callback с человеческим сообщением.
 """
@@ -106,7 +110,13 @@ def _search_iteration(
     dropped_filters: List[str]
 ) -> List[SearchResult]:
     """
-    Одна итерация поиска: semantic + structured → merge → rerank.
+    Одна итерация поиска: semantic + structured + entity_like → merge → rerank.
+    
+    Гибридный подход для entity:
+    1. Semantic search (entity добавлен в embedding через _enrich_query)
+    2. Structured search (SQL-фильтры: category, dates)
+    3. Entity LIKE fallback (если entity указан, ищем по LIKE в metadata и content)
+    4. Merge + Rerank
     """
     all_hits: List[SearchHit] = []
     seen_chunks: Set[str] = set()  # Для дедупликации по file_path + chunk_index
@@ -124,7 +134,7 @@ def _search_iteration(
             seen_chunks.add(key)
             all_hits.append(hit)
     
-    # 2. Structured search (только если есть фильтры)
+    # 2. Structured search (только если есть SQL-фильтры: category, dates)
     if not filters.is_empty():
         structured_hits = vector_store.search_structured(
             filters=filters,
@@ -137,10 +147,27 @@ def _search_iteration(
                 seen_chunks.add(key)
                 all_hits.append(hit)
     
-    # 3. Rerank
+    # 3. Entity LIKE fallback (гибридный подход)
+    # Semantic search может не найти точные совпадения по ФИО,
+    # поэтому добавляем SQL LIKE поиск как fallback
+    if filters.entity:
+        entity_like_hits = vector_store.search_by_entity_like(
+            entity=filters.entity,
+            limit=limit
+        )
+        
+        for hit in entity_like_hits:
+            key = f"{hit.metadata.file_path}:{hit.metadata.chunk_index}"
+            if key not in seen_chunks:
+                seen_chunks.add(key)
+                all_hits.append(hit)
+        
+        logger.debug(f"Entity LIKE fallback: +{len(entity_like_hits)} hits for entity='{filters.entity}'")
+    
+    # 4. Rerank
     results = rerank_results(all_hits, top_k=limit)
     
-    # 4. Записываем debug info
+    # 5. Записываем debug info
     debug.add_attempt(
         used_filters=filters.to_dict(),
         dropped_filters=dropped_filters,
@@ -157,13 +184,14 @@ def _relax_filters(
     stream_callback: Optional[StreamCallback]
 ) -> Tuple[SearchFilter, List[str]]:
     """
-    Ослабить фильтры по приоритету.
+    Ослабить SQL фильтры по приоритету.
     
-    Порядок ослабления:
-    1. keywords (наименее точный)
-    2. company/person (средняя точность)
-    3. category (высокая точность)
-    4. date_from/date_to — расширяем диапазон
+    ВАЖНО: entity и keywords НЕ являются SQL фильтрами!
+    Они добавляются в embedding query (семантический поиск).
+    
+    SQL фильтры для ослабления:
+    1. date_from/date_to — расширяем диапазон
+    2. category — убираем (последний resort)
     
     Returns:
         (relaxed_filters, dropped_filter_names)
@@ -171,30 +199,16 @@ def _relax_filters(
     dropped = []
     relaxed = filters.model_copy()
     
-    # 1. Убираем keywords
-    if relaxed.keywords:
-        relaxed.keywords = None
-        dropped.append("keywords")
-        _notify(stream_callback, "📋 Убираю фильтр по ключевым словам...")
+    # Entity и keywords — НЕ SQL фильтры, не нужно ослаблять
+    # Они используются для обогащения embedding query
     
-    # 2. Убираем company/person
-    if relaxed.company:
-        relaxed.company = None
-        dropped.append("company")
-        _notify(stream_callback, "🏢 Убираю фильтр по компании...")
-    
-    if relaxed.person:
-        relaxed.person = None
-        dropped.append("person")
-        _notify(stream_callback, "👤 Убираю фильтр по персоне...")
-    
-    # 3. Расширяем диапазон дат
+    # 1. Расширяем диапазон дат
     if relaxed.date_from or relaxed.date_to:
         relaxed = _expand_date_range(relaxed, stream_callback)
         dropped.append("date_expanded")
     
-    # 4. Убираем category (последний resort)
-    if relaxed.category and len(dropped) < 2:
+    # 2. Убираем category (последний resort)
+    if relaxed.category and len(dropped) < 1:
         relaxed.category = None
         dropped.append("category")
         _notify(stream_callback, "📁 Убираю фильтр по категории...")
@@ -235,11 +249,8 @@ def _describe_search(filters: SearchFilter) -> str:
     if filters.category:
         parts.append(f"категории «{filters.category}»")
     
-    if filters.company:
-        parts.append(f"компании «{filters.company}»")
-    
-    if filters.person:
-        parts.append(f"с упоминанием «{filters.person}»")
+    if filters.entity:
+        parts.append(f"с упоминанием «{filters.entity}»")
     
     if filters.keywords:
         kw = ", ".join(filters.keywords[:3])

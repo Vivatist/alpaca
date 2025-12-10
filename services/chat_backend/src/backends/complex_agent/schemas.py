@@ -73,8 +73,7 @@ class MetadataModel(BaseModel):
 class SearchFilter(BaseModel):
     """Фильтры для поиска документов."""
     category: Optional[str] = None
-    company: Optional[str] = None
-    person: Optional[str] = None
+    entity: Optional[str] = None  # Компания или человек (ищем в entities без фильтра по type)
     keywords: Optional[List[str]] = None
     date_from: Optional[str] = None  # YYYY-MM-DD
     date_to: Optional[str] = None    # YYYY-MM-DD
@@ -84,10 +83,8 @@ class SearchFilter(BaseModel):
         result = {}
         if self.category:
             result["category"] = self.category
-        if self.company:
-            result["company"] = self.company
-        if self.person:
-            result["person"] = self.person
+        if self.entity:
+            result["entity"] = self.entity
         if self.keywords:
             result["keywords"] = self.keywords
         if self.date_from:
@@ -97,10 +94,14 @@ class SearchFilter(BaseModel):
         return result
     
     def is_empty(self) -> bool:
-        """Проверить, пусты ли все фильтры."""
+        """
+        Проверить, пусты ли SQL фильтры.
+        
+        ВАЖНО: entity и keywords НЕ являются SQL фильтрами!
+        Они добавляются в embedding query для семантического поиска.
+        """
         return not any([
-            self.category, self.company, self.person,
-            self.keywords, self.date_from, self.date_to
+            self.category, self.date_from, self.date_to
         ])
     
     def copy_without(self, *fields: str) -> "SearchFilter":
@@ -201,8 +202,7 @@ class AgentAnswer(BaseModel):
 class ExtractedFilters(BaseModel):
     """Фильтры, извлечённые из запроса пользователя."""
     category: Optional[str] = None
-    company: Optional[str] = None
-    person: Optional[str] = None
+    entity: Optional[str] = None  # Компания или человек (объединённое поле)
     keywords: Optional[List[str]] = None
     date_from: Optional[str] = None
     date_to: Optional[str] = None
@@ -211,8 +211,7 @@ class ExtractedFilters(BaseModel):
         """Конвертировать в SearchFilter."""
         return SearchFilter(
             category=self.category,
-            company=self.company,
-            person=self.person,
+            entity=self.entity,
             keywords=self.keywords,
             date_from=self.date_from,
             date_to=self.date_to,
