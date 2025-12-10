@@ -35,5 +35,26 @@ services:
       timeout: 5s
       retries: 5
 
+  # Warmup контейнер - загружает модели в VRAM при старте
+  ollama-warmup:
+    image: curlimages/curl:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "⏳ Warming up Ollama models..."
+        # Загружаем embedding модель
+        curl -s http://ollama:11434/api/embeddings -d '{"model":"bge-m3","prompt":"warmup"}' > /dev/null
+        echo "✅ bge-m3 loaded"
+        # Загружаем LLM модель
+        curl -s http://ollama:11434/api/generate -d '{"model":"qwen2.5:32b","prompt":"Hi","stream":false}' > /dev/null
+        echo "✅ qwen2.5:32b loaded"
+        echo "🚀 All models ready in VRAM!"
+        # Держим контейнер в спящем режиме чтобы Docker не перезапускал его
+        sleep infinity
+
 volumes:
   ollama_storage:
