@@ -243,8 +243,8 @@ services:
       - RERANKER_TYPE=date
       
       # === LLM BACKEND ===
-      # CHAT_BACKEND: simple (RAG+Ollama) | agent (LangChain+MCP)
-      - CHAT_BACKEND=agent
+      # CHAT_BACKEND: simple (RAG+Ollama) | agent (LangChain+MCP) | complex_agent (Agentic RAG)
+      - CHAT_BACKEND=complex_agent
       - MCP_SERVER_URL=http://mcp-server:8000
       
       # Deprecated (use CHAT_BACKEND instead)
