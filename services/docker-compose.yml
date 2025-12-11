@@ -141,10 +141,11 @@ services:
       - WORKER_MAX_CONCURRENT_FILES=5
       - WORKER_MAX_CONCURRENT_PARSING=2
       - WORKER_MAX_CONCURRENT_EMBEDDING=3
+      - WORKER_MAX_CONCURRENT_LLM=2
       
       # === PIPELINE SETTINGS ===
       - ENABLE_CLEANER=true
-      - CLEANER_PIPELINE=["simple","stamps"]
+      - CLEANER_PIPELINE=["simple","letterhead","stamps"]
       - CHUNKER_BACKEND=smart # options: simple, smart
       - CHUNK_SIZE=1000
       - CHUNK_OVERLAP=200

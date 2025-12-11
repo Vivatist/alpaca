@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALPACA RAG Test Console</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🦙 ALPACA RAG Test Console</h1>
+            <div class="config">
+                <label>API URL: <input type="text" id="apiUrl" value="http://localhost:8082/api/chat"></label>
+                <label>Backend: 
+                    <select id="backend">
+                        <option value="complex_agent" selected>complex_agent</option>
+                        <option value="simple">simple</option>
+                        <option value="agent">agent</option>
+                    </select>
+                </label>
+            </div>
+        </header>
+
+        <main>
+            <div class="panel left-panel">
+                <h2>📝 Тестовые запросы</h2>
+                <div class="test-queries">
+                    <div class="query-controls">
+                        <button id="runAllBtn" class="btn btn-primary">▶️ Запустить все</button>
+                        <button id="stopBtn" class="btn btn-danger" disabled>⏹️ Стоп</button>
+                        <button id="clearResultsBtn" class="btn btn-secondary">🗑️ Очистить</button>
+                    </div>
+                    <div class="query-list" id="queryList"></div>
+                    <div class="add-query">
+                        <input type="text" id="newQuery" placeholder="Добавить новый запрос...">
+                        <button id="addQueryBtn" class="btn btn-small">➕</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel right-panel">
+                <h2>💬 Ручной запрос</h2>
+                <div class="manual-query">
+                    <textarea id="manualInput" placeholder="Введите запрос..." rows="3"></textarea>
+                    <button id="sendBtn" class="btn btn-primary">📤 Отправить</button>
+                </div>
+                
+                <div class="current-response">
+                    <h3>Текущий ответ <span id="responseStatus"></span></h3>
+                    <div class="response-meta" id="responseMeta"></div>
+                    <div class="response-content" id="responseContent"></div>
+                    <div class="response-sources" id="responseSources"></div>
+                </div>
+            </div>
+        </main>
+
+        <section class="results-section">
+            <h2>📊 Результаты тестов</h2>
+            <div class="results-summary" id="resultsSummary"></div>
+            <div class="results-table-container">
+                <table class="results-table" id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Запрос</th>
+                            <th>Фильтры</th>
+                            <th>Найдено</th>
+                            <th>Время</th>
+                            <th>Ответ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <script src="queries.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

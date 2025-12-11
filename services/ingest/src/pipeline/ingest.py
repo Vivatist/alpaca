@@ -38,6 +38,7 @@ class IngestDocument:
     embedder: Embedder
     parse_semaphore: Semaphore
     embed_semaphore: Semaphore
+    llm_semaphore: Semaphore
     
     # Опциональные компоненты
     cleaner: Optional[Callable[[str], str]] = None
@@ -84,7 +85,8 @@ class IngestDocument:
             
             # 3. Extract metadata (если metaextractor задан)
             if self.metaextractor is not None:
-                file.metadata = self.metaextractor(file)
+                with self.llm_semaphore:
+                    file.metadata = self.metaextractor(file)
                 self.logger.info(f"✅ Metadata | keys={list(file.metadata.keys()) if file.metadata else []}")
             else:
                 file.metadata = {}
