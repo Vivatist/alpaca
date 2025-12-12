@@ -101,7 +101,11 @@ class Worker:
                     if not futures:
                         logger.debug("Queue is empty, waiting...")
                         time.sleep(poll_interval)
+                    elif file_info is None:
+                        # Есть активные задачи, но очередь пуста - ждём подольше
+                        time.sleep(poll_interval)
                     else:
+                        # Есть и задачи, и файлы в очереди - быстрый цикл
                         time.sleep(0.2)
                         
                 except KeyboardInterrupt:
