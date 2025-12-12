@@ -96,7 +96,6 @@ class Worker:
                         # Запускаем обработку в отдельном потоке
                         future = executor.submit(self.process_file, file_info)
                         futures[future] = file_info['path']
-                        logger.info(f"🚀 Started | path={file_info['path']} active={len(futures)}/{max_workers}")
                     
                     # Ждём
                     if not futures:

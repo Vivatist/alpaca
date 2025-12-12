@@ -29,7 +29,7 @@ def smart_chunker(file: FileSnapshot) -> List[str]:
     text = file.raw_text or ""
     
     if not text.strip():
-        logger.warning(f"Empty text for chunking | file={file.path}")
+        logger.warning(f"Empty text for chunking")
         return []
     
     try:
@@ -47,7 +47,7 @@ def smart_chunker(file: FileSnapshot) -> List[str]:
         # Фильтруем пустые чанки
         chunks = [c.strip() for c in chunks if c.strip()]
         
-        logger.info(f"Smart chunking complete | file={file.path} chunks={len(chunks)} overlap={settings.CHUNK_OVERLAP}")
+        logger.info(f"Smart chunking | chunks={len(chunks)} overlap={settings.CHUNK_OVERLAP}")
         return chunks
         
     except ImportError:

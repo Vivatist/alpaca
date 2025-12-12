@@ -29,7 +29,7 @@ def simple_chunker(file: FileSnapshot) -> List[str]:
     text = file.raw_text or ""
     
     if not text.strip():
-        logger.warning(f"Empty text for chunking | file={file.path}")
+        logger.warning(f"Empty text for chunking")
         return []
     
     chunk_size = settings.CHUNK_SIZE
@@ -73,5 +73,5 @@ def simple_chunker(file: FileSnapshot) -> List[str]:
     if current_chunk:
         chunks.append(current_chunk)
     
-    logger.info(f"Simple chunking complete | file={file.path} chunks={len(chunks)}")
+    logger.info(f"Simple chunking | chunks={len(chunks)}")
     return chunks

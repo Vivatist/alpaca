@@ -59,13 +59,13 @@ class IngestDocument:
         Returns:
             True если обработка успешна
         """
-        self.logger.info(f"🍎 Start ingest pipeline | file={file.path} hash={file.hash[:8]}...")
+        # Маркер и путь уже выведены в ProcessFileEvent
         
         try:
             # 1. Parse
             parser = self.parser_registry.get_parser(file.path)
             if parser is None:
-                self.logger.error(f"Unsupported file type | file={file.path}")
+                self.logger.error(f"Unsupported file type")
                 self.repository.mark_as_error(file.hash)
                 return False
             
@@ -83,45 +83,46 @@ class IngestDocument:
                 file.raw_text = self.cleaner(file.raw_text)
                 cleaned_chars = len(file.raw_text) if file.raw_text else 0
                 removed = parsed_chars - cleaned_chars
-                self.logger.info(f"✅ Parsed & cleaned | chars={cleaned_chars} removed={removed}")
+                self.logger.info(f"Parsed & cleaned | chars={cleaned_chars} removed={removed}")
             else:
-                self.logger.info(f"✅ Parsed | chars={parsed_chars}")
+                self.logger.info(f"Parsed | chars={parsed_chars}")
             
             # 3. Extract metadata (если metaextractor задан)
             if self.metaextractor is not None:
                 with self.llm_semaphore:
                     file.metadata = self.metaextractor(file)
-                self.logger.info(f"✅ Metadata | keys={list(file.metadata.keys()) if file.metadata else []}")
+                category = file.metadata.get('category', 'N/A') if file.metadata else 'N/A'
+                self.logger.info(f"Metadata | category={category}")
             else:
                 file.metadata = {}
             
             # 4. Chunk
             chunks = self.chunker(file)
             if not chunks:
-                self.logger.warning(f"No chunks created | file={file.path}")
+                self.logger.warning(f"No chunks created")
                 self.repository.mark_as_error(file.hash)
                 return False
             
-            self.logger.info(f"✅ Chunked | count={len(chunks)}")
+            self.logger.info(f"Chunked | count={len(chunks)}")
             
             # 5. Embed
             with self.embed_semaphore:
                 chunks_count = self.embedder(self.repository, file, chunks, file.metadata)
             
             if chunks_count == 0:
-                self.logger.warning(f"No embeddings created | file={file.path}")
+                self.logger.warning(f"No embeddings created")
                 self.repository.mark_as_error(file.hash)
                 return False
             
             # 6. Mark success
             self.repository.mark_as_ok(file.hash)
-            self.logger.info(f"✅ File processed successfully | file={file.path} chunks={chunks_count}")
+            self.logger.info(f"Done | chunks={chunks_count}")
             return True
             
         except Exception as exc:
             import traceback
-            self.logger.error(f"Pipeline failed | file={file.path} error={exc}")
-            self.logger.error(f"Traceback:\n{traceback.format_exc()}")
+            self.logger.error(f"Pipeline failed | error={exc}")
+            self.logger.debug(f"Traceback:\n{traceback.format_exc()}")
             self.repository.mark_as_error(file.hash)
             return False
     
@@ -135,6 +136,6 @@ class IngestDocument:
             os.makedirs(os.path.dirname(temp_file_path), exist_ok=True)
             with open(temp_file_path, "w", encoding="utf-8") as f:
                 f.write(file.raw_text)
-            self.logger.debug(f"💾 Saved to {temp_file_path}")
+            self.logger.debug(f"Saved to {temp_file_path}")
         except Exception as e:
             self.logger.warning(f"Failed to save debug file | error={e}")

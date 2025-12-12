@@ -114,12 +114,12 @@ def llm_extractor(file: FileSnapshot, metadata: Dict[str, Any]) -> Dict[str, Any
         
         if llm_metadata:
             result.update(llm_metadata)
-            logger.info(f"✅ LLM extraction | file={file.path} category={llm_metadata.get('category', 'N/A')}")
+            logger.info(f"LLM extraction | category={llm_metadata.get('category', 'N/A')}")
         else:
-            logger.warning(f"Failed to parse LLM response | file={file.path}")
+            logger.warning(f"Failed to parse LLM response")
         
     except Exception as e:
-        logger.warning(f"LLM extraction failed | file={file.path} error={e}")
+        logger.warning(f"LLM extraction failed | error={e}")
     
     return result
 

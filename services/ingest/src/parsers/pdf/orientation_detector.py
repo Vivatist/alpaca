@@ -158,7 +158,7 @@ def detect_best_rotation(file_path: str) -> int:
                 except:
                     pass
         
-        logger.info(f"✅ Best rotation detected | angle={best_angle}° score={best_score}")
+        logger.info(f"Best rotation detected | angle={best_angle}° score={best_score}")
         return best_angle
         
     except Exception as e:
@@ -210,11 +210,11 @@ def rotate_pdf_physically(input_path: str, angle: int, output_path: Optional[str
                 append_images=rotated_images[1:]
             )
         
-        logger.info(f"✅ PDF rotated {angle}° | pages={len(rotated_images)} output={output_path}")
+        logger.info(f"PDF rotated {angle}° | pages={len(rotated_images)} output={output_path}")
         return output_path
         
     except Exception as e:
-        logger.error(f"❌ Physical rotation failed | error={e}")
+        logger.error(f"Physical rotation failed | error={e}")
         return None
 
 
@@ -236,7 +236,7 @@ def smart_rotate_pdf(file_path: str) -> Tuple[str, bool]:
     needs_rotation, confidence = quick_check_orientation(file_path)
     
     if not needs_rotation:
-        logger.debug(f"✅ Document orientation OK | confidence={confidence}%")
+        logger.debug(f"Document orientation OK | confidence={confidence}%")
         return file_path, False
     
     logger.info(f"⚠️ Document may be rotated | confidence={confidence}%, running OCR detection...")
@@ -245,7 +245,7 @@ def smart_rotate_pdf(file_path: str) -> Tuple[str, bool]:
     best_angle = detect_best_rotation(file_path)
     
     if best_angle == 0:
-        logger.info("✅ No rotation needed after OCR check")
+        logger.info("No rotation needed after OCR check")
         return file_path, False
     
     # Шаг 3: Физический поворот
