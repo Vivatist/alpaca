@@ -4,6 +4,8 @@ FROM python:3.11-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # LibreOffice для конвертации .doc/.xls/.ppt
     libreoffice \
+    # ImageMagick для конвертации WMF/EMF изображений
+    imagemagick \
     # Tesseract для OCR
     tesseract-ocr \
     tesseract-ocr-rus \
