@@ -9,10 +9,31 @@ class TestConsole {
         this.results = [];
         this.isRunning = false;
         this.abortController = null;
+        this.serverMode = false; // true если запущен через server.js
         
         this.initElements();
         this.initEventListeners();
+        this.checkServerMode();
         this.renderQueries();
+    }
+
+    /**
+     * Проверяем, запущены ли мы через server.js (есть API)
+     */
+    async checkServerMode() {
+        try {
+            const response = await fetch('/api/queries');
+            if (response.ok) {
+                this.serverMode = true;
+                const data = await response.json();
+                this.queries = data.queries;
+                this.renderQueries();
+                console.log('✅ Server mode: запросы загружены из файла');
+            }
+        } catch (e) {
+            // Работаем без сервера - запросы только в памяти
+            console.log('ℹ️ Static mode: изменения запросов не сохраняются');
+        }
     }
 
     initElements() {
@@ -28,7 +49,7 @@ class TestConsole {
         // Controls
         this.runAllBtn = document.getElementById('runAllBtn');
         this.stopBtn = document.getElementById('stopBtn');
-        this.clearResultsBtn = document.getElementById('clearResultsBtn');
+        this.invertCheckboxesBtn = document.getElementById('invertCheckboxesBtn');
         
         // Manual query
         this.manualInput = document.getElementById('manualInput');
@@ -48,7 +69,7 @@ class TestConsole {
     initEventListeners() {
         this.runAllBtn.addEventListener('click', () => this.runAllQueries());
         this.stopBtn.addEventListener('click', () => this.stopExecution());
-        this.clearResultsBtn.addEventListener('click', () => this.clearResults());
+        this.invertCheckboxesBtn.addEventListener('click', () => this.invertCheckboxes());
         this.addQueryBtn.addEventListener('click', () => this.addQuery());
         this.sendBtn.addEventListener('click', () => this.sendManualQuery());
         
@@ -80,17 +101,61 @@ class TestConsole {
         });
     }
 
-    addQuery() {
+    async addQuery() {
         const query = this.newQueryInput.value.trim();
-        if (query) {
+        if (!query) return;
+        
+        if (this.serverMode) {
+            try {
+                const response = await fetch('/api/queries', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query })
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    this.queries = data.queries;
+                    console.log(`✅ Запрос сохранён в файл: "${query}"`);
+                } else {
+                    throw new Error('Ошибка сохранения');
+                }
+            } catch (error) {
+                console.error('Ошибка добавления:', error);
+                this.showError('Не удалось сохранить запрос');
+                return;
+            }
+        } else {
             this.queries.push(query);
-            this.newQueryInput.value = '';
-            this.renderQueries();
         }
+        
+        this.newQueryInput.value = '';
+        this.renderQueries();
     }
 
-    deleteQuery(index) {
-        this.queries.splice(index, 1);
+    async deleteQuery(index) {
+        const query = this.queries[index];
+        
+        if (this.serverMode) {
+            try {
+                const response = await fetch(`/api/queries/${index}`, {
+                    method: 'DELETE'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    this.queries = data.queries;
+                    console.log(`🗑️ Запрос удалён из файла: "${query}"`);
+                } else {
+                    throw new Error('Ошибка удаления');
+                }
+            } catch (error) {
+                console.error('Ошибка удаления:', error);
+                this.showError('Не удалось удалить запрос');
+                return;
+            }
+        } else {
+            this.queries.splice(index, 1);
+        }
+        
         this.renderQueries();
     }
 
@@ -205,7 +270,9 @@ class TestConsole {
             found: 0,
             answer: '',
             sources: [],
-            searchMessages: []
+            searchMessages: [],
+            backend: null,
+            ttft: null
         };
         
         const response = await fetch(apiUrl, {
@@ -251,13 +318,28 @@ class TestConsole {
             }
         }
         
-        this.responseStatus.textContent = 'done';
+        // Финальный статус с backend и TTFT
+        let doneText = '✅ done';
+        if (result.backend) {
+            doneText = `✅ ${result.backend}`;
+        }
+        if (result.ttft !== null) {
+            doneText += ` | TTFT: ${result.ttft}s`;
+        }
+        this.responseStatus.textContent = doneText;
         this.responseStatus.className = 'done';
         
         return result;
     }
 
     handleStreamEvent(data, result) {
+        // Timing info (backend + TTFT)
+        if (data.backend !== undefined || data.ttft !== undefined) {
+            if (data.backend) result.backend = data.backend;
+            if (data.ttft !== undefined) result.ttft = data.ttft;
+            this.updateTimingDisplay(result);
+        }
+        
         // Tool call (search status)
         if (data.name === 'search_status') {
             result.searchMessages.push(data.message);
@@ -321,6 +403,19 @@ class TestConsole {
         }
         
         this.responseMeta.innerHTML = html;
+    }
+
+    updateTimingDisplay(result) {
+        // Обновляем статус с информацией о backend и TTFT
+        let statusText = 'streaming';
+        if (result.backend) {
+            statusText = `⚙️ ${result.backend}`;
+        }
+        if (result.ttft !== null) {
+            statusText += ` | TTFT: ${result.ttft}s`;
+        }
+        this.responseStatus.textContent = statusText;
+        this.responseStatus.className = 'streaming';
     }
 
     renderSources(sources) {
@@ -422,18 +517,9 @@ class TestConsole {
         `;
     }
 
-    clearResults() {
-        this.results = [];
-        this.resultsBody.innerHTML = '';
-        this.resultsSummary.innerHTML = '';
-        this.responseContent.textContent = '';
-        this.responseMeta.innerHTML = '';
-        this.responseSources.innerHTML = '';
-        this.responseStatus.textContent = '';
-        this.responseStatus.className = '';
-        
-        this.queryList.querySelectorAll('.query-item').forEach(item => {
-            item.classList.remove('success', 'running');
+    invertCheckboxes() {
+        this.queryList.querySelectorAll('.query-item input[type="checkbox"]').forEach(checkbox => {
+            checkbox.checked = !checkbox.checked;
         });
     }
 

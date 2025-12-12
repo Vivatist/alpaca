@@ -73,7 +73,7 @@ class IngestDocument:
                 file.raw_text = parser.parse(file)
                 self.repository.set_raw_text(file.hash, file.raw_text)
             
-            self.logger.info(f"✅ Parsed | chars={len(file.raw_text) if file.raw_text else 0}")
+            parsed_chars = len(file.raw_text) if file.raw_text else 0
             
             # 1.1. Save to disk for debugging
             self._save_to_disk(file)
@@ -81,7 +81,11 @@ class IngestDocument:
             # 2. Clean (если cleaner задан)
             if self.cleaner is not None:
                 file.raw_text = self.cleaner(file.raw_text)
-                self.logger.info(f"✅ Cleaned | chars={len(file.raw_text) if file.raw_text else 0}")
+                cleaned_chars = len(file.raw_text) if file.raw_text else 0
+                removed = parsed_chars - cleaned_chars
+                self.logger.info(f"✅ Parsed & cleaned | chars={cleaned_chars} removed={removed}")
+            else:
+                self.logger.info(f"✅ Parsed | chars={parsed_chars}")
             
             # 3. Extract metadata (если metaextractor задан)
             if self.metaextractor is not None:
