@@ -4,12 +4,14 @@ Chat Backends Registry.
 Паттерн Registry для переключения между реализациями чата:
 - simple: RAG через Pipeline + Ollama (по умолчанию)
 - agent: LangChain Agent + MCP Server
+- complex_agent: Agentic RAG с robust search и реранкингом
 
-Переключение через ENV: CHAT_BACKEND=simple|agent
+Переключение через ENV: CHAT_BACKEND=simple|agent|complex_agent
 
 Структура:
-- backends/simple/ — все зависимости Simple RAG
-- backends/agent/ — все зависимости Agent + MCP
+- backends/simple/ - все зависимости Simple RAG
+- backends/agent/ - все зависимости Agent + MCP
+- backends/complex_agent/ - Agentic RAG с robust search
 
 Добавление нового бэкенда:
 1. Создать папку backends/mybackend/ с __init__.py и backend.py
@@ -25,6 +27,7 @@ from settings import settings
 from .protocol import ChatBackend, StreamEvent, SourceInfo
 from .simple import SimpleChatBackend
 from .agent import AgentChatBackend
+from .complex_agent import ComplexAgentBackend
 
 logger = get_logger("chat_backend.backends")
 
@@ -34,6 +37,7 @@ logger = get_logger("chat_backend.backends")
 BACKENDS: Dict[str, Type[ChatBackend]] = {
     "simple": SimpleChatBackend,
     "agent": AgentChatBackend,
+    "complex_agent": ComplexAgentBackend,
 }
 
 
@@ -92,6 +96,7 @@ __all__ = [
     # Implementations
     "SimpleChatBackend",
     "AgentChatBackend",
+    "ComplexAgentBackend",
     # Registry
     "BACKENDS",
     "get_backend",

@@ -141,10 +141,11 @@ services:
       - WORKER_MAX_CONCURRENT_FILES=5
       - WORKER_MAX_CONCURRENT_PARSING=2
       - WORKER_MAX_CONCURRENT_EMBEDDING=3
+      - WORKER_MAX_CONCURRENT_LLM=2
       
       # === PIPELINE SETTINGS ===
       - ENABLE_CLEANER=true
-      - CLEANER_PIPELINE=["simple","stamps"]
+      - CLEANER_PIPELINE=["simple","letterhead","stamps"]
       - CHUNKER_BACKEND=smart # options: simple, smart
       - CHUNK_SIZE=1000
       - CHUNK_OVERLAP=200
@@ -234,13 +235,17 @@ services:
       - OLLAMA_LLM_MODEL=qwen2.5:32b
       
       # === RAG SETTINGS ===
-      - RAG_TOP_K=5
+      - RAG_TOP_K=10
       - RAG_SIMILARITY_THRESHOLD=0.3
       - PIPELINE_TYPE=simple
       
+      # === RERANKER SETTINGS ===
+      # RERANKER_TYPE: none (без реранкинга) | date (по дате модификации)
+      - RERANKER_TYPE=date
+      
       # === LLM BACKEND ===
-      # CHAT_BACKEND: simple (RAG+Ollama) | agent (LangChain+MCP)
-      - CHAT_BACKEND=agent
+      # CHAT_BACKEND: simple (RAG+Ollama) | agent (LangChain+MCP) | complex_agent (Agentic RAG)
+      - CHAT_BACKEND=complex_agent
       - MCP_SERVER_URL=http://mcp-server:8000
       
       # Deprecated (use CHAT_BACKEND instead)

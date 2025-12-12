@@ -9,6 +9,7 @@ import os
 import tempfile
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 from typing import Optional
 from PIL import Image
@@ -18,14 +19,16 @@ from logging_config import get_logger
 
 logger = get_logger("core.parser.image_converter")
 
+# Глобальный lock для LibreOffice (не поддерживает параллельные вызовы)
+_libreoffice_lock = threading.Lock()
+
 
 def convert_wmf_to_png(wmf_path: str, image_idx: int, temp_dir: str) -> Optional[str]:
     """
     Конвертация WMF/EMF изображения в PNG для OCR
     
-    WMF (Windows Metafile) не поддерживается PIL напрямую,
-    но мы можем использовать ImageMagick через subprocess или
-    попробовать открыть как BMP (некоторые WMF содержат BMP data)
+    WMF (Windows Metafile) не поддерживается PIL напрямую.
+    Используем wmf2svg (libwmf-bin) → ImageMagick для конвертации.
     
     Args:
         wmf_path: Путь к WMF файлу
@@ -36,41 +39,59 @@ def convert_wmf_to_png(wmf_path: str, image_idx: int, temp_dir: str) -> Optional
         Путь к PNG файлу или None если конвертация не удалась
     """
     png_path = os.path.join(temp_dir, f"image_{image_idx}_converted.png")
+    svg_path = os.path.join(temp_dir, f"image_{image_idx}_temp.svg")
     
+    # Попытка 1: wmf2svg → ImageMagick (более надёжный для WMF)
     try:
-        # Попытка 1: Использовать ImageMagick через subprocess
-        logger.info(f"Attempting ImageMagick conversion for image {image_idx}")
+        logger.info(f"Attempting wmf2svg conversion for image {image_idx}")
         
-        # Пробуем сначала ImageMagick 7 (команда 'magick')
-        try:
-            result = subprocess.run(
-                ['magick', wmf_path, png_path],
+        # Сначала конвертируем WMF → SVG через libwmf
+        result_wmf = subprocess.run(
+            ['wmf2svg', '-o', svg_path, wmf_path],
+            capture_output=True,
+            timeout=30,
+            text=True
+        )
+        
+        if result_wmf.returncode == 0 and os.path.exists(svg_path):
+            # Затем SVG → PNG через ImageMagick
+            result_svg = subprocess.run(
+                ['convert', svg_path, png_path],
                 capture_output=True,
                 timeout=30,
                 text=True
             )
-            logger.debug(f"ImageMagick result: returncode={result.returncode}")
-        except FileNotFoundError:
-            logger.debug(f"'magick' command not found, trying 'convert'")
-            # Fallback для ImageMagick 6 (команда 'convert')
-            result = subprocess.run(
-                ['convert', wmf_path, png_path],
-                capture_output=True,
-                timeout=30,
-                text=True
-            )
-            logger.debug(f"Convert result: returncode={result.returncode}")
+            
+            # Удаляем временный SVG
+            if os.path.exists(svg_path):
+                os.remove(svg_path)
+            
+            if result_svg.returncode == 0 and os.path.exists(png_path):
+                logger.info(f"WMF converted via wmf2svg: image {image_idx}")
+                return png_path
+        else:
+            logger.debug(f"wmf2svg failed with return code {result_wmf.returncode}")
+    except (FileNotFoundError, subprocess.TimeoutExpired, Exception) as e:
+        logger.debug(f"wmf2svg conversion exception: {e}")
+    
+    # Попытка 2: Прямой ImageMagick (может работать для некоторых WMF)
+    try:
+        logger.debug(f"Trying direct ImageMagick for image {image_idx}")
+        result = subprocess.run(
+            ['convert', wmf_path, png_path],
+            capture_output=True,
+            timeout=30,
+            text=True
+        )
         
         if result.returncode == 0 and os.path.exists(png_path):
             logger.info(f"WMF converted with ImageMagick: image {image_idx}")
             return png_path
-        else:
-            logger.warning(f"ImageMagick conversion failed with return code {result.returncode}")
     except (FileNotFoundError, subprocess.TimeoutExpired, Exception) as e:
-        logger.warning(f"ImageMagick conversion exception: {e}")
+        logger.debug(f"ImageMagick conversion exception: {e}")
     
     try:
-        # Попытка 2: Попробовать открыть напрямую через PIL
+        # Попытка 3: Попробовать открыть напрямую через PIL
         # Некоторые "WMF" файлы на самом деле обычные растровые изображения
         img = Image.open(wmf_path)
         img.save(png_path, 'PNG')
@@ -97,15 +118,16 @@ def extract_images_via_pdf(docx_path: str, image_idx: int, temp_dir: str) -> Opt
         Путь к PNG файлу или None если конвертация не удалась
     """
     try:
-        # Конвертируем DOCX в PDF через LibreOffice
+        # Конвертируем DOCX в PDF через LibreOffice (с lock для предотвращения конфликтов)
         pdf_temp_dir = tempfile.mkdtemp(prefix="alpaca_pdf_convert_")
         
-        result = subprocess.run(
-            ['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', pdf_temp_dir, docx_path],
-            capture_output=True,
-            text=True,
-            timeout=60
-        )
+        with _libreoffice_lock:
+            result = subprocess.run(
+                ['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', pdf_temp_dir, docx_path],
+                capture_output=True,
+                text=True,
+                timeout=120  # Увеличил таймаут т.к. может быть очередь
+            )
         
         if result.returncode != 0:
             logger.error(f"LibreOffice PDF conversion failed | returncode={result.returncode}")

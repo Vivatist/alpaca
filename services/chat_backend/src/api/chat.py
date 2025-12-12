@@ -27,6 +27,7 @@ class ChatRequest(BaseModel):
     """Запрос к чату (JSON)."""
     message: str
     conversation_id: str | None = None
+    backend: str | None = None  # simple | agent
 
 
 # === Helpers ===
@@ -68,24 +69,39 @@ async def chat_stream(
     """
     logger.info(f"📨 Chat stream request: {request.message[:50]}...")
     
-    chat_backend = get_backend(backend) if backend else get_default_backend()
+    # Backend из body или query param или default
+    backend_name = request.backend or backend
+    chat_backend = get_backend(backend_name) if backend_name else get_default_backend()
+    actual_backend = chat_backend.name
+    logger.info(f"🔧 Using backend: {actual_backend}")
+    
     base_url = _get_base_url(req)
     
     async def event_generator() -> AsyncGenerator[str, None]:
         try:
             t_start = time.time()
             first_chunk = True
+            ttft_sent = False
             
             for event in chat_backend.stream(
                 query=request.message,
                 conversation_id=request.conversation_id,
                 base_url=base_url
             ):
-                # Логируем TTFT
+                # Отправляем TTFT при первом chunk
                 if event.type == "chunk" and first_chunk:
-                    t_first_token = time.time() - t_start
-                    logger.info(f"⏱️ TIMING: TTFT = {t_first_token:.2f}s")
+                    ttft = time.time() - t_start
+                    logger.info(f"⏱️ TIMING: TTFT = {ttft:.2f}s")
                     first_chunk = False
+                    
+                    # Отправляем timing event клиенту
+                    if not ttft_sent:
+                        timing_event = StreamEvent(
+                            type="timing",
+                            data={"backend": actual_backend, "ttft": round(ttft, 2)}
+                        )
+                        yield _format_sse_event(timing_event)
+                        ttft_sent = True
                 
                 yield _format_sse_event(event)
                 

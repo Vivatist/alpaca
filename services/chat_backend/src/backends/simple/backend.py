@@ -15,6 +15,7 @@ from .embedder import build_embedder
 from .searcher import build_searcher
 from .pipeline import SimpleRAGPipeline
 from .ollama import ollama_stream
+from rerankers import build_reranker_from_settings
 
 logger = get_logger("chat_backend.simple")
 
@@ -53,8 +54,15 @@ class SimpleChatBackend(ChatBackend):
                 top_k=settings.RAG_TOP_K,
                 threshold=settings.RAG_SIMILARITY_THRESHOLD
             )
-            self._pipeline = SimpleRAGPipeline(searcher=searcher)
-            logger.info("✅ Simple pipeline initialized")
+            
+            # Реранкер (опционально, по умолчанию none)
+            reranker = build_reranker_from_settings()
+            
+            self._pipeline = SimpleRAGPipeline(
+                searcher=searcher,
+                reranker=reranker
+            )
+            logger.info(f"✅ Simple pipeline initialized | reranker={reranker.name}")
         return self._pipeline
     
     def _build_source_info(self, chunk: dict, base_url: str) -> SourceInfo:

@@ -96,13 +96,16 @@ class Worker:
                         # Запускаем обработку в отдельном потоке
                         future = executor.submit(self.process_file, file_info)
                         futures[future] = file_info['path']
-                        logger.info(f"🚀 Started | path={file_info['path']} active={len(futures)}/{max_workers}")
                     
                     # Ждём
                     if not futures:
                         logger.debug("Queue is empty, waiting...")
                         time.sleep(poll_interval)
+                    elif file_info is None:
+                        # Есть активные задачи, но очередь пуста - ждём подольше
+                        time.sleep(poll_interval)
                     else:
+                        # Есть и задачи, и файлы в очереди - быстрый цикл
                         time.sleep(0.2)
                         
                 except KeyboardInterrupt:

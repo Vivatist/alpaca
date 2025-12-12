@@ -4,6 +4,11 @@ FROM python:3.11-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # LibreOffice для конвертации .doc/.xls/.ppt
     libreoffice \
+    # ImageMagick для конвертации WMF/EMF изображений
+    imagemagick \
+    libmagickwand-dev \
+    # Поддержка WMF формата
+    libwmf-bin \
     # Tesseract для OCR
     tesseract-ocr \
     tesseract-ocr-rus \
@@ -14,7 +19,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     gcc \
     # Очистка кеша
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    # Разрешить ImageMagick конвертировать WMF/EMF/PDF
+    && sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml || true \
+    && sed -i 's/rights="none" pattern="PS"/rights="read|write" pattern="PS"/' /etc/ImageMagick-6/policy.xml || true \
+    && sed -i 's/rights="none" pattern="EPS"/rights="read|write" pattern="EPS"/' /etc/ImageMagick-6/policy.xml || true \
+    && sed -i '/<\/policymap>/i <policy domain="coder" rights="read|write" pattern="WMF" \/>' /etc/ImageMagick-6/policy.xml || true \
+    && sed -i '/<\/policymap>/i <policy domain="coder" rights="read|write" pattern="EMF" \/>' /etc/ImageMagick-6/policy.xml || true
 
 WORKDIR /app
 

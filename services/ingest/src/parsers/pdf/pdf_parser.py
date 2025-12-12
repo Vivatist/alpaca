@@ -44,20 +44,19 @@ class PDFParser(BaseParser):
 
         try:
             if not os.path.exists(file_path):
-                self.logger.error(f"File not found | file={file.path}")
+                self.logger.error(f"File not found")
                 raise FileNotFoundError(f"File not found | file={file.path}")
 
-            self.logger.info(f"🍎 Starting PDF parsing | file={file.path}")
+            self.logger.info(f"PDF parsing | pages={extract_pdf_metadata(file_path).get('pages', 0)}")
 
             metadata = extract_pdf_metadata(file_path)
             pages = metadata.get('pages', 0)
-            self.logger.info(f"📄 PDF metadata | pages={pages}")
 
             working_file, needs_cleanup = smart_rotate_pdf(file_path)
 
             try:
                 doc_type, confidence = self._detect_document_type(working_file)
-                self.logger.info(f"📋 Document type | type={doc_type} confidence={confidence}%")
+                self.logger.info(f"Document type | type={doc_type} confidence={confidence}%")
 
                 if doc_type == 'scanned':
                     text = self._parse_scanned(working_file)
@@ -70,7 +69,7 @@ class PDFParser(BaseParser):
                     self.logger.warning("All parsers failed, trying fallback")
                     text = self._parse_fallback(working_file)
 
-                self.logger.info(f"✅ Parsing complete | length={len(text)} chars")
+                self.logger.info(f"PDF parsed | chars={len(text)}")
                 return text
 
             finally:
@@ -81,7 +80,7 @@ class PDFParser(BaseParser):
                         pass
 
         except Exception as e:  # pragma: no cover - защитный блок
-            self.logger.error(f"❌ Parsing failed | file={file.path} error={e}")
+            self.logger.error(f"Parsing failed | error={e}")
             raise
 
     def _detect_document_type(self, file_path: str) -> tuple[str, int]:

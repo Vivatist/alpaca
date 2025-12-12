@@ -12,7 +12,7 @@ from typing import List, Dict, Optional
 from docx import Document  # type: ignore
 
 from logging_config import get_logger
-from .image_converter import convert_wmf_to_png, extract_images_via_pdf, get_image_extension
+from .image_converter import get_image_extension
 from settings import settings
 
 logger = get_logger("core.parser.ocr_processor")
@@ -64,24 +64,16 @@ def extract_images_from_docx(file_path: str) -> List[Dict]:
                     
                     logger.debug(f"Image saved | index={image_idx} size={len(image_data)} type={content_type}")
                     
-                    # КРИТИЧНО: Конвертируем WMF/EMF в PNG для OCR
+                    # Фильтрация: пропускаем изображения не подходящие для OCR
+                    # 1. WMF/EMF — обычно схемы/диаграммы, не содержат текст для OCR
                     if content_type in ('image/x-wmf', 'image/x-emf') or ext in ('.wmf', '.emf'):
-                        converted_path = convert_wmf_to_png(image_path, image_idx, temp_dir)
-                        if converted_path:
-                            image_path = converted_path
-                            ext = '.png'
-                            logger.info(f"Converted WMF/EMF to PNG | index={image_idx} path={converted_path}")
-                        else:
-                            logger.warning(f"WMF/EMF conversion failed, trying PDF method | index={image_idx}")
-                            # Альтернатива: конвертируем весь DOCX в PDF, затем в изображения
-                            pdf_converted = extract_images_via_pdf(file_path, image_idx, temp_dir)
-                            if pdf_converted:
-                                image_path = pdf_converted
-                                ext = '.png'
-                                logger.info(f"Converted via PDF method | index={image_idx} path={pdf_converted}")
-                            else:
-                                logger.error(f"All conversion methods failed | index={image_idx}")
-                                continue
+                        logger.debug(f"Skipping WMF/EMF (usually diagrams) | index={image_idx}")
+                        continue
+                    
+                    # 2. Маленькие изображения (<10KB) — иконки, логотипы
+                    if len(image_data) < 10 * 1024:
+                        logger.debug(f"Skipping small image | index={image_idx} size={len(image_data)}")
+                        continue
                     
                     images.append({
                         'index': image_idx,

@@ -72,18 +72,18 @@ def ollama_embedder(
     """
     try:
         if not chunks:
-            logger.warning(f"No chunks to embed | file={file.path}")
+            logger.warning(f"No chunks to embed")
             return 0
         
         if doc_metadata is None:
             doc_metadata = {}
         
-        logger.info(f"🔮 Embedding {len(chunks)} chunks | file={file.path}")
+        logger.info(f"Embedding | chunks={len(chunks)}")
         
         # Удаляем старые чанки
         deleted_count = repo.delete_chunks_by_hash(file.hash)
         if deleted_count > 0:
-            logger.info(f"Deleted {deleted_count} old chunks | file={file.path}")
+            logger.info(f"Deleted old chunks | count={deleted_count}")
         
         inserted_count = 0
         total_chunks = len(chunks)
@@ -120,9 +120,9 @@ def ollama_embedder(
                     logger.error(f"Error saving chunk {global_idx}: {e}")
                     continue
         
-        logger.info(f"✅ Embedded {inserted_count}/{total_chunks} chunks | file={file.path}")
+        logger.info(f"Embedded | count={inserted_count}/{total_chunks}")
         return inserted_count
         
     except Exception as e:
-        logger.error(f"Embedding failed | file={file.path} error={e}")
+        logger.error(f"Embedding failed | error={e}")
         return 0

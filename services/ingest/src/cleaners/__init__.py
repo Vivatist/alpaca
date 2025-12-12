@@ -11,6 +11,7 @@ from settings import settings
 
 from .simple import simple_cleaner
 from .stamps import stamps_cleaner
+from .letterhead import letterhead_cleaner
 
 logger = get_logger("ingest.cleaner")
 
@@ -21,6 +22,7 @@ CleanerFunc = Callable[[str], str]
 CLEANERS: dict[str, CleanerFunc] = {
     "simple": simple_cleaner,
     "stamps": stamps_cleaner,
+    "letterhead": letterhead_cleaner,
 }
 
 
@@ -66,6 +68,7 @@ def build_cleaner() -> CleanerFunc:
 __all__ = [
     "simple_cleaner",
     "stamps_cleaner",
+    "letterhead_cleaner",
     "get_cleaner_pipeline",
     "build_cleaner",
     "CLEANERS",

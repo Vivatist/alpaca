@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     WORKER_MAX_CONCURRENT_FILES: int
     WORKER_MAX_CONCURRENT_PARSING: int
     WORKER_MAX_CONCURRENT_EMBEDDING: int
+    WORKER_MAX_CONCURRENT_LLM: int
     
     # === PATHS ===
     MONITORED_PATH: str

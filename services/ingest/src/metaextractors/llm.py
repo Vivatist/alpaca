@@ -7,6 +7,7 @@ LLM экстрактор: анализ содержимого через Ollama.
 - keywords: ключевые слова (до 5)
 - entities: сущности - люди и компании (до 5)
 - category: категория документа
+- document_date: дата документа (перезаписывает modified_at если найдена)
 """
 
 import os
@@ -54,6 +55,7 @@ EXTRACTION_PROMPT = """Проанализируй документ и верни
    - role: должность (для person) или роль в документе (для company), может быть null
 5. category (строка): СТРОГО одна из категорий:
 {categories}
+6. document_date (строка или null): дата документа в формате YYYY-MM-DD, если явно указана в тексте (дата договора, протокола, подписания, составления и т.п.). Если дата не найдена — null.
 
 Документ:
 {text}
@@ -112,12 +114,12 @@ def llm_extractor(file: FileSnapshot, metadata: Dict[str, Any]) -> Dict[str, Any
         
         if llm_metadata:
             result.update(llm_metadata)
-            logger.info(f"✅ LLM extraction | file={file.path} category={llm_metadata.get('category', 'N/A')}")
+            logger.info(f"LLM extraction | category={llm_metadata.get('category', 'N/A')}")
         else:
-            logger.warning(f"Failed to parse LLM response | file={file.path}")
+            logger.warning(f"Failed to parse LLM response")
         
     except Exception as e:
-        logger.warning(f"LLM extraction failed | file={file.path} error={e}")
+        logger.warning(f"LLM extraction failed | error={e}")
     
     return result
 
@@ -179,8 +181,56 @@ def _parse_llm_response(response: str) -> Dict[str, Any]:
                 else:
                     result['category'] = "Прочее"
         
+        # document_date -> modified_at (перезаписывает дату файла если найдена дата документа)
+        if 'document_date' in data and data['document_date']:
+            date_str = str(data['document_date']).strip()
+            parsed_date = _parse_document_date(date_str)
+            if parsed_date:
+                result['modified_at'] = parsed_date
+        
         return result
         
     except json.JSONDecodeError as e:
         logger.debug(f"JSON parse error: {e}")
         return {}
+
+
+def _parse_document_date(date_str: str) -> str | None:
+    """
+    Парсинг даты документа в формат ISO 8601.
+    
+    Поддерживает форматы:
+    - YYYY-MM-DD (ISO)
+    - DD.MM.YYYY (русский)
+    - DD.MM.YY (короткий год)
+    - DD/MM/YYYY
+    - DD-MM-YYYY
+    
+    Returns:
+        Дата в формате YYYY-MM-DDTHH:MM:SS.ffffff или None
+    """
+    from datetime import datetime
+    
+    date_str = date_str.strip()
+    
+    # Форматы для парсинга (в порядке приоритета)
+    formats = [
+        "%Y-%m-%d",      # 2023-04-10 (ISO)
+        "%d.%m.%Y",      # 10.04.2023 (русский)
+        "%d.%m.%y",      # 10.04.23 (короткий год)
+        "%d/%m/%Y",      # 10/04/2023
+        "%d/%m/%y",      # 10/04/23
+        "%d-%m-%Y",      # 10-04-2023
+        "%d-%m-%y",      # 10-04-23
+        "%Y/%m/%d",      # 2023/04/10
+    ]
+    
+    for fmt in formats:
+        try:
+            dt = datetime.strptime(date_str, fmt)
+            # Возвращаем в ISO формате с микросекундами (как в base_extractor)
+            return dt.strftime("%Y-%m-%dT00:00:00.000000")
+        except ValueError:
+            continue
+    
+    return None

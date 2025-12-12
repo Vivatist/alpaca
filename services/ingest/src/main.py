@@ -63,6 +63,7 @@ def main():
     # Семафоры для ограничения параллелизма
     parse_semaphore = Semaphore(settings.WORKER_MAX_CONCURRENT_PARSING)
     embed_semaphore = Semaphore(settings.WORKER_MAX_CONCURRENT_EMBEDDING)
+    llm_semaphore = Semaphore(settings.WORKER_MAX_CONCURRENT_LLM)
     
     # 4. Сборка пайплайна
     logger.info("Assembling pipeline...")
@@ -74,6 +75,7 @@ def main():
         embedder=embedder,
         parse_semaphore=parse_semaphore,
         embed_semaphore=embed_semaphore,
+        llm_semaphore=llm_semaphore,
         cleaner=cleaner,
         metaextractor=metaextractor,
         temp_dir=settings.TMP_MD_PATH,

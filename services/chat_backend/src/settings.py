@@ -1,14 +1,19 @@
 """
 Настройки Chat Backend Service.
 
-Все значения ОБЯЗАТЕЛЬНЫ и должны быть переданы через ENV.
-Сервис упадёт при старте, если чего-то не хватает.
+Все значения читаются из ENV переменных (docker-compose.yml).
+Значения по умолчанию НЕ ЗАДАЮТСЯ — сервис упадёт, если ENV не установлен.
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Настройки сервиса."""
+    """
+    Настройки сервиса — только чтение ENV.
+    
+    НЕ добавляйте сюда значения по умолчанию!
+    Все настройки задаются в docker-compose.yml.
+    """
     
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -31,21 +36,21 @@ class Settings(BaseSettings):
     OLLAMA_LLM_MODEL: str
     OLLAMA_EMBEDDING_MODEL: str
     
-    # LLM Backend (deprecated, use CHAT_BACKEND)
-    LLM_BACKEND: str = "ollama"
-    
     # Chat Backend: simple (RAG+Ollama) | agent (LangChain+MCP)
-    CHAT_BACKEND: str = "simple"
+    CHAT_BACKEND: str
     
     # MCP Server URL для agent бэкенда
-    MCP_SERVER_URL: str = "http://localhost:8083"
+    MCP_SERVER_URL: str
     
     # RAG Settings
     RAG_TOP_K: int
     RAG_SIMILARITY_THRESHOLD: float
     
+    # Reranker: none | date
+    RERANKER_TYPE: str
+    
     # Streaming Settings
-    STREAM_CHUNK_DELAY: float  # Задержка между чанками в секундах (0 = без задержки)
+    STREAM_CHUNK_DELAY: float
     
     # Pipeline
     PIPELINE_TYPE: str
@@ -54,4 +59,10 @@ class Settings(BaseSettings):
     PUBLIC_URL: str
 
 
-settings = Settings()
+def get_settings() -> Settings:
+    """Получить настройки из ENV."""
+    return Settings()
+
+
+# Синглтон для обратной совместимости
+settings = get_settings()

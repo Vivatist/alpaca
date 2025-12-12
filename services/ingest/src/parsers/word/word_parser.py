@@ -77,10 +77,10 @@ class WordParser(BaseParser):
         
         try:
             if not os.path.exists(file_path):
-                self.logger.error(f"File not found | file={file_path}")
+                self.logger.error(f"File not found")
                 raise FileNotFoundError(f"File not found | file={file_path}")
             
-            self.logger.info(f"Parsing Word document | file={file.path}")
+            self.logger.info(f"Word parsing | ext={Path(file_path).suffix.lower()}")
             
             # 1. Конвертация .doc → .docx через LibreOffice если нужно
             file_ext = Path(file_path).suffix.lower()
@@ -93,7 +93,7 @@ class WordParser(BaseParser):
                     file_path = converted_path
                     file_ext = '.docx'
                     converted = True
-                    self.logger.info(f"Converted .doc to .docx | path={converted_path}")
+                    self.logger.info(f"Converted .doc to .docx")
                 else:
                     self.logger.warning(f"Failed to convert .doc to .docx, will try direct parsing")
             
@@ -146,12 +146,12 @@ class WordParser(BaseParser):
             elif not self.enable_ocr:
                 self.logger.debug("OCR disabled, skipping image processing")
             
-            self.logger.info(f"Word document parsed successfully | file={original_file_path} length={len(markdown_content)}")
+            self.logger.info(f"Word parsed | chars={len(markdown_content)}")
 
             return markdown_content
 
         except Exception as e:
-            self.logger.error(f"Error parsing Word document | file={file_path} error={type(e).__name__}: {e}")
+            self.logger.error(f"Error parsing Word | error={type(e).__name__}: {e}")
             raise
         
         finally:
@@ -176,7 +176,7 @@ class WordParser(BaseParser):
             Markdown текст
         """
         try:
-            self.logger.info(f"Parsing with markitdown | file={file_path}")
+            self.logger.debug(f"Parsing with markitdown")
             result = self.markitdown.convert(file_path)
             
             if result and hasattr(result, 'text_content'):
@@ -188,10 +188,10 @@ class WordParser(BaseParser):
                 return self._fallback_parse_internal(file_path)
                 
         except Exception as e:
-            self.logger.error(f"Markitdown failed | file={file_path} error={type(e).__name__}: {e}")
+            self.logger.error(f"Markitdown failed | error={type(e).__name__}: {e}")
             return self._fallback_parse_internal(file_path)
     
     def _fallback_parse_internal(self, file_path: str) -> str:
         """Внутренний вызов fallback парсера"""
-        self.logger.info(f"Using fallback parser | file={file_path}")
+        self.logger.info(f"Using fallback parser")
         return fallback_parse(file_path)
