@@ -13,12 +13,18 @@
 
 ### Режим работы снаружи контейнера
 
-При работе **снаружи контейнера** (с хост-машины) сервисы доступны через проброшенные порты на `localhost`:
+При работе **снаружи контейнера** (с хост-машины) сервисы доступны через Docker network или Tailscale:
 
 | Сервис | Хост | Порт | Пример URL |
 |--------|------|------|------------|
-| PostgreSQL | `localhost` | `54322` | `postgresql://postgres:password@localhost:54322/postgres` |
-| Ollama | `localhost` | `11434` | `http://localhost:11434` |
+| PostgreSQL | `supabase-db` | `5432` | `postgresql://postgres:password@supabase-db:5432/postgres` |
+| Ollama (ноутбук) | `100.68.201.91` | `11434` | `http://100.68.201.91:11434` (через Tailscale к Alpaca) |
+| Ollama (сервер) | `localhost` | `11434` | `http://localhost:11434` |
+
+**Важно**: контейнер `supabase-db` должен быть подключён к сети `alpaca_alpaca_network`:
+```bash
+docker network connect alpaca_alpaca_network supabase-db
+```
 
 ### Важно помнить
 

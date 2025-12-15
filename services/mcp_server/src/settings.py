@@ -10,8 +10,8 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """Настройки MCP сервера."""
     
-    # Database
-    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:54322/postgres"
+    # Database (через Docker network: supabase-db:5432)
+    DATABASE_URL: str = "postgresql://postgres:postgres@supabase-db:5432/postgres"
     
     # Ollama
     OLLAMA_BASE_URL: str = "http://ollama:11434"

@@ -25,8 +25,9 @@ monitored_folder/ → FileWatcher → PostgreSQL+pgvector ← Ingest → Ollama 
 | **unstructured** | 9000 | Парсинг документов с OCR |
 
 **Supabase** (PostgreSQL + pgvector) — отдельная установка:
-- **Локально (Windows)**: `C:\supabase\docker`, порт 54322
-- **На сервере**: `~/supabase/docker`, порт 5432 (внутренний, без внешнего маппинга)
+- **Локально (Windows)**: `C:\supabase\docker`
+- **На сервере**: `~/supabase/docker`
+- **Доступ из Docker**: через имя контейнера `supabase-db:5432` (после подключения к сети `alpaca_alpaca_network`)
 
 ### Структура сервисов
 
@@ -178,13 +179,12 @@ def get_component_pipeline(names: List[str]) -> Component:  # Для pipeline
 Создаётся вручную на каждой машине, **НЕ коммитится в git**:
 
 ```bash
-# Локально (Windows) — Supabase на порту 54322
-DATABASE_URL=postgresql://postgres:your-password@host.docker.internal:54322/postgres
-OLLAMA_BASE_URL=http://host.docker.internal:11434
-
-# На сервере — Supabase через Docker network
+# Database - через Docker network (одинаково для ноутбука и сервера)
 DATABASE_URL=postgresql://postgres:your-password@supabase-db:5432/postgres
-OLLAMA_BASE_URL=http://172.17.0.1:11434
+
+# Ollama - на ноутбуке через Tailscale IP Alpaca, на сервере локально
+OLLAMA_BASE_URL=http://100.68.201.91:11434  # Ноутбук (через Tailscale)
+# OLLAMA_BASE_URL=http://localhost:11434    # Alpaca (локальный)
 
 # Paths
 MONITORED_FOLDER_PATH=/path/to/monitored_folder
@@ -219,35 +219,33 @@ MCP_SERVER_URL: http://mcp-server:8000
 
 | Окружение | Машина | Supabase | Ollama | Доступ |
 |-----------|--------|----------|--------|--------|
-| **Локальное** | Windows (Andrey) | `host.docker.internal:54322` | `host.docker.internal:11434` | localhost |
-| **Сервер** | alpaca-phantom (Linux) | `supabase-db:5432` (Docker network) | `172.17.0.1:11434` | SSH |
+| **Development** | Ноутбук (asus) | `supabase-db:5432` (Docker network) | `100.68.201.91:11434` (Alpaca через Tailscale) | localhost |
+| **Production** | Alpaca (alpaca-phantom) | `supabase-db:5432` (Docker network) | `localhost:11434` | SSH / Tailscale |
 
-### SSH доступ к серверу
+### SSH доступ к серверам
 
 ```bash
-# Подключение (хост alpaca-phantom настроен в ~/.ssh/config)
-ssh alpaca@alpaca-phantom
+# Alpaca через Tailscale (без пароля)
+ssh alpaca
+
+# VDS (без пароля)
+ssh vds
 
 # Выполнить команду удалённо
-ssh alpaca@alpaca-phantom "docker ps"
-ssh alpaca@alpaca-phantom "cd ~/alpaca/services && docker compose logs -f filewatcher"
+ssh alpaca "docker ps"
+ssh alpaca "cd ~/alpaca/services && docker compose logs -f filewatcher"
 ```
 
-**~/.ssh/config**:
+### Docker-сети и Supabase
+
+Supabase и ALPACA работают в **разных Docker Compose проектах**. Для связи контейнер `supabase-db` подключается к сети ALPACA:
+
+```bash
+# Выполняется при первом запуске и при деплое
+docker network connect alpaca_alpaca_network supabase-db
 ```
-Host alpaca-phantom
-    HostName 100.68.201.91  # Tailscale IP (или 95.217.205.233 внешний)
-    User alpaca
-    IdentityFile ~/.ssh/id_rsa
-```
 
-### Сетевая конфигурация на сервере
-
-На сервере Supabase и ALPACA работают в **разных Docker Compose проектах**. Для связи:
-
-1. **supabase-db** не имеет внешнего порта (только внутренний 5432/tcp)
-2. **supabase-pooler** занимает порт 0.0.0.0:5432 (это НЕ прямой PostgreSQL!)
-3. **Решение**: Контейнер `supabase-db` подключается к сети `alpaca_alpaca_network`
+После этого все сервисы обращаются к БД по имени `supabase-db:5432`.
 
 ```bash
 # Подключить supabase-db к сети ALPACA (выполняется при деплое)
@@ -259,7 +257,7 @@ docker network connect alpaca_alpaca_network supabase-db
 ### Запуск сервисов
 
 ```bash
-# 1. Запустить Supabase (отдельно, работает на порту 54322)
+# 1. Запустить Supabase (отдельно)
 cd ~/supabase/docker && docker compose up -d
 
 # 2. Запустить Ollama (если локально с GPU)
@@ -274,7 +272,7 @@ cd ~/alpaca/services && docker compose up -d
 ### Порты сервисов
 
 - **Supabase Dashboard**: http://localhost:8000
-- **PostgreSQL**: localhost:54322 (не 5432!)
+- **PostgreSQL**: через Docker network (`supabase-db:5432`)
 - **Ollama**: http://localhost:11434
 - **Unstructured**: http://localhost:9000
 - **FileWatcher API**: http://localhost:8081
@@ -448,32 +446,101 @@ elements = response.json()  # Список элементов документа
 ## Особенности проекта
 
 1. **Supabase отдельно** - Находится в `~/supabase/docker`, не является частью основного docker-compose.yml
-2. **Порт 54322, а не 5432** - Supabase PostgreSQL использует нестандартный порт во избежание конфликтов
+2. **Docker network для БД** - `supabase-db` подключён к `alpaca_alpaca_network`, доступ по имени контейнера
 3. **Все сервисы в Docker** - Включая Ingest (бывший Worker)
 4. **Временные распарсенные файлы** - Сохраняются в `/home/alpaca/tmp_md` как .md для отладки/проверки
 5. **Блокировка статусом** - Статус `processed` предотвращает состояние гонки при обработке очереди
 6. **Русский язык** - Комментарии, логи, документация смешивают русский и английский; код/API на английском
 7. **Изолированные микросервисы** - Все сервисы независимы, имеют собственные settings/repository
 
-## Внешний доступ к API (Интернет)
+## Сетевая архитектура (Tailscale + VDS)
 
-### Архитектура доступа
+### Обзор инфраструктуры
 
-Локальная машина находится за NAT без белого IP. Внешний доступ организован через **reverse SSH tunnel** на VDS:
+Все машины объединены в единую сеть через **Tailscale VPN**:
 
 ```
-Интернет → VDS (95.217.205.233:8443/HTTPS) → SSH туннель → Локальная машина → Docker-сервисы
+┌─────────────────────────────────────────────────────────────────────┐
+│                           ИНТЕРНЕТ                                  │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  VDS (95.217.205.233)                                               │
+│  Tailscale: 100.114.64.71                                           │
+│  • nginx reverse proxy (HTTPS :8443)                                │
+│  • Публичный домен: api.alpaca-smart.com                            │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │ Tailscale
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  Alpaca Server (alpaca-phantom)                                     │
+│  Tailscale: 100.68.201.91                                           │
+│  • Production: все микросервисы                                     │
+│  • Ollama + GPU (RTX 3090)                                          │
+│  • Supabase PostgreSQL                                              │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │ Tailscale
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  Ноутбук разработчика (asus)                                        │
+│  Tailscale: 100.69.74.5                                             │
+│  • Development: локальные сервисы                                   │
+│  • Ollama на Alpaca через Tailscale                                 │
+│  • Локальная Supabase                                               │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-- **VDS**: Hetzner, Ubuntu, IP: 95.217.205.233
-- **Домен**: `api.alpaca-smart.com` (DNS A-запись на VDS)
-- **SSL**: Let's Encrypt сертификат, HTTPS на порту 8443
-- **SSH туннель**: autossh reverse tunnel через порт 2222
+### Машины и их роли
+
+| Машина | Tailscale IP | Внешний IP | Роль |
+|--------|--------------|------------|------|
+| **VDS** (87041server) | 100.114.64.71 | 95.217.205.233 | Публичный прокси, nginx, SSL |
+| **Alpaca** (alpaca-phantom) | 100.68.201.91 | — | Production, Ollama GPU |
+| **Ноутбук** (asus) | 100.69.74.5 | — | Development |
+| **Lovable.dev** | — | — | Frontend (внешний сервис) |
+
+### SSH доступ
+
+Конфигурация `~/.ssh/config` на ноутбуке:
+```
+# VDS сервер (внешний IP, порт 2222)
+Host vds
+    HostName 95.217.205.233
+    Port 2222
+    User root
+
+# Alpaca сервер через Tailscale
+Host alpaca alpaca-phantom
+    HostName 100.68.201.91
+    User alpaca
+    ForwardAgent yes
+```
+
+Команды:
+```bash
+ssh alpaca    # → Alpaca через Tailscale (без пароля)
+ssh vds       # → VDS (без пароля)
+```
 
 ### Конфигурация nginx на VDS
 
-Файл `/etc/nginx/sites-available/api.alpaca-smart.com`:
+nginx проксирует запросы на Alpaca через Tailscale:
+
 ```nginx
+# /etc/nginx/sites-available/api.alpaca-smart.com
+upstream alpaca_admin {
+    server 100.68.201.91:8080;  # Tailscale IP
+}
+
+upstream alpaca_chat {
+    server 100.68.201.91:8082;
+}
+
+upstream alpaca_supabase {
+    server 100.68.201.91:8000;
+}
+
 server {
     listen 8443 ssl;
     server_name api.alpaca-smart.com;
@@ -481,68 +548,68 @@ server {
     ssl_certificate /etc/letsencrypt/live/api.alpaca-smart.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/api.alpaca-smart.com/privkey.pem;
     
-    # Chat Backend
     location /chat/ {
-        proxy_pass http://localhost:8082/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
+        proxy_pass http://alpaca_chat/;
+        # ... headers
     }
     
-    # Admin Backend  
     location /admin/ {
-        proxy_pass http://localhost:8080/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
+        proxy_pass http://alpaca_admin/;
     }
     
-    # Fallback
-    location / {
-        proxy_pass http://localhost:8080/;
+    location /supabase/ {
+        proxy_pass http://alpaca_supabase/;
     }
 }
 ```
 
-### SSH туннель (autossh)
-
-Файл `/etc/systemd/system/autossh-tunnel.service` на локальной машине:
-```ini
-[Service]
-ExecStart=/usr/bin/autossh -M 0 -N \
-    -o "ServerAliveInterval 30" \
-    -o "ServerAliveCountMax 3" \
-    -R 2223:localhost:22 \
-    -R 8080:localhost:8080 \
-    -R 8082:localhost:8082 \
-    vds
-```
-
-Управление:
-```bash
-sudo systemctl status autossh-tunnel   # Проверить статус
-sudo systemctl restart autossh-tunnel  # Перезапустить
-journalctl -u autossh-tunnel -f        # Логи
-```
-
-### Проброс портов через туннель
-
-| Локальный порт | VDS порт | Сервис |
-|---------------|----------|--------|
-| 22 | 2223 | SSH (для доступа к локальной машине) |
-| 8080 | 8080 | Admin Backend |
-| 8082 | 8082 | Chat Backend |
-
 ### URL-адреса API
 
+**Production (через VDS):**
 - **Admin Backend**: `https://api.alpaca-smart.com:8443/admin/`
-  - Health: `/admin/health`
-  - Docs: `/admin/docs`
 - **Chat Backend**: `https://api.alpaca-smart.com:8443/chat/`
-  - Health: `/chat/health`
-  - Docs: `/chat/docs`
+- **Supabase Studio**: `https://api.alpaca-smart.com:8444/`
+
+**Development (локально на ноутбуке):**
+- **Admin Backend**: `http://localhost:8080`
+- **Chat Backend**: `http://localhost:8082`
+- **Supabase Studio**: `http://localhost:8000`
+
+### Docker-сети
+
+**На Alpaca (production):**
+- Сеть `alpaca_alpaca_network` объединяет все сервисы
+- `supabase-db` подключён к этой сети: `docker network connect alpaca_alpaca_network supabase-db`
+- DATABASE_URL использует `supabase-db:5432`
+
+**На ноутбуке (development):**
+- Сеть `alpaca_alpaca_network` для ALPACA сервисов
+- `supabase-db` подключается к той же сети
+- DATABASE_URL: `postgresql://...@supabase-db:5432/postgres`
+
+### Файл .env для разных окружений
+
+**Ноутбук** (`services/.env`):
+```bash
+# Database - через Docker network
+DATABASE_URL=postgresql://postgres:PASSWORD@supabase-db:5432/postgres
+
+# Ollama - на Alpaca через Tailscale
+OLLAMA_BASE_URL=http://100.68.201.91:11434
+```
+
+**Alpaca** (`services/.env`):
+```bash
+# Database - через Docker network
+DATABASE_URL=postgresql://postgres:PASSWORD@supabase-db:5432/postgres
+
+# Ollama - локальный
+OLLAMA_BASE_URL=http://localhost:11434
+```
 
 ### ROOT_PATH для Swagger
 
-При работе за reverse proxy с путевой маршрутизацией (path-based routing), FastAPI требует `root_path` для корректной генерации URL в Swagger UI:
+При работе за reverse proxy с path-based routing:
 
 ```python
 # В main.py сервиса
@@ -558,49 +625,21 @@ environment:
   - ROOT_PATH=/chat  # или /admin
 ```
 
-### Известные проблемы с сетью
+### Диагностика сети
 
-**Проблема**: Некоторые порты (не 8080) могут не работать через SSH туннель из определённых сетей. TCP-соединение устанавливается, но HTTP-ответы не возвращаются.
-
-**Симптомы**:
-- `curl` зависает после установки соединения
-- Работает с мобильной сети, не работает из домашней
-- На VDS `curl localhost:порт` работает
-
-**Диагностика**:
 ```bash
-# На VDS - проверить что туннель работает
-curl -v http://localhost:8082/health
+# Проверить Tailscale статус
+tailscale status
 
-# На локальной машине - проверить Docker
-curl http://localhost:8082/health
+# Проверить доступность Alpaca
+ssh alpaca "hostname && uptime"
 
-# Проверить туннель
-ssh vds "netstat -tlnp | grep 808"
+# Проверить nginx на VDS
+ssh vds "curl -s http://100.68.201.91:8082/health"
+
+# Проверить production API
+curl https://api.alpaca-smart.com:8443/chat/health
 ```
-
-**Временное решение (если порт не работает напрямую)**:
-
-1. Добавить локальный nginx как прокси:
-```nginx
-# /etc/nginx/sites-available/chat-backend
-server {
-    listen 8082;
-    location / {
-        proxy_pass http://127.0.0.1:18082;
-    }
-}
-```
-
-2. Изменить порт Docker на локальный:
-```yaml
-ports:
-  - "127.0.0.1:18082:8000"  # Только localhost
-```
-
-3. nginx слушает 8082, проксирует на 18082 (Docker)
-
-**Текущий статус**: Проблема обойдена использованием единого HTTPS-порта 8443 с path-based routing на VDS. Все сервисы доступны через этот порт.
 
 ## Изоляция микросервисов
 

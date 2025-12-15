@@ -51,7 +51,7 @@ ALPACA — это **RAG (Retrieval Augmented Generation) система** для
 
 | Компонент | Расположение | Описание |
 |-----------|--------------|----------|
-| **Supabase** | Локально (`~/supabase/docker`) | PostgreSQL + pgvector, порт 54322 |
+| **Supabase** | Docker network (`supabase-db:5432`) | PostgreSQL + pgvector |
 | **Ollama** | Сервер (Tailscale) | LLM и эмбеддинги на GPU |
 
 ## Поток данных
@@ -308,7 +308,7 @@ environment:
 ```
 ┌─────────────────────────────────────────────────────┐
 │                   Docker Network                     │
-│                  (alpaca_network)                    │
+│              (alpaca_alpaca_network)                 │
 ├─────────────────────────────────────────────────────┤
 │  filewatcher ──► 8081                               │
 │  ingest (internal)                                  │
@@ -317,20 +317,14 @@ environment:
 │  admin-backend ──► 8080                             │
 │  unstructured ──► 9000                              │
 │                                                     │
-│  supabase-db ──► 54322 (PostgreSQL)                 │
+│  supabase-db ──► 5432 (PostgreSQL, внутри сети)     │
 │  supabase-studio ──► 8000 (Dashboard)               │
 └─────────────────────────────────────────────────────┘
           │
-          │ 172.17.0.1 (Docker bridge)
+          │ Tailscale (100.68.201.91 - Alpaca)
           ▼
 ┌─────────────────────────────────────────────────────┐
-│                  Host Machine                        │
-└─────────────────────────────────────────────────────┘
-          │
-          │ Tailscale (100.68.201.91)
-          ▼
-┌─────────────────────────────────────────────────────┐
-│                 GPU Server                           │
+│        GPU Server (alpaca-phantom)                   │
 │                                                     │
 │  Ollama ──► 11434                                   │
 └─────────────────────────────────────────────────────┘
