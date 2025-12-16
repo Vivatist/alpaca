@@ -42,7 +42,8 @@ class TestConsole {
      */
     async loadBackends() {
         const apiUrl = this.apiUrlInput.value;
-        const backendsUrl = apiUrl.replace('/api/chat', '/api/backends');
+        // /api/chat → /api/chat/backends
+        const backendsUrl = apiUrl.replace(/\/api\/chat\/?$/, '/api/chat/backends');
         
         try {
             const response = await fetch(backendsUrl);

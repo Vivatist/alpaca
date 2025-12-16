@@ -28,6 +28,7 @@ from .protocol import ChatBackend, StreamEvent, SourceInfo
 from .simple import SimpleChatBackend
 from .agent import AgentChatBackend
 from .complex_agent import ComplexAgentBackend
+from .complex_phantom import ComplexPhantomBackend
 
 logger = get_logger("chat_backend.backends")
 
@@ -38,6 +39,7 @@ BACKENDS: Dict[str, Type[ChatBackend]] = {
     "simple": SimpleChatBackend,
     "agent": AgentChatBackend,
     "complex_agent": ComplexAgentBackend,
+    "complex_phantom": ComplexPhantomBackend,
 }
 
 
