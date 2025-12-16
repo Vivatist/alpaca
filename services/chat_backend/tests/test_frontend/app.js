@@ -14,6 +14,7 @@ class TestConsole {
         this.initElements();
         this.initEventListeners();
         this.checkServerMode();
+        this.loadBackends();
         this.renderQueries();
     }
 
@@ -34,6 +35,38 @@ class TestConsole {
             // Работаем без сервера - запросы только в памяти
             console.log('ℹ️ Static mode: изменения запросов не сохраняются');
         }
+    }
+
+    /**
+     * Загружаем список доступных бэкендов с сервера
+     */
+    async loadBackends() {
+        const apiUrl = this.apiUrlInput.value;
+        const backendsUrl = apiUrl.replace('/api/chat', '/api/backends');
+        
+        try {
+            const response = await fetch(backendsUrl);
+            if (response.ok) {
+                const data = await response.json();
+                this.renderBackendOptions(data.available, data.default);
+                console.log(`✅ Backends loaded: ${data.available.join(', ')} (default: ${data.default})`);
+            } else {
+                throw new Error(`HTTP ${response.status}`);
+            }
+        } catch (e) {
+            console.warn('⚠️ Не удалось загрузить список бэкендов:', e.message);
+            // Fallback на базовые значения
+            this.renderBackendOptions(['simple', 'agent', 'complex_agent'], 'complex_agent');
+        }
+    }
+
+    /**
+     * Отрисовка опций бэкендов в select
+     */
+    renderBackendOptions(backends, defaultBackend) {
+        this.backendSelect.innerHTML = backends
+            .map(b => `<option value="${b}" ${b === defaultBackend ? 'selected' : ''}>${b}</option>`)
+            .join('');
     }
 
     initElements() {
@@ -84,6 +117,9 @@ class TestConsole {
             }
             // Shift+Enter — перенос строки (поведение по умолчанию)
         });
+
+        // Перезагружать бэкенды при изменении API URL
+        this.apiUrlInput.addEventListener('change', () => this.loadBackends());
     }
 
     renderQueries() {
@@ -477,15 +513,22 @@ class TestConsole {
     }
 
     addResultRow(result) {
+        const rowIndex = this.results.length - 1;
         const row = document.createElement('tr');
+        row.className = 'result-row';
+        row.dataset.resultIndex = rowIndex;
         
         const filtersHtml = Object.entries(result.filters || {})
             .map(([k, v]) => `<span class="filter-tag">${k}: ${Array.isArray(v) ? v.join(', ') : v}</span>`)
             .join(' ') || '-';
         
-        const answerPreview = (result.answer || '').replace(/\\n/g, ' ').slice(0, 150);
+        const answerPreview = (result.answer || '').replace(/\n/g, ' ').slice(0, 150);
+        const hasDetails = result.sources?.length > 0 || result.answer?.length > 150;
         
         row.innerHTML = `
+            <td class="expand-col">
+                ${hasDetails ? `<button class="expand-btn" onclick="testConsole.toggleResultDetails(${rowIndex})">▶</button>` : ''}
+            </td>
             <td>${result.index + 1}</td>
             <td class="query-col truncate" title="${this.escapeHtml(result.query)}">${this.escapeHtml(result.query)}</td>
             <td class="filters-col">${filtersHtml}</td>
@@ -495,10 +538,87 @@ class TestConsole {
         `;
         
         if (result.error) {
-            row.style.color = 'var(--accent)';
+            row.style.color = 'var(--error)';
         }
         
         this.resultsBody.appendChild(row);
+        
+        // Создаём скрытую строку с подробностями
+        if (hasDetails) {
+            const detailsRow = document.createElement('tr');
+            detailsRow.className = 'result-details-row hidden';
+            detailsRow.id = `details-${rowIndex}`;
+            detailsRow.innerHTML = `<td colspan="7">${this.renderResultDetails(result)}</td>`;
+            this.resultsBody.appendChild(detailsRow);
+        }
+    }
+
+    toggleResultDetails(rowIndex) {
+        const detailsRow = document.getElementById(`details-${rowIndex}`);
+        const btn = this.resultsBody.querySelector(`tr[data-result-index="${rowIndex}"] .expand-btn`);
+        
+        if (detailsRow) {
+            const isHidden = detailsRow.classList.toggle('hidden');
+            if (btn) btn.textContent = isHidden ? '▶' : '▼';
+        }
+    }
+
+    renderResultDetails(result) {
+        let html = '<div class="result-details">';
+        
+        // Полный ответ
+        if (result.answer) {
+            html += `
+                <div class="details-section">
+                    <h4>💬 Полный ответ</h4>
+                    <div class="details-answer">${this.escapeHtml(result.answer)}</div>
+                </div>
+            `;
+        }
+        
+        // Источники
+        if (result.sources && result.sources.length > 0) {
+            html += `
+                <div class="details-section">
+                    <h4>📎 Найденные документы (${result.sources.length})</h4>
+                    <div class="details-sources">
+                        ${result.sources.map((s, i) => this.renderSourceCard(s, i)).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        
+        html += '</div>';
+        return html;
+    }
+
+    renderSourceCard(source, index) {
+        const similarity = source.similarity ? (source.similarity * 100).toFixed(1) + '%' : '?';
+        const simClass = this.getSimilarityClass(source.similarity);
+        
+        return `
+            <div class="source-card">
+                <div class="source-card-header">
+                    <span class="source-num">#${index + 1}</span>
+                    <strong class="source-name">${this.escapeHtml(source.file_name || source.file_path?.split('/').pop() || 'Документ')}</strong>
+                    <span class="source-tag ${simClass}">sim: ${similarity}</span>
+                    ${source.download_url ? `<button class="btn btn-small" onclick="testConsole.openSource('${this.escapeHtml(source.download_url)}', '')">📥 Открыть</button>` : ''}
+                </div>
+                <div class="source-card-path">${this.escapeHtml(source.file_path || '')}</div>
+                <div class="source-card-meta">
+                    ${source.category ? `<span class="source-tag">${source.category}</span>` : ''}
+                    ${source.chunk_index !== undefined ? `<span class="source-tag">chunk: ${source.chunk_index}</span>` : ''}
+                    ${source.modified_at ? `<span class="source-tag">📅 ${this.formatDate(source.modified_at)}</span>` : ''}
+                </div>
+                ${source.title ? `<div class="source-card-title">📄 ${this.escapeHtml(source.title)}</div>` : ''}
+                ${source.summary ? `<div class="source-card-summary">${this.escapeHtml(source.summary)}</div>` : ''}
+                ${source.content ? `<div class="source-card-content"><details><summary>Содержимое чанка</summary><pre>${this.escapeHtml(source.content)}</pre></details></div>` : ''}
+            </div>
+        `;
+    }
+
+    closeModal() {
+        document.getElementById('documentModal').classList.remove('visible');
     }
 
     updateSummary() {

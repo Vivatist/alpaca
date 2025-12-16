@@ -63,7 +63,7 @@ python -m http.server 8888
 ## Настройка
 
 - **API URL**: по умолчанию `http://localhost:8082/api/chat`
-- **Backend**: `complex_agent`, `simple`, `agent`
+- **Backend**: загружается динамически с сервера через `GET /api/backends`
 
 ## Структура
 

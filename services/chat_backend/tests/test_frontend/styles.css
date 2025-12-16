@@ -651,3 +651,252 @@ select:focus-visible {
     outline: 1px solid var(--border-focus);
     outline-offset: -1px;
 }
+
+/* === Result Details (expandable rows) === */
+.result-row {
+    cursor: default;
+}
+
+.expand-col {
+    width: 30px;
+    text-align: center;
+}
+
+.expand-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 10px;
+    padding: 4px 8px;
+    border-radius: 2px;
+    transition: background 0.1s;
+}
+
+.expand-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.result-details-row {
+    background: var(--bg-secondary);
+}
+
+.result-details-row.hidden {
+    display: none;
+}
+
+.result-details-row td {
+    padding: 0;
+}
+
+.result-details {
+    padding: 12px 16px;
+    border-left: 3px solid var(--accent);
+    margin: 4px 0;
+}
+
+.details-section {
+    margin-bottom: 16px;
+}
+
+.details-section:last-child {
+    margin-bottom: 0;
+}
+
+.details-section h4 {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    letter-spacing: 0.3px;
+}
+
+.details-answer {
+    background: var(--bg-primary);
+    padding: 12px;
+    border-radius: 4px;
+    white-space: pre-wrap;
+    font-size: 12px;
+    line-height: 1.5;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+}
+
+.details-sources {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Source Card */
+.source-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 12px;
+}
+
+.source-card:hover {
+    border-color: var(--border-focus);
+}
+
+.source-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.source-num {
+    font-size: 10px;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    padding: 2px 6px;
+    border-radius: 2px;
+}
+
+.source-name {
+    flex: 1;
+    color: var(--info);
+    font-size: 12px;
+}
+
+.source-card-path {
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.source-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+
+.source-card-title {
+    font-size: 11px;
+    color: var(--function);
+    margin-bottom: 4px;
+}
+
+.source-card-summary {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.source-card-content {
+    margin-top: 8px;
+}
+
+.source-card-content details {
+    font-size: 11px;
+}
+
+.source-card-content summary {
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 4px 0;
+}
+
+.source-card-content summary:hover {
+    color: var(--text-primary);
+}
+
+.source-card-content pre {
+    background: var(--bg-tertiary);
+    padding: 8px;
+    border-radius: 2px;
+    overflow-x: auto;
+    max-height: 150px;
+    overflow-y: auto;
+    font-size: 10px;
+    margin-top: 4px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Similarity classes */
+.sim-high {
+    color: var(--success) !important;
+    border-color: var(--success) !important;
+}
+
+.sim-medium {
+    color: var(--warning) !important;
+    border-color: var(--warning) !important;
+}
+
+.sim-low {
+    color: var(--error) !important;
+    border-color: var(--error) !important;
+}
+
+/* === Modal === */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-overlay.visible {
+    display: flex;
+}
+
+.modal-content {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    max-width: 900px;
+    max-height: 80vh;
+    width: 90%;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-tertiary);
+}
+
+.modal-header h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-highlight);
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px 8px;
+}
+
+.modal-close:hover {
+    color: var(--error);
+}
+
+.modal-body {
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+}
