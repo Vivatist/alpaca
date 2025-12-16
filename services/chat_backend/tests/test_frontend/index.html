@@ -14,9 +14,7 @@
                 <label>API URL: <input type="text" id="apiUrl" value="http://localhost:8082/api/chat"></label>
                 <label>Backend: 
                     <select id="backend">
-                        <option value="complex_agent" selected>complex_agent</option>
-                        <option value="simple">simple</option>
-                        <option value="agent">agent</option>
+                        <option value="">Загрузка...</option>
                     </select>
                 </label>
             </div>
@@ -62,6 +60,7 @@
                 <table class="results-table" id="resultsTable">
                     <thead>
                         <tr>
+                            <th></th>
                             <th>#</th>
                             <th>Запрос</th>
                             <th>Фильтры</th>
@@ -74,6 +73,17 @@
                 </table>
             </div>
         </section>
+        
+        <!-- Модальное окно для просмотра документа -->
+        <div class="modal-overlay" id="documentModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modalTitle">Документ</h3>
+                    <button class="modal-close" onclick="testConsole.closeModal()">✕</button>
+                </div>
+                <div class="modal-body" id="modalBody"></div>
+            </div>
+        </div>
     </div>
 
     <script src="queries.js"></script>

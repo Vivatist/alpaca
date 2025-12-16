@@ -58,7 +58,7 @@ monitored_folder/ → FileWatcher → PostgreSQL+pgvector ← Ingest → Ollama 
 | **FileWatcher** | 8081 | Сканирование папки с документами |
 | **Chat Backend** | 8082 | RAG API для чата |
 | **MCP Server** | 8083 | Model Context Protocol |
-| **Supabase** | 54322 | PostgreSQL + pgvector |
+| **Supabase** | Docker network | PostgreSQL + pgvector (`supabase-db:5432`) |
 | **Ollama** | 11434 | LLM (qwen2.5:32b) + эмбеддинги (bge-m3) |
 
 ### Технологии

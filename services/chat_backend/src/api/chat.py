@@ -143,13 +143,3 @@ async def stats():
     except Exception as e:
         logger.error(f"Stats error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/backends")
-async def list_backends():
-    """Список доступных бэкендов."""
-    from backends import BACKENDS
-    return {
-        "default": settings.CHAT_BACKEND,
-        "available": list(BACKENDS.keys()),
-    }
