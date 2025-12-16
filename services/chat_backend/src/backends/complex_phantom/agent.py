@@ -23,6 +23,8 @@ from .config import (
     DOCUMENT_CATEGORIES, 
     AGENT_SYSTEM_PROMPT,
     QUERY_EXTRACTION_PROMPT,
+    QUERY_CLASSIFICATION_PROMPT,
+    DIRECT_ANSWER_SYSTEM_PROMPT,
     DEFAULT_SEARCH_LIMIT,
 )
 
@@ -130,6 +132,15 @@ class RagAgent:
         Yields:
             Части текстового ответа
         """
+        # 0. Классифицируем запрос — нужен ли поиск?
+        query_type = self._classify_query(user_query)
+        logger.info(f"Query classification: {query_type}")
+        
+        if query_type == "direct":
+            # Прямой ответ без поиска по документам
+            yield from self._stream_direct_answer(user_query)
+            return
+        
         # 1. Извлекаем фильтры
         if stream_callback:
             stream_callback("🔎 Анализирую запрос...")
@@ -167,6 +178,88 @@ class RagAgent:
             stream_callback("💭 Формирую ответ...")
         
         yield from self._stream_generate(user_query, results)
+    
+    def _classify_query(self, query: str) -> str:
+        """
+        Классифицировать запрос: требует ли он поиска по документам.
+        
+        Returns:
+            "search" — нужен поиск по документам
+            "direct" — прямой ответ без поиска
+        """
+        import requests
+        
+        prompt = QUERY_CLASSIFICATION_PROMPT.format(query=query)
+        
+        try:
+            response = requests.post(
+                f"{self.ollama_url}/api/generate",
+                json={
+                    "model": self.llm_model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {"temperature": 0, "num_predict": 10}
+                },
+                timeout=30
+            )
+            
+            if response.ok:
+                result = response.json().get("response", "").strip().lower()
+                # Ищем ключевые слова в ответе
+                if "direct" in result:
+                    return "direct"
+                elif "search" in result:
+                    return "search"
+                # По умолчанию — поиск (безопаснее)
+                logger.warning(f"Unclear classification: {result}, defaulting to search")
+                return "search"
+            else:
+                logger.error(f"Classification request failed: {response.status_code}")
+                return "search"
+                
+        except Exception as e:
+            logger.error(f"Classification error: {e}")
+            return "search"
+    
+    def _stream_direct_answer(self, query: str) -> Iterator[str]:
+        """
+        Генерировать прямой ответ без поиска по документам.
+        
+        Yields:
+            Части текстового ответа
+        """
+        import requests
+        
+        try:
+            response = requests.post(
+                f"{self.ollama_url}/api/generate",
+                json={
+                    "model": self.llm_model,
+                    "prompt": query,
+                    "system": DIRECT_ANSWER_SYSTEM_PROMPT,
+                    "stream": True,
+                },
+                stream=True,
+                timeout=120
+            )
+            
+            if not response.ok:
+                yield f"Ошибка генерации: {response.status_code}"
+                return
+            
+            for line in response.iter_lines():
+                if line:
+                    try:
+                        data = json.loads(line)
+                        chunk = data.get("response", "")
+                        if chunk:
+                            yield chunk
+                    except json.JSONDecodeError:
+                        continue
+                        
+        except Exception as e:
+            logger.error(f"Direct answer error: {e}")
+            yield f"Ошибка: {e}"
     
     def _enrich_query(self, query: str, filters: ExtractedFilters) -> str:
         """

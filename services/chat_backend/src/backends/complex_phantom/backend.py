@@ -76,6 +76,67 @@ class ComplexPhantomBackend(ChatBackend):
             modified_at=meta.modified_at,
         )
     
+    def _build_source_from_chunk(self, chunk: dict, base_url: str) -> SourceInfo:
+        """Построить SourceInfo из chunk dict (формат MCP)."""
+        metadata = chunk.get("metadata", {})
+        file_path = metadata.get("file_path", "")
+        file_name = file_path.split("/")[-1] if file_path else "unknown"
+        
+        encoded_path = quote(file_path, safe="")
+        download_url = f"{base_url}/api/files/download?path={encoded_path}"
+        
+        return SourceInfo(
+            file_path=file_path,
+            file_name=file_name,
+            chunk_index=metadata.get("chunk_index", 0),
+            similarity=chunk.get("similarity", 0),
+            download_url=download_url,
+            title=metadata.get("title"),
+            summary=metadata.get("summary"),
+            category=metadata.get("category"),
+            modified_at=metadata.get("modified_at"),
+        )
+    
+    def _check_langchain(self) -> bool:
+        """Проверить доступность LangChain."""
+        try:
+            from langchain_ollama import ChatOllama
+            from langgraph.prebuilt import create_react_agent
+            return True
+        except ImportError:
+            logger.warning("LangChain not available")
+            return False
+    
+    def _create_search_func(self):
+        """Создать функцию поиска через vector_store."""
+        vector_store = self._get_vector_store()
+        
+        def search_func(query: str, top_k: int = 5):
+            """Поиск документов по запросу."""
+            # Получаем embedding
+            embedding = vector_store.get_embedding(
+                query, settings.OLLAMA_BASE_URL, settings.OLLAMA_EMBEDDING_MODEL
+            )
+            if not embedding:
+                return []
+            
+            # Поиск через search_semantic
+            results = vector_store.search_semantic(embedding, limit=top_k)
+            
+            # Конвертируем SearchHit в формат chunks для LangChain
+            chunks = []
+            for hit in results:
+                # MetadataModel — pydantic, используем model_dump()
+                meta_dict = hit.metadata.model_dump() if hasattr(hit.metadata, 'model_dump') else {}
+                chunks.append({
+                    "content": hit.content,
+                    "metadata": meta_dict,
+                    "similarity": hit.base_score,
+                })
+            return chunks
+        
+        return search_func
+    
     def stream(
         self,
         query: str,
@@ -83,85 +144,83 @@ class ComplexPhantomBackend(ChatBackend):
         base_url: str = ""
     ) -> Iterator[StreamEvent]:
         """
-        Потоковая генерация ответа.
+        Потоковая генерация ответа через LangChain Agent.
         
-        Events:
-        1. tool_call — промежуточные сообщения о поиске
-        2. metadata — sources после поиска
-        3. chunk — части текстового ответа
-        4. done — завершение
+        Использует подход из agent backend:
+        - Агент сам решает нужен ли поиск
+        - На простые вопросы (2+2) отвечает напрямую
+        - На вопросы про документы — использует search_documents tool
         """
         logger.info(f"📨 Complex Phantom stream: {query[:50]}...")
         
-        # Собираем промежуточные сообщения
-        intermediate_messages: List[str] = []
-        
-        def stream_callback(message: str):
-            """Callback для промежуточных сообщений."""
-            intermediate_messages.append(message)
-            # Сразу отправляем как tool_call event
-            # (будет обработано в цикле ниже)
+        # Проверяем LangChain
+        if not self._check_langchain():
+            yield StreamEvent(type="error", data={"error": "LangChain не установлен"})
+            return
         
         try:
-            agent = self._get_agent()
+            from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage
+            from .langchain_agent import create_agent, SearchContext, DEFAULT_SYSTEM_PROMPT
             
-            # Извлекаем фильтры и ищем
-            stream_callback("🔎 Анализирую запрос...")
+            # Контекст для сбора найденных документов
+            search_context = SearchContext()
             
-            filters = agent._extract_filters(query)
-            
-            # Embedding
-            embedding = agent.vector_store.get_embedding(
-                query, agent.ollama_url, agent.embedding_model
+            # Создаём агента
+            agent = create_agent(
+                base_url=settings.OLLAMA_BASE_URL,
+                model=settings.OLLAMA_LLM_MODEL,
+                search_func=self._create_search_func(),
+                context=search_context
             )
             
-            if not embedding:
-                yield StreamEvent(type="error", data={"error": "Не удалось обработать запрос"})
-                return
+            messages = [
+                SystemMessage(content=DEFAULT_SYSTEM_PROMPT),
+                HumanMessage(content=query)
+            ]
             
-            # Robust search с callback'ами
-            from .robust_search import robust_search
+            sources_sent = False
             
-            results, debug_info = robust_search(
-                vector_store=agent.vector_store,
-                embedding=embedding,
-                filters=filters.to_search_filter(),
-                limit=10,
-                stream_callback=stream_callback
-            )
+            # Стримим ответ агента
+            for event in agent.stream({"messages": messages}, stream_mode="messages"):
+                if isinstance(event, tuple) and len(event) >= 1:
+                    message = event[0]
+                    
+                    # После tool вызова отправляем sources
+                    if isinstance(message, ToolMessage):
+                        if search_context.chunks and not sources_sent:
+                            sources = [self._build_source_from_chunk(c, base_url) for c in search_context.chunks]
+                            yield StreamEvent(
+                                type="metadata",
+                                data={
+                                    "conversation_id": conversation_id or "",
+                                    "sources": [s.to_dict() for s in sources],
+                                }
+                            )
+                            sources_sent = True
+                            logger.info(f"📎 Sent {len(sources)} sources")
+                        continue
+                    
+                    if isinstance(message, AIMessage):
+                        # Tool calls
+                        if hasattr(message, 'tool_calls') and message.tool_calls:
+                            for tc in message.tool_calls:
+                                yield StreamEvent(
+                                    type="tool_call",
+                                    data={"name": tc.get("name", ""), "args": tc.get("args", {})}
+                                )
+                        # Text content
+                        elif message.content:
+                            yield StreamEvent(type="chunk", data={"content": message.content})
             
-            # Отправляем промежуточные сообщения
-            for msg in intermediate_messages:
-                yield StreamEvent(
-                    type="tool_call",
-                    data={"name": "search_status", "message": msg}
-                )
-            
-            # Sources
-            if results:
-                sources = [self._build_source_info(r, base_url) for r in results]
+            # Если sources не были отправлены — пустой список
+            if not sources_sent:
                 yield StreamEvent(
                     type="metadata",
-                    data={
-                        "conversation_id": conversation_id or "",
-                        "sources": [s.to_dict() for s in sources],
-                    }
+                    data={"conversation_id": conversation_id or "", "sources": []}
                 )
-                logger.info(f"📎 Sent {len(sources)} sources")
-            
-            # Генерируем ответ
-            if not results:
-                yield StreamEvent(
-                    type="chunk",
-                    data={"content": "К сожалению, по вашему запросу документы не найдены."}
-                )
-            else:
-                # Streaming generate
-                for chunk in agent._stream_generate(query, results):
-                    yield StreamEvent(type="chunk", data={"content": chunk})
             
             yield StreamEvent(type="done", data={})
             
         except Exception as e:
-            logger.error(f"❌ Complex Agent error: {e}")
+            logger.error(f"❌ Complex Phantom error: {e}")
             yield StreamEvent(type="error", data={"error": str(e)})
