@@ -106,7 +106,8 @@ def main():
         logger.info("✅ File Watcher Service initialized successfully")
         
     except Exception as e:
-        logger.error(f"❌ Failed to initialize File Watcher Service: {e}")
+        logger.error(f"❌ Failed to initialize File Watcher Service")
+        logger.error(f"   {type(e).__name__}: {e}")
         sys.exit(1)
     
     # Основной цикл

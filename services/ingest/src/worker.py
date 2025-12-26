@@ -35,6 +35,26 @@ class Worker:
         self.filewatcher_api_url = filewatcher_api_url
         self.process_file = process_file_func
         self.processed_count = 0
+        
+        # Проверяем доступность FileWatcher API при инициализации
+        try:
+            response = requests.get(
+                f"{self.filewatcher_api_url}/api/queue/stats",
+                timeout=5
+            )
+            response.raise_for_status()
+            logger.info(f"✅ FileWatcher API is available at {self.filewatcher_api_url}")
+        except requests.exceptions.ConnectionError:
+            logger.error(f"❌ Cannot connect to FileWatcher API at {self.filewatcher_api_url}")
+            logger.error(f"   Make sure FileWatcher service is running")
+            raise
+        except requests.exceptions.Timeout:
+            logger.error(f"❌ FileWatcher API timeout at {self.filewatcher_api_url}")
+            logger.error(f"   Make sure FileWatcher service is responding")
+            raise
+        except Exception as e:
+            logger.error(f"❌ Failed to check FileWatcher API: {e}")
+            raise
     
     def _get_next_file(self) -> Optional[Dict[str, Any]]:
         """Получить следующий файл из очереди FileWatcher."""

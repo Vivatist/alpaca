@@ -9,18 +9,44 @@ from fastapi.responses import Response
 from typing import Optional, Dict
 from pydantic import BaseModel, Field
 import os
+from contextlib import asynccontextmanager
+import logging
 
 from repository import FileWatcherRepository
 
-# Инициализация FastAPI
+logger = logging.getLogger(__name__)
+
+# Глобальный объект репозитория (инициализируется в startup)
+db: Optional[FileWatcherRepository] = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Управление жизненным циклом приложения"""
+    global db
+    
+    # Startup - инициализируем БД
+    try:
+        db = FileWatcherRepository(database_url=os.getenv("DATABASE_URL"))
+        logger.info("✅ Database initialized successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize database")
+        logger.error(f"   {type(e).__name__}: {e}")
+        raise
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down File Watcher API")
+
+
+# Инициализация FastAPI с lifespan
 app = FastAPI(
     title="File Watcher API",
     description="API для управления очередью обработки файлов",
-    version="2.0.0"
+    version="2.0.0",
+    lifespan=lifespan
 )
-
-# Инициализация репозитория
-db = FileWatcherRepository(database_url=os.getenv("DATABASE_URL"))
 
 
 class FileResponse(BaseModel):
@@ -36,6 +62,8 @@ class FileResponse(BaseModel):
 @app.get("/health")
 async def health():
     """Проверка здоровья сервиса"""
+    if db is None:
+        return {"status": "initializing", "service": "file-watcher-api", "version": "2.0.0"}
     return {"status": "healthy", "service": "file-watcher-api", "version": "2.0.0"}
 
 
@@ -54,6 +82,9 @@ async def get_next_file():
         FileResponse: Информация о следующем файле для обработки
         204 No Content: Если очередь пуста
     """
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    
     try:
         next_file = db.get_next_file()
         
@@ -73,6 +104,9 @@ async def get_queue_stats() -> Dict[str, int]:
     Returns:
         Dict: Количество файлов по каждому статусу
     """
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    
     try:
         return db.get_queue_stats()
     except Exception as e:

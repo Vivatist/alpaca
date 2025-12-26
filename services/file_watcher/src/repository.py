@@ -69,7 +69,24 @@ class FileWatcherRepository:
         self.connection_string = database_url or os.getenv("DATABASE_URL")
         self.files_table = files_table
         self.chunks_table = chunks_table
-        self._ensure_tables()
+        
+        try:
+            self._ensure_tables()
+        except psycopg2.OperationalError as e:
+            error_msg = str(e)
+            if "refused" in error_msg.lower() or "connect" in error_msg.lower():
+                logger.error(f"❌ Cannot connect to database at {self.connection_string}")
+                logger.error(f"   Ensure PostgreSQL is running and DATABASE_URL is correct")
+                logger.error(f"   Error: {error_msg}")
+            else:
+                logger.error(f"❌ Database operational error: {error_msg}")
+            raise
+        except psycopg2.DatabaseError as e:
+            logger.error(f"❌ Database error during initialization: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"❌ Unexpected error during database initialization: {e}")
+            raise
 
     @contextmanager
     def get_connection(self):

@@ -38,16 +38,27 @@ def main():
     
     # 2. Инициализация репозитория
     logger.info("Initializing repository...")
-    repository = IngestRepository(
-        database_url=settings.DATABASE_URL,
-        files_table="files",
-        chunks_table="chunks"
-    )
+    try:
+        repository = IngestRepository(
+            database_url=settings.DATABASE_URL,
+            files_table="files",
+            chunks_table="chunks"
+        )
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize repository")
+        logger.error(f"   {type(e).__name__}: {e}")
+        import sys
+        sys.exit(1)
     
     # Сброс зависших processed статусов
-    reset_count = repository.reset_processed_to_added()
-    if reset_count > 0:
-        logger.info(f"🔄 Reset {reset_count} stuck 'processed' files to 'added'")
+    try:
+        reset_count = repository.reset_processed_to_added()
+        if reset_count > 0:
+            logger.info(f"🔄 Reset {reset_count} stuck 'processed' files to 'added'")
+    except Exception as e:
+        logger.error(f"❌ Failed to reset processed files: {e}")
+        import sys
+        sys.exit(1)
     
     # 3. Сборка компонентов пайплайна
     logger.info("Building pipeline components...")
@@ -89,11 +100,17 @@ def main():
     # 5. Создание и запуск worker
     logger.info("Creating worker...")
     
-    worker = Worker(
-        repository=repository,
-        filewatcher_api_url=settings.FILEWATCHER_URL,
-        process_file_func=process_file_event,
-    )
+    try:
+        worker = Worker(
+            repository=repository,
+            filewatcher_api_url=settings.FILEWATCHER_URL,
+            process_file_func=process_file_event,
+        )
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize worker")
+        logger.error(f"   {type(e).__name__}: {e}")
+        import sys
+        sys.exit(1)
     
     logger.info("=" * 60)
     logger.info("✅ Ingest Service ready")
